@@ -1,0 +1,230 @@
+<h2>The four core screens</h2>
+<p class="subtitle">First pass at structure, not final polish. Left to right: the home list, a session's Terminal tab, the same session's Chat tab, and what a notification looks like on the lock screen.</p>
+
+<style>
+  .ph-row { display:flex; gap:1.5rem; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .ph-col { display:flex; flex-direction:column; align-items:center; gap:.6rem; }
+  .ph-cap { font-size:.8rem; color: var(--text-secondary); max-width:340px; text-align:center; }
+  .ph { width:340px; height:720px; background:#0b0d12; border-radius:30px; border:6px solid #262932; overflow:hidden; display:flex; flex-direction:column; font-family: Inter, Roboto, system-ui, sans-serif; color:#e6e8ee; font-size:13px; box-shadow:0 14px 34px rgba(0,0,0,.4); position:relative; }
+  .ph * { box-sizing:border-box; }
+  .ph-status { height:26px; display:flex; justify-content:space-between; padding:0 18px; font-size:11px; color:#9aa0ad; align-items:center; flex:none; }
+  .ph-appbar { display:flex; align-items:center; gap:10px; padding:8px 14px 6px; flex:none; }
+  .ph-appbar .t { font-weight:600; font-size:17px; }
+  .ph-appbar .sub { font-size:11px; color:#9aa0ad; margin-top:1px; }
+  .ph-appbar .sp { flex:1; }
+  .ic { width:34px; height:34px; border-radius:17px; display:inline-flex; align-items:center; justify-content:center; color:#c9cdd6; font-size:16px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:11px; background:#161a22; color:#c9cdd6; border:1px solid #242934; }
+  .chip.on { background:#16261c; color:#7ddc9a; border-color:#1f3a28; }
+  .dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .dot.amber { background:#f5b94a; box-shadow:0 0 0 3px rgba(245,185,74,.18); }
+  .dot.blue { background:#5aa9ff; box-shadow:0 0 0 3px rgba(90,169,255,.18); }
+  .dot.green { background:#4fd38a; }
+  .dot.grey { background:#6b7280; }
+  .filters { display:flex; gap:6px; padding:4px 14px 10px; flex:none; overflow:hidden; }
+  .filters .chip { white-space:nowrap; }
+  .filters .chip.sel { background:#1d2a44; color:#9cc4ff; border-color:#2b3f66; }
+  .list { flex:1; overflow:hidden; padding:0 12px; display:flex; flex-direction:column; gap:8px; }
+  .card { background:#12151c; border:1px solid #1f232d; border-radius:16px; padding:12px 12px 10px; }
+  .card.needs { border-color:#4a3a1a; background:#161410; }
+  .card .r1 { display:flex; align-items:center; gap:8px; }
+  .card .name { font-weight:600; font-size:14px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card .ago { font-size:11px; color:#7d8390; }
+  .card .st { display:flex; align-items:center; gap:6px; font-size:12px; margin-top:6px; }
+  .card .st.amber { color:#f5b94a; } .card .st.blue { color:#8cc0ff; } .card .st.green { color:#7ddc9a; } .card .st.grey { color:#8b919c; }
+  .card .msg { font-size:12px; color:#aab0bb; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace; }
+  .card .meta { display:flex; gap:6px; margin-top:8px; }
+  .tag { font-size:10px; padding:2px 7px; border-radius:6px; background:#1a1e27; color:#9aa0ad; border:1px solid #242934; }
+  .tag.claude { color:#e3b08a; border-color:#3d2b1f; background:#1f1812; }
+  .tag.codex { color:#b7b7f5; border-color:#2b2b4a; background:#15152a; }
+  .tag.shell { color:#9fd0ff; border-color:#1f3550; background:#101c29; }
+  .fab { position:absolute; right:16px; bottom:22px; background:#9cc4ff; color:#0b1a33; border-radius:16px; padding:12px 16px; font-weight:600; font-size:13px; display:flex; gap:8px; align-items:center; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+  .tabs { display:flex; margin:4px 14px 8px; background:#12151c; border-radius:12px; padding:3px; flex:none; }
+  .tabs div { flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; color:#9aa0ad; }
+  .tabs div.sel { background:#1d2a44; color:#cfe2ff; font-weight:600; }
+  .term { flex:1; background:#0b0d12; margin:0 10px; font-family:'Cascadia Code','JetBrains Mono',Consolas,monospace; font-size:10.5px; line-height:1.45; white-space:pre; overflow:hidden; color:#d4d8e0; padding:6px 4px; }
+  .term .u { color:#9cc4ff; } .term .b { color:#f5b94a; } .term .g { color:#7ddc9a; } .term .d { color:#6b7280; } .term .box { color:#c9b58c; }
+  .keybar { display:flex; gap:5px; padding:6px 10px; flex:none; overflow:hidden; }
+  .keybar div { flex:none; min-width:38px; padding:7px 9px; text-align:center; background:#161a22; border:1px solid #242934; border-radius:9px; font-size:11px; color:#c9cdd6; font-family:'Cascadia Code',Consolas,monospace; }
+  .keybar div.mod { color:#9cc4ff; }
+  .composer { display:flex; gap:8px; padding:8px 10px 12px; flex:none; align-items:center; }
+  .composer .in { flex:1; background:#161a22; border:1px solid #242934; border-radius:22px; padding:10px 14px; color:#7d8390; font-size:13px; }
+  .composer .send { width:40px; height:40px; border-radius:20px; background:#9cc4ff; color:#0b1a33; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .chat { flex:1; overflow:hidden; padding:4px 12px; display:flex; flex-direction:column; gap:8px; }
+  .me { align-self:flex-end; background:#1d2a44; color:#dde9ff; border-radius:16px 16px 4px 16px; padding:9px 12px; max-width:85%; font-size:13px; }
+  .ai { font-size:13px; color:#dfe3ea; line-height:1.4; padding:2px 2px; }
+  .tool { background:#12151c; border:1px solid #1f232d; border-radius:12px; padding:8px 10px; display:flex; gap:8px; align-items:center; font-size:12px; }
+  .tool .k { font-family:'Cascadia Code',Consolas,monospace; color:#9aa0ad; font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool .n { font-weight:600; color:#c9cdd6; }
+  .tool .ok { color:#4fd38a; } .tool .wait { color:#f5b94a; }
+  .agent { background:#13161f; border:1px solid #2b2f3b; border-left:3px solid #b7b7f5; border-radius:12px; padding:9px 10px; font-size:12px; }
+  .agent .r { display:flex; align-items:center; gap:6px; }
+  .agent .name { font-weight:600; color:#d6d6ff; flex:1; }
+  .agent .meta { color:#8b919c; font-size:11px; margin-top:3px; }
+  .ask { background:#1a1710; border:1px solid #4a3a1a; border-radius:14px; padding:10px 12px; }
+  .ask .q { font-size:13px; color:#f1e3c4; font-weight:600; }
+  .ask .c { font-family:'Cascadia Code',Consolas,monospace; font-size:11px; color:#c9b58c; margin-top:4px; }
+  .ask .btns { display:flex; gap:6px; margin-top:9px; }
+  .ask .btns div { flex:1; text-align:center; padding:8px 4px; border-radius:10px; font-size:12px; font-weight:600; }
+  .ask .yes { background:#4fd38a; color:#07210f; } .ask .always { background:#16261c; color:#7ddc9a; border:1px solid #1f3a28; } .ask .no { background:#2a1a1a; color:#ff8a80; border:1px solid #4a2222; }
+  .lock { flex:1; display:flex; flex-direction:column; align-items:center; padding:30px 14px 0; gap:10px; background: radial-gradient(1200px 500px at 50% -10%, #1b2440, #0b0d12 60%); }
+  .lock .time { font-size:54px; font-weight:300; letter-spacing:-1px; color:#f3f5fa; }
+  .lock .date { font-size:13px; color:#9aa0ad; margin-top:-6px; margin-bottom:14px; }
+  .notif { width:100%; background:rgba(28,31,40,.92); border-radius:18px; padding:11px 13px; border:1px solid #2b2f3b; }
+  .notif .h { display:flex; align-items:center; gap:7px; font-size:11px; color:#9aa0ad; }
+  .notif .h .app { color:#c9cdd6; font-weight:600; }
+  .notif .ti { font-weight:600; font-size:13px; margin-top:5px; color:#eef0f5; }
+  .notif .bo { font-size:12px; color:#b7bcc7; margin-top:2px; }
+  .notif .acts { display:flex; gap:14px; margin-top:9px; font-size:12px; font-weight:600; color:#9cc4ff; }
+  .appdot { width:16px; height:16px; border-radius:5px; background:linear-gradient(135deg,#9cc4ff,#5aa9ff); display:inline-block; }
+</style>
+
+<div class="ph-row">
+
+  <!-- 1. Sessions home -->
+  <div class="ph-col">
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar">
+        <div><div class="t">Sessions</div><div class="sub">4 running on this laptop</div></div>
+        <div class="sp"></div>
+        <span class="chip on"><span class="dot green"></span>AMAN-LAPTOP</span>
+        <span class="ic">⚙</span>
+      </div>
+      <div class="filters">
+        <span class="chip sel">All</span><span class="chip">Needs you · 1</span><span class="chip">Working · 1</span><span class="chip">Done</span>
+      </div>
+      <div class="list">
+        <div class="card needs">
+          <div class="r1"><span class="dot amber"></span><span class="name">web-platform</span><span class="ago">2m</span></div>
+          <div class="st amber">Needs your input</div>
+          <div class="msg">Allow Bash to run "npm test"?</div>
+          <div class="meta"><span class="tag claude">claude</span><span class="tag">2 sub-agents</span><span class="tag">feature/ci</span></div>
+        </div>
+        <div class="card">
+          <div class="r1"><span class="dot blue"></span><span class="name">shop-estimator</span><span class="ago">now</span></div>
+          <div class="st blue">Working · 14 min</div>
+          <div class="msg">● Edit(src/parsers/estimate.ts)</div>
+          <div class="meta"><span class="tag codex">codex</span><span class="tag">main</span></div>
+        </div>
+        <div class="card">
+          <div class="r1"><span class="dot green"></span><span class="name">remote-dev</span><span class="ago">1h</span></div>
+          <div class="st green">Finished</div>
+          <div class="msg">Added README and CI workflow. Tests pass.</div>
+          <div class="meta"><span class="tag claude">claude</span><span class="tag">main</span></div>
+        </div>
+        <div class="card">
+          <div class="r1"><span class="dot grey"></span><span class="name">ToolKit</span><span class="ago">3h</span></div>
+          <div class="st grey">Shell · idle</div>
+          <div class="msg">PS D:\Naya Repos\personal\ToolKit&gt;</div>
+          <div class="meta"><span class="tag shell">powershell</span></div>
+        </div>
+      </div>
+      <div class="fab">＋ New session</div>
+    </div>
+    <div class="ph-cap">Home. Every session on the laptop, sorted so "needs you" floats to the top. Laptop connection status lives in the header.</div>
+  </div>
+
+  <!-- 2. Terminal tab -->
+  <div class="ph-col">
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar">
+        <span class="ic">←</span>
+        <div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span> claude · needs your input</div></div>
+        <div class="sp"></div>
+        <span class="ic">⋮</span>
+      </div>
+      <div class="tabs"><div class="sel">Terminal</div><div>Chat</div></div>
+      <div class="term"><span class="u">&gt; Add a README and a GitHub Actions CI workflow</span>
+
+<span class="b">●</span> I'll look at the project structure first.
+
+<span class="b">●</span> <b>Bash</b>(ls -la)
+  <span class="d">⎿  total 12
+     drwxr-xr-x  src
+     -rw-r--r--  package.json</span>
+
+<span class="b">●</span> <b>Explore</b>(find existing CI configs)
+  <span class="d">⎿  Done (3 tool uses · 2.1k tokens)</span>
+
+<span class="g">●</span> <b>Write</b>(.github/workflows/ci.yml)
+  <span class="d">⎿  Wrote 42 lines</span>
+
+<span class="b">●</span> <b>Bash</b>(npm test)
+
+<span class="box">╭─────────────────────────────────────╮
+│ Allow Bash to run "npm test"?       │
+│                                     │
+│ ❯ 1. Yes                            │
+│   2. Yes, and don't ask again       │
+│   3. No, and tell Claude what to do │
+╰─────────────────────────────────────╯</span>
+<span class="d">  ⏵⏵ accept edits on · ? for shortcuts</span></div>
+      <div class="keybar"><div>Esc</div><div>Tab</div><div class="mod">Ctrl</div><div>↑</div><div>↓</div><div>←</div><div>→</div><div>⏎</div><div>⌨</div></div>
+      <div class="composer"><div class="in">Type, then send as a line…</div><div class="send">➤</div></div>
+    </div>
+    <div class="ph-cap">Terminal tab. Pixel-faithful mirror of the laptop window. A key bar for the keys phone keyboards lack, and a composer that sends a whole line so you're not fighting autocorrect inside the terminal.</div>
+  </div>
+
+  <!-- 3. Chat tab -->
+  <div class="ph-col">
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar">
+        <span class="ic">←</span>
+        <div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span> claude · needs your input</div></div>
+        <div class="sp"></div>
+        <span class="ic">⋮</span>
+      </div>
+      <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+      <div class="chat">
+        <div class="me">Add a README and a GitHub Actions CI workflow</div>
+        <div class="ai">I'll look at the project structure first.</div>
+        <div class="tool"><span class="ok">✓</span><span class="n">Bash</span><span class="k">ls -la</span></div>
+        <div class="agent">
+          <div class="r"><span>🧭</span><span class="name">Explore · find existing CI configs</span><span>›</span></div>
+          <div class="meta">Sub-agent · done · 3 tool uses · 2.1k tokens</div>
+        </div>
+        <div class="tool"><span class="ok">✓</span><span class="n">Write</span><span class="k">.github/workflows/ci.yml · 42 lines</span></div>
+        <div class="tool"><span class="wait">●</span><span class="n">Bash</span><span class="k">npm test</span></div>
+        <div class="ask">
+          <div class="q">Claude wants to run a command</div>
+          <div class="c">npm test</div>
+          <div class="btns"><div class="yes">Allow</div><div class="always">Always</div><div class="no">Deny</div></div>
+        </div>
+      </div>
+      <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+    </div>
+    <div class="ph-cap">Chat tab. Same session, read from the transcript on disk. Tool calls collapse to one line, sub-agents are cards you tap into, and prompts become real buttons that press the right key in the terminal for you.</div>
+  </div>
+
+  <!-- 4. Notification -->
+  <div class="ph-col">
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="lock">
+        <div class="time">19:42</div>
+        <div class="date">Thu, 30 Oct</div>
+        <div class="notif">
+          <div class="h"><span class="appdot"></span><span class="app">Remote Dev</span><span>· web-platform · now</span></div>
+          <div class="ti">Claude needs your input</div>
+          <div class="bo">Allow Bash to run "npm test"?</div>
+          <div class="acts"><span>Allow</span><span>Deny</span><span>Open</span></div>
+        </div>
+        <div class="notif">
+          <div class="h"><span class="appdot"></span><span class="app">Remote Dev</span><span>· remote-dev · 1h</span></div>
+          <div class="ti">Task finished</div>
+          <div class="bo">Added README and CI workflow. Tests pass.</div>
+          <div class="acts"><span>Open</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="ph-cap">Notifications. Raised by the app itself over Tailscale, no third party. Permission prompts get Allow / Deny right on the notification; finishes get Open.</div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:2rem">
+  <h3>What I'd like your reaction to</h3>
+  <p class="subtitle">Does the structure feel right: a flat list of sessions, then two tabs inside a session? Anything you'd expect to see that's missing, and anything here you'd never use?</p>
+</div>

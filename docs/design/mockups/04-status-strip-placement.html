@@ -1,0 +1,156 @@
+<h2>Where should the status strip live?</h2>
+<p class="subtitle">Three placements for the same chips, on the Chat tab in Aurora dark. Click the one you prefer. A is my recommendation: it sits where the status line sits in the terminal, and it never pushes the conversation down.</p>
+
+<style>
+  .row { display:flex; gap:1.4rem; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .col { display:flex; flex-direction:column; align-items:center; gap:.6rem; padding:.8rem; border-radius:18px; border:2px solid transparent; cursor:pointer; }
+  .col:hover { border-color:var(--accent); }
+  .col.selected { border-color:var(--selected-border); background:var(--selected-bg); }
+  .col h3 { margin:0; }
+  .cap { font-size:.8rem; color:var(--text-secondary); max-width:300px; text-align:center; }
+  .cap b { color:var(--text-primary); }
+
+  .ph { zoom:.88; width:340px; height:660px; --font:Inter,Roboto,system-ui,sans-serif; --frame:#232848; --bg:#0a0c18; --sf:#11142a; --sf2:#181c38; --bd:#232848; --tx:#e9ebff; --tx2:#8f94bb; --ac:#8ef0d6; --acOn:#062219; --acSoft:#1a2f3a; --amber:#ffc46b; --green:#5fe0a8; --codex:#b9a6ff;
+        background:var(--bg); border-radius:30px; border:6px solid var(--frame); overflow:hidden; display:flex; flex-direction:column; font-family:var(--font); color:var(--tx); font-size:13px; box-shadow:0 14px 34px rgba(0,0,0,.35); position:relative; }
+  .ph * { box-sizing:border-box; }
+  .ph-status { height:26px; display:flex; justify-content:space-between; padding:0 18px; font-size:11px; color:var(--tx2); align-items:center; flex:none; }
+  .ph-appbar { display:flex; align-items:center; gap:10px; padding:6px 14px 4px; flex:none; position:relative; }
+  .ph-appbar .t { font-weight:700; font-size:16px; letter-spacing:-.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; }
+  .ph-appbar .sub { font-size:11px; color:var(--tx2); margin-top:1px; display:flex; align-items:center; gap:5px; }
+  .ph-appbar .sp { flex:1; }
+  .ic { width:32px; height:32px; border-radius:16px; display:inline-flex; align-items:center; justify-content:center; color:var(--tx2); font-size:15px; background:var(--sf); border:1px solid var(--bd); flex:none; }
+  .dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .dot.amber { background:var(--amber); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
+  .tabs { display:flex; margin:4px 14px 6px; background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:3px; flex:none; }
+  .tabs div { flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; color:var(--tx2); }
+  .tabs div.sel { background:var(--acSoft); color:var(--ac); font-weight:700; }
+  .strip { display:flex; gap:5px; padding:0 12px; flex:none; overflow:hidden; }
+  .strip span { font-size:10.5px; padding:3px 8px; border-radius:7px; background:var(--sf2); border:1px solid var(--bd); color:var(--tx2); white-space:nowrap; font-family:'Cascadia Code',Consolas,monospace; }
+  .strip span.m { color:var(--ac); border-color:color-mix(in srgb, var(--ac) 35%, transparent); background:color-mix(in srgb, var(--ac) 12%, transparent); }
+  .strip.bottom { padding:6px 12px 0; border-top:1px solid var(--bd); margin-top:2px; }
+  .strip.under { padding:0 14px 10px; }
+  .strip.under span { background:transparent; border:none; padding:0; color:var(--tx2); font-size:10.5px; }
+  .strip.under span.m { color:var(--ac); }
+  .composer { display:flex; gap:8px; padding:8px 10px 12px; flex:none; align-items:center; }
+  .composer.tight { padding-bottom:6px; }
+  .composer .in { flex:1; background:var(--sf); border:1px solid var(--bd); border-radius:22px; padding:10px 14px; color:var(--tx2); font-size:12.5px; }
+  .composer .send { width:40px; height:40px; border-radius:20px; background:linear-gradient(135deg,#b9a6ff,#8ef0d6); color:#0a0c18; display:flex; align-items:center; justify-content:center; font-weight:700; flex:none; }
+  .chat { flex:1; overflow:hidden; padding:2px 12px; display:flex; flex-direction:column; gap:8px; }
+  .me { align-self:flex-end; background:var(--acSoft); color:var(--tx); border-radius:16px 16px 4px 16px; padding:9px 12px; max-width:85%; font-size:12.5px; }
+  .ai { font-size:12.5px; color:var(--tx); line-height:1.4; padding:2px 2px; }
+  .tool { background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:8px 10px; display:flex; gap:8px; align-items:center; font-size:12px; }
+  .tool .k { font-family:'Cascadia Code',Consolas,monospace; color:var(--tx2); font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool .n { font-weight:650; color:var(--tx); }
+  .tool .ok { color:var(--green); }
+  .agent { background:var(--sf); border:1px solid var(--bd); border-left:3px solid var(--codex); border-radius:12px; padding:8px 10px; font-size:12px; }
+  .agent .r { display:flex; align-items:center; gap:6px; }
+  .agent .name { font-weight:650; color:var(--tx); flex:1; }
+  .agent .meta { color:var(--tx2); font-size:11px; margin-top:3px; }
+  .ask { background:color-mix(in srgb, var(--amber) 9%, var(--sf)); border:1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius:14px; padding:10px 10px 8px; }
+  .ask .q { font-size:12.5px; color:var(--tx); font-weight:650; margin-bottom:7px; }
+  .ask .opt { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; background:var(--sf); border:1px solid var(--bd); font-size:12px; margin-bottom:5px; color:var(--tx); }
+  .ask .opt .n { width:18px; height:18px; border-radius:9px; background:var(--sf2); color:var(--tx2); font-size:10px; display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex:none; }
+  .ask .opt.sel { border-color:var(--ac); background:var(--acSoft); }
+  .ask .opt.sel .n { background:var(--ac); color:var(--acOn); }
+  .ask .rec { margin-left:auto; font-size:9.5px; color:var(--green); font-weight:700; }
+
+  /* header pill + dropdown (option C) */
+  .pill { display:inline-flex; align-items:center; gap:5px; padding:5px 9px; border-radius:999px; background:var(--sf); border:1px solid var(--bd); font-size:10.5px; color:var(--ac); font-family:'Cascadia Code',Consolas,monospace; white-space:nowrap; }
+  .sheet { position:absolute; right:14px; top:52px; width:230px; background:var(--sf); border:1px solid var(--bd); border-radius:14px; padding:10px; box-shadow:0 12px 30px rgba(0,0,0,.5); z-index:5; }
+  .sheet .g { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .sheet .kv { background:var(--sf2); border-radius:9px; padding:6px 8px; }
+  .sheet .kv small { display:block; font-size:9.5px; color:var(--tx2); text-transform:uppercase; letter-spacing:.06em; }
+  .sheet .kv b { font-size:12px; color:var(--tx); font-family:'Cascadia Code',Consolas,monospace; font-weight:600; }
+  .sheet .kv.m b { color:var(--ac); }
+</style>
+
+<div class="row">
+
+  <!-- A: bottom, above composer -->
+  <div class="col" data-choice="a-above-composer" onclick="toggleSelect(this)">
+    <h3>A · Above the composer</h3>
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+      <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+      <div class="chat">
+        <div class="me">Add login to the API</div>
+        <div class="ai">I'll check how sessions are handled today.</div>
+        <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+        <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+        <div class="ai">Two options fit this codebase. Let me ask.</div>
+        <div class="ask">
+          <div class="q">Which auth approach should I use?</div>
+          <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+          <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+          <div class="opt"><span class="n">3</span>Other…</div>
+        </div>
+      </div>
+      <div class="strip bottom"><span class="m">✦ Fable 5.1</span><span>xhigh</span><span>ctx 11%</span><span>$3.60</span><span>5h 38%</span><span>32m</span></div>
+      <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+    </div>
+    <div class="cap"><b>Recommended.</b> Same place as the terminal's status line. Conversation gets the full height above it. Scrolls sideways if you pick many chips.</div>
+  </div>
+
+  <!-- B: below composer, like the TUI -->
+  <div class="col" data-choice="b-below-composer" onclick="toggleSelect(this)">
+    <h3>B · Under the composer</h3>
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+      <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+      <div class="chat">
+        <div class="me">Add login to the API</div>
+        <div class="ai">I'll check how sessions are handled today.</div>
+        <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+        <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+        <div class="ai">Two options fit this codebase. Let me ask.</div>
+        <div class="ask">
+          <div class="q">Which auth approach should I use?</div>
+          <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+          <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+          <div class="opt"><span class="n">3</span>Other…</div>
+        </div>
+      </div>
+      <div class="composer tight"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+      <div class="strip under"><span class="m">✦ Fable 5.1</span><span>·</span><span>xhigh</span><span>·</span><span>ctx 11%</span><span>·</span><span>$3.60</span><span>·</span><span>5h 38%</span></div>
+    </div>
+    <div class="cap">Exactly how Claude Code lays it out: input box, then status text beneath. Plain text, no chips. Rides up with the keyboard.</div>
+  </div>
+
+  <!-- C: header pill + sheet -->
+  <div class="col" data-choice="c-header-pill" onclick="toggleSelect(this)">
+    <h3>C · Header pill, tap to expand</h3>
+    <div class="ph">
+      <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+      <div class="ph-appbar">
+        <span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="pill">✦ Fable 5.1 · 11% ▾</span>
+        <div class="sheet"><div class="g">
+          <div class="kv m"><small>Model</small><b>Fable 5.1</b></div>
+          <div class="kv"><small>Thinking</small><b>xhigh</b></div>
+          <div class="kv"><small>Ctx used</small><b>11.0%</b></div>
+          <div class="kv"><small>Cost</small><b>$3.60</b></div>
+          <div class="kv"><small>5h limit</small><b>38%</b></div>
+          <div class="kv"><small>Session</small><b>32m</b></div>
+        </div></div>
+      </div>
+      <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+      <div class="chat">
+        <div class="me">Add login to the API</div>
+        <div class="ai">I'll check how sessions are handled today.</div>
+        <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+        <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+        <div class="ai">Two options fit this codebase. Let me ask.</div>
+        <div class="ask">
+          <div class="q">Which auth approach should I use?</div>
+          <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+          <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+          <div class="opt"><span class="n">3</span>Other…</div>
+        </div>
+      </div>
+      <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+    </div>
+    <div class="cap">Only model and context stay visible in a header pill. Tap it for the full grid, shown open here. Zero space taken from the conversation.</div>
+  </div>
+
+</div>

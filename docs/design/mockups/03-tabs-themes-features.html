@@ -1,0 +1,439 @@
+<h2>Terminal and Chat in all four themes, plus the approved features</h2>
+<p class="subtitle">All four themes stay. Use the toggle to flip every screen between dark and light. Further down: the notification with inline reply, the Settings screen with keep-awake and the status-strip picker, a New Session screen with Playbooks for you to judge, and a vector version of the icon.</p>
+
+<input type="checkbox" id="lightmode" style="display:none">
+<label for="lightmode" class="modebtn"><span class="off">☾ Showing dark · click for light</span><span class="on">☀ Showing light · click for dark</span></label>
+
+<style>
+  .modebtn { display:inline-block; padding:.5rem 1rem; border:1px solid var(--border); border-radius:999px; cursor:pointer; font-size:.85rem; background:var(--bg-secondary); margin-bottom:1.25rem; user-select:none; }
+  .modebtn .on { display:none; }
+  #lightmode:checked ~ .modebtn { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #lightmode:checked ~ .modebtn .on { display:inline; }
+  #lightmode:checked ~ .modebtn .off { display:none; }
+
+  .row { display:flex; gap:1.1rem; flex-wrap:wrap; justify-content:center; align-items:flex-start; margin-bottom:.5rem; }
+  .col { display:flex; flex-direction:column; align-items:center; gap:.5rem; }
+  .cap { font-size:.78rem; color:var(--text-secondary); max-width:270px; text-align:center; }
+  .cap b { color:var(--text-primary); }
+  .sec { margin:2.2rem 0 .8rem; }
+  .sec h3 { margin-bottom:.2rem; }
+  .sec p { color:var(--text-secondary); font-size:.9rem; margin:0; }
+
+  .ph { zoom:.78; width:340px; height:640px; background:var(--bg); border-radius:30px; border:6px solid var(--frame); overflow:hidden; display:flex; flex-direction:column; font-family:var(--font); color:var(--tx); font-size:13px; box-shadow:0 14px 34px rgba(0,0,0,.35); position:relative; }
+  .ph.tall { height:700px; }
+  .ph * { box-sizing:border-box; }
+  .ph-status { height:26px; display:flex; justify-content:space-between; padding:0 18px; font-size:11px; color:var(--tx2); align-items:center; flex:none; }
+  .ph-appbar { display:flex; align-items:center; gap:10px; padding:6px 14px 4px; flex:none; }
+  .ph-appbar .t { font-weight:700; font-size:16px; letter-spacing:-.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
+  .ph-appbar .sub { font-size:11px; color:var(--tx2); margin-top:1px; display:flex; align-items:center; gap:5px; }
+  .ph-appbar .sp { flex:1; }
+  .ic { width:32px; height:32px; border-radius:16px; display:inline-flex; align-items:center; justify-content:center; color:var(--tx2); font-size:15px; background:var(--sf); border:1px solid var(--bd); flex:none; }
+  .dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .dot.amber { background:var(--amber); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
+  .dot.green { background:var(--green); }
+  .tabs { display:flex; margin:4px 14px 6px; background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:3px; flex:none; }
+  .tabs div { flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; color:var(--tx2); }
+  .tabs div.sel { background:var(--acSoft); color:var(--ac); font-weight:700; }
+  .strip { display:flex; gap:5px; padding:0 14px 6px; flex:none; overflow:hidden; }
+  .strip span { font-size:10.5px; padding:3px 8px; border-radius:7px; background:var(--sf2); border:1px solid var(--bd); color:var(--tx2); white-space:nowrap; font-family:'Cascadia Code',Consolas,monospace; }
+  .strip span.m { color:var(--ac); border-color:color-mix(in srgb, var(--ac) 35%, transparent); background:color-mix(in srgb, var(--ac) 12%, transparent); }
+  .term { flex:1; background:var(--tbg); margin:0 10px; border-radius:10px; font-family:'Cascadia Code','JetBrains Mono',Consolas,monospace; font-size:10.4px; line-height:1.45; white-space:pre; overflow:hidden; color:var(--tfg); padding:8px 8px; }
+  .term .u { color:var(--tuser); } .term .b { color:var(--tbul); } .term .d { color:var(--tdim); } .term .box { color:var(--tbox); } .term .sl { color:var(--tsl); }
+  .keybar { display:flex; gap:5px; padding:6px 10px 2px; flex:none; overflow:hidden; }
+  .keybar div { flex:none; min-width:36px; padding:7px 8px; text-align:center; background:var(--sf); border:1px solid var(--bd); border-radius:9px; font-size:11px; color:var(--tx); font-family:'Cascadia Code',Consolas,monospace; }
+  .keybar div.mod { color:var(--ac); }
+  .composer { display:flex; gap:8px; padding:8px 10px 12px; flex:none; align-items:center; }
+  .composer .in { flex:1; background:var(--sf); border:1px solid var(--bd); border-radius:22px; padding:10px 14px; color:var(--tx2); font-size:12.5px; }
+  .composer .send { width:40px; height:40px; border-radius:20px; background:var(--ac); color:var(--acOn); display:flex; align-items:center; justify-content:center; font-weight:700; flex:none; }
+  .chat { flex:1; overflow:hidden; padding:2px 12px; display:flex; flex-direction:column; gap:8px; }
+  .me { align-self:flex-end; background:var(--acSoft); color:var(--tx); border-radius:16px 16px 4px 16px; padding:9px 12px; max-width:85%; font-size:12.5px; }
+  .ai { font-size:12.5px; color:var(--tx); line-height:1.4; padding:2px 2px; }
+  .tool { background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:8px 10px; display:flex; gap:8px; align-items:center; font-size:12px; }
+  .tool .k { font-family:'Cascadia Code',Consolas,monospace; color:var(--tx2); font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool .n { font-weight:650; color:var(--tx); }
+  .tool .ok { color:var(--green); }
+  .agent { background:var(--sf); border:1px solid var(--bd); border-left:3px solid var(--codex); border-radius:12px; padding:8px 10px; font-size:12px; }
+  .agent .r { display:flex; align-items:center; gap:6px; }
+  .agent .name { font-weight:650; color:var(--tx); flex:1; }
+  .agent .meta { color:var(--tx2); font-size:11px; margin-top:3px; }
+  .ask { background:color-mix(in srgb, var(--amber) 9%, var(--sf)); border:1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius:14px; padding:10px 10px 8px; }
+  .ask .q { font-size:12.5px; color:var(--tx); font-weight:650; margin-bottom:7px; }
+  .ask .opt { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; background:var(--sf); border:1px solid var(--bd); font-size:12px; margin-bottom:5px; color:var(--tx); }
+  .ask .opt .n { width:18px; height:18px; border-radius:9px; background:var(--sf2); color:var(--tx2); font-size:10px; display:inline-flex; align-items:center; justify-content:center; font-weight:700; flex:none; }
+  .ask .opt.sel { border-color:var(--ac); background:var(--acSoft); }
+  .ask .opt.sel .n { background:var(--ac); color:var(--acOn); }
+  .ask .rec { margin-left:auto; font-size:9.5px; color:var(--green); font-weight:700; letter-spacing:.03em; }
+  .ask .foot { font-size:10.5px; color:var(--tx2); margin-top:3px; }
+
+  /* lock screen + notif */
+  .lock { flex:1; display:flex; flex-direction:column; align-items:center; padding:26px 14px 0; gap:10px; background:radial-gradient(900px 420px at 50% -10%, color-mix(in srgb, var(--ac) 28%, var(--bg)), var(--bg) 60%); }
+  .lock .time { font-size:52px; font-weight:300; letter-spacing:-1px; color:var(--tx); }
+  .lock .date { font-size:13px; color:var(--tx2); margin-top:-6px; margin-bottom:12px; }
+  .notif { width:100%; background:color-mix(in srgb, var(--sf) 92%, transparent); border-radius:18px; padding:11px 13px; border:1px solid var(--bd); }
+  .notif .h { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--tx2); }
+  .notif .h .app { color:var(--tx); font-weight:650; }
+  .notif .ti { font-weight:650; font-size:13px; margin-top:5px; color:var(--tx); }
+  .notif .bo { font-size:12px; color:var(--tx2); margin-top:2px; line-height:1.35; }
+  .notif .acts { display:flex; gap:14px; margin-top:9px; font-size:12px; font-weight:650; color:var(--ac); }
+  .notif .reply { display:flex; gap:8px; align-items:center; margin-top:9px; }
+  .notif .reply .f { flex:1; background:var(--sf2); border:1px solid var(--bd); border-radius:18px; padding:8px 12px; font-size:12px; color:var(--tx); }
+  .notif .reply .s { width:32px; height:32px; border-radius:16px; background:var(--ac); color:var(--acOn); display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .appicon { width:16px; height:16px; border-radius:4px; display:inline-block; }
+
+  /* settings */
+  .set { flex:1; overflow:hidden; padding:0 12px; display:flex; flex-direction:column; gap:8px; }
+  .grp { background:var(--sf); border:1px solid var(--bd); border-radius:16px; overflow:hidden; }
+  .grp .gh { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--tx2); padding:9px 12px 4px; font-weight:700; }
+  .srow { display:flex; align-items:center; gap:10px; padding:9px 12px; border-top:1px solid var(--bd); font-size:12.5px; }
+  .srow:first-of-type { border-top:none; }
+  .srow .l { flex:1; }
+  .srow .l small { display:block; color:var(--tx2); font-size:10.5px; margin-top:1px; }
+  .sw { width:38px; height:22px; border-radius:11px; background:var(--sf2); border:1px solid var(--bd); position:relative; flex:none; }
+  .sw i { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:8px; background:var(--tx2); }
+  .sw.on { background:var(--ac); border-color:var(--ac); } .sw.on i { left:18px; background:var(--acOn); }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; padding:4px 12px 10px; }
+  .chips span { font-size:10.5px; padding:4px 9px; border-radius:999px; background:var(--sf2); border:1px solid var(--bd); color:var(--tx2); }
+  .chips span.sel { background:var(--acSoft); color:var(--ac); border-color:color-mix(in srgb, var(--ac) 35%, transparent); font-weight:700; }
+  .seg { display:flex; background:var(--sf2); border-radius:9px; padding:2px; font-size:11px; }
+  .seg div { padding:4px 8px; border-radius:7px; color:var(--tx2); }
+  .seg div.sel { background:var(--sf); color:var(--tx); font-weight:700; box-shadow:0 1px 2px rgba(0,0,0,.15); }
+
+  /* new session */
+  .form { flex:1; overflow:hidden; padding:0 12px; display:flex; flex-direction:column; gap:9px; }
+  .lbl { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--tx2); font-weight:700; margin-bottom:-4px; }
+  .field { background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:9px 12px; font-size:12px; color:var(--tx); display:flex; align-items:center; gap:8px; }
+  .field .mono { font-family:'Cascadia Code',Consolas,monospace; font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .field.ta { min-height:58px; align-items:flex-start; color:var(--tx2); }
+  .segw { display:flex; background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:3px; }
+  .segw div { flex:1; text-align:center; padding:7px; border-radius:9px; font-size:12px; color:var(--tx2); }
+  .segw div.sel { background:var(--acSoft); color:var(--ac); font-weight:700; }
+  .pb { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .pbc { background:var(--sf); border:1px solid var(--bd); border-radius:12px; padding:9px 10px; font-size:11.5px; }
+  .pbc .t { font-weight:650; color:var(--tx); display:flex; gap:6px; align-items:center; }
+  .pbc .s { color:var(--tx2); font-size:10.5px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pbc.add { border-style:dashed; color:var(--tx2); display:flex; align-items:center; justify-content:center; }
+  .cta { margin:0 12px 12px; background:var(--ac); color:var(--acOn); text-align:center; padding:12px; border-radius:14px; font-weight:700; font-size:13px; flex:none; }
+
+  /* ---------- themes: dark by default, light when toggled ---------- */
+  .all .graphite { --font:Inter,Roboto,system-ui,sans-serif; --frame:#262932; --bg:#0b0d12; --sf:#12151c; --sf2:#1a1e27; --bd:#222733; --tx:#e6e8ee; --tx2:#8f96a3; --ac:#9cc4ff; --acOn:#0b1a33; --acSoft:#1d2a44; --amber:#f5b94a; --blue:#5aa9ff; --green:#4fd38a; --claude:#e3a57e; --codex:#b4a7ff; --shell:#7fd1e6; --tbg:#0b0d12; --tfg:#d4d8e0; --tuser:#9cc4ff; --tbul:#f5b94a; --tdim:#6b7280; --tbox:#c9b58c; --tsl:#5aa9ff; }
+  #lightmode:checked ~ .all .graphite { --frame:#2a2d35; --bg:#f2f3f6; --sf:#ffffff; --sf2:#e9ebf0; --bd:#dcdfe6; --tx:#171a21; --tx2:#697180; --ac:#2f6fed; --acOn:#ffffff; --acSoft:#e3ecff; --amber:#c98a12; --blue:#2f6fed; --green:#1f9d5a; --claude:#c2622f; --codex:#6a52e6; --shell:#1686a3; --tbg:#ffffff; --tfg:#2a2f3a; --tuser:#2f6fed; --tbul:#b8780a; --tdim:#8a919e; --tbox:#8a6d2b; --tsl:#2f6fed; }
+
+  .all .ember { --font:Inter,Roboto,system-ui,sans-serif; --frame:#2a2320; --bg:#120f0d; --sf:#1b1613; --sf2:#241e1a; --bd:#2e2622; --tx:#f3ebe3; --tx2:#a3978c; --ac:#e8a06c; --acOn:#2a160a; --acSoft:#3a2718; --amber:#f2b955; --blue:#8fb7ff; --green:#6fd39a; --claude:#f0b48c; --codex:#c5b4ff; --shell:#86d0c0; --tbg:#120f0d; --tfg:#e9dfd4; --tuser:#e8a06c; --tbul:#f2b955; --tdim:#7d7064; --tbox:#d1b58a; --tsl:#e8a06c; }
+  #lightmode:checked ~ .all .ember { --frame:#3a2f28; --bg:#f8f3ec; --sf:#fffdf9; --sf2:#f1e9df; --bd:#e3d8cb; --tx:#2a211b; --tx2:#7d6f63; --ac:#c8622f; --acOn:#ffffff; --acSoft:#f6e2d5; --amber:#b8800f; --blue:#3a6fd8; --green:#1f8f5a; --claude:#bf5a2a; --codex:#6c54d8; --shell:#1a8f7f; --tbg:#fffdf9; --tfg:#332a24; --tuser:#c8622f; --tbul:#b8800f; --tdim:#9a8c80; --tbox:#8a6a3a; --tsl:#c8622f; }
+
+  .all .aurora { --font:Inter,Roboto,system-ui,sans-serif; --frame:#232848; --bg:#0a0c18; --sf:#11142a; --sf2:#181c38; --bd:#232848; --tx:#e9ebff; --tx2:#8f94bb; --ac:#8ef0d6; --acOn:#062219; --acSoft:#1a2f3a; --amber:#ffc46b; --blue:#86a9ff; --green:#5fe0a8; --claude:#ffb088; --codex:#b9a6ff; --shell:#7ad8ff; --tbg:#0a0c18; --tfg:#d9dcf5; --tuser:#b9a6ff; --tbul:#ffc46b; --tdim:#6a6f99; --tbox:#c9c3a0; --tsl:#8ef0d6; }
+  .all .aurora .composer .send, .all .aurora .cta { background:linear-gradient(135deg,#b9a6ff,#8ef0d6); color:#0a0c18; }
+  #lightmode:checked ~ .all .aurora { --frame:#2b2f55; --bg:#f0f2fb; --sf:#ffffff; --sf2:#e7eaf8; --bd:#d8dcf0; --tx:#171a33; --tx2:#6b7096; --ac:#4f46e5; --acOn:#ffffff; --acSoft:#e6e4ff; --amber:#c58a0d; --blue:#4f46e5; --green:#179c62; --claude:#d2652f; --codex:#6d5ae6; --shell:#0e8fb8; --tbg:#ffffff; --tfg:#2a2d4a; --tuser:#4f46e5; --tbul:#b8780a; --tdim:#8c90b0; --tbox:#7a6a3a; --tsl:#179c62; }
+  #lightmode:checked ~ .all .aurora .composer .send, #lightmode:checked ~ .all .aurora .cta { background:linear-gradient(135deg,#6d5ae6,#1fb597); color:#fff; }
+
+  .all .phosphor { --font:'Cascadia Code','JetBrains Mono',Consolas,monospace; --frame:#15261a; --bg:#040705; --sf:#0a120c; --sf2:#0f1a12; --bd:#15261a; --tx:#d8f3df; --tx2:#6f9c7c; --ac:#3dff8f; --acOn:#04200f; --acSoft:#0f3a20; --amber:#ffd166; --blue:#62b6ff; --green:#3dff8f; --claude:#ffb86b; --codex:#c3a6ff; --shell:#62e0ff; --tbg:#040705; --tfg:#c8eccf; --tuser:#3dff8f; --tbul:#ffd166; --tdim:#4f7a5c; --tbox:#9fd3ad; --tsl:#3dff8f; }
+  #lightmode:checked ~ .all .phosphor { --frame:#1d3a28; --bg:#eef3ee; --sf:#ffffff; --sf2:#e2ebe3; --bd:#cfdcd2; --tx:#10251a; --tx2:#577462; --ac:#0f9d58; --acOn:#ffffff; --acSoft:#d9f1e3; --amber:#b07a00; --blue:#1f6fd0; --green:#0f9d58; --claude:#cc6b1f; --codex:#6f4fd9; --shell:#0c8fb0; --tbg:#ffffff; --tfg:#1d3326; --tuser:#0f9d58; --tbul:#b07a00; --tdim:#86a08f; --tbox:#4f7a5c; --tsl:#0f9d58; }
+  .all .phosphor .tabs, .all .phosphor .tool, .all .phosphor .agent, .all .phosphor .ask, .all .phosphor .ask .opt, .all .phosphor .keybar div, .all .phosphor .composer .in, .all .phosphor .grp, .all .phosphor .field, .all .phosphor .segw, .all .phosphor .pbc, .all .phosphor .cta, .all .phosphor .notif, .all .phosphor .term { border-radius:7px; }
+  .all .phosphor .composer .send, .all .phosphor .notif .reply .s { border-radius:7px; }
+</style>
+
+<div class="all">
+
+<div class="sec"><h3>Terminal tab</h3><p>Same Claude Code session in each theme. Your status line is part of the terminal output, so it appears as-is. The agent is in skip-permissions mode, so what's waiting is a question, not a permission prompt.</p></div>
+<div class="row">
+
+  <div class="col"><div class="ph graphite">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div class="sel">Terminal</div><div>Chat</div></div>
+    <div class="term"><span class="u">&gt; Add login to the API</span>
+
+<span class="b">●</span> I'll check how sessions are handled today.
+
+<span class="b">●</span> <b>Grep</b>(pattern: "session", path: src/)
+  <span class="d">⎿  Found 14 matches in 6 files</span>
+
+<span class="b">●</span> <b>Explore</b>(find existing auth code)
+  <span class="d">⎿  Done (5 tool uses · 3.4k tokens)</span>
+
+<span class="b">●</span> Two options fit this codebase. Let me ask.
+
+<span class="box">╭─ Question ──────────────────────────╮
+│ Which auth approach should I use?   │
+│                                     │
+│ ❯ 1. Session cookies (Recommended)  │
+│   2. JWT in Authorization header    │
+│   3. Other                          │
+╰─────────────────────────────────────╯</span>
+<span class="sl">Model: Fable 5.1 │ Thinking: xhigh │ Ctx: 11.0% │ $3.60 │ 5h: 38%</span>
+<span class="d">⏵⏵ bypass permissions on · 1 shell</span></div>
+    <div class="keybar"><div>Esc</div><div>Tab</div><div class="mod">Ctrl</div><div>↑</div><div>↓</div><div>←</div><div>→</div><div>⏎</div><div>⌨</div></div>
+    <div class="composer"><div class="in">Type, then send as a line…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Graphite</b></div></div>
+
+  <div class="col"><div class="ph ember">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div class="sel">Terminal</div><div>Chat</div></div>
+    <div class="term"><span class="u">&gt; Add login to the API</span>
+
+<span class="b">●</span> I'll check how sessions are handled today.
+
+<span class="b">●</span> <b>Grep</b>(pattern: "session", path: src/)
+  <span class="d">⎿  Found 14 matches in 6 files</span>
+
+<span class="b">●</span> <b>Explore</b>(find existing auth code)
+  <span class="d">⎿  Done (5 tool uses · 3.4k tokens)</span>
+
+<span class="b">●</span> Two options fit this codebase. Let me ask.
+
+<span class="box">╭─ Question ──────────────────────────╮
+│ Which auth approach should I use?   │
+│                                     │
+│ ❯ 1. Session cookies (Recommended)  │
+│   2. JWT in Authorization header    │
+│   3. Other                          │
+╰─────────────────────────────────────╯</span>
+<span class="sl">Model: Fable 5.1 │ Thinking: xhigh │ Ctx: 11.0% │ $3.60 │ 5h: 38%</span>
+<span class="d">⏵⏵ bypass permissions on · 1 shell</span></div>
+    <div class="keybar"><div>Esc</div><div>Tab</div><div class="mod">Ctrl</div><div>↑</div><div>↓</div><div>←</div><div>→</div><div>⏎</div><div>⌨</div></div>
+    <div class="composer"><div class="in">Type, then send as a line…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Ember</b></div></div>
+
+  <div class="col"><div class="ph aurora">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div class="sel">Terminal</div><div>Chat</div></div>
+    <div class="term"><span class="u">&gt; Add login to the API</span>
+
+<span class="b">●</span> I'll check how sessions are handled today.
+
+<span class="b">●</span> <b>Grep</b>(pattern: "session", path: src/)
+  <span class="d">⎿  Found 14 matches in 6 files</span>
+
+<span class="b">●</span> <b>Explore</b>(find existing auth code)
+  <span class="d">⎿  Done (5 tool uses · 3.4k tokens)</span>
+
+<span class="b">●</span> Two options fit this codebase. Let me ask.
+
+<span class="box">╭─ Question ──────────────────────────╮
+│ Which auth approach should I use?   │
+│                                     │
+│ ❯ 1. Session cookies (Recommended)  │
+│   2. JWT in Authorization header    │
+│   3. Other                          │
+╰─────────────────────────────────────╯</span>
+<span class="sl">Model: Fable 5.1 │ Thinking: xhigh │ Ctx: 11.0% │ $3.60 │ 5h: 38%</span>
+<span class="d">⏵⏵ bypass permissions on · 1 shell</span></div>
+    <div class="keybar"><div>Esc</div><div>Tab</div><div class="mod">Ctrl</div><div>↑</div><div>↓</div><div>←</div><div>→</div><div>⏎</div><div>⌨</div></div>
+    <div class="composer"><div class="in">Type, then send as a line…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Aurora</b></div></div>
+
+  <div class="col"><div class="ph phosphor">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>claude · needs input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div class="sel">terminal</div><div>chat</div></div>
+    <div class="term"><span class="u">&gt; Add login to the API</span>
+
+<span class="b">●</span> I'll check how sessions are handled today.
+
+<span class="b">●</span> <b>Grep</b>(pattern: "session", path: src/)
+  <span class="d">⎿  Found 14 matches in 6 files</span>
+
+<span class="b">●</span> <b>Explore</b>(find existing auth code)
+  <span class="d">⎿  Done (5 tool uses · 3.4k tokens)</span>
+
+<span class="b">●</span> Two options fit this codebase. Let me ask.
+
+<span class="box">╭─ Question ──────────────────────────╮
+│ Which auth approach should I use?   │
+│                                     │
+│ ❯ 1. Session cookies (Recommended)  │
+│   2. JWT in Authorization header    │
+│   3. Other                          │
+╰─────────────────────────────────────╯</span>
+<span class="sl">Model: Fable 5.1 │ Thinking: xhigh │ Ctx: 11.0% │ $3.60 │ 5h: 38%</span>
+<span class="d">⏵⏵ bypass permissions on · 1 shell</span></div>
+    <div class="keybar"><div>Esc</div><div>Tab</div><div class="mod">Ctrl</div><div>↑</div><div>↓</div><div>←</div><div>→</div><div>⏎</div><div>⌨</div></div>
+    <div class="composer"><div class="in">type, then send as a line…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Phosphor</b></div></div>
+
+</div>
+
+<div class="sec"><h3>Chat tab</h3><p>Same session, read from the transcript. The status strip under the tabs shows the chips you picked in Settings. Claude's question renders as real buttons; tapping one presses the matching number in the terminal.</p></div>
+<div class="row">
+
+  <div class="col"><div class="ph graphite">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+    <div class="strip"><span class="m">✦ Fable 5.1</span><span>xhigh</span><span>ctx 11%</span><span>$3.60</span><span>5h 38%</span><span>32m</span></div>
+    <div class="chat">
+      <div class="me">Add login to the API</div>
+      <div class="ai">I'll check how sessions are handled today.</div>
+      <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+      <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+      <div class="ai">Two options fit this codebase. Let me ask.</div>
+      <div class="ask">
+        <div class="q">Which auth approach should I use?</div>
+        <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+        <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+        <div class="opt"><span class="n">3</span>Other…</div>
+        <div class="foot">Tap to answer. Same as pressing 1, 2 or 3 in the terminal.</div>
+      </div>
+    </div>
+    <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Graphite</b></div></div>
+
+  <div class="col"><div class="ph ember">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+    <div class="strip"><span class="m">✦ Fable 5.1</span><span>xhigh</span><span>ctx 11%</span><span>$3.60</span><span>5h 38%</span><span>32m</span></div>
+    <div class="chat">
+      <div class="me">Add login to the API</div>
+      <div class="ai">I'll check how sessions are handled today.</div>
+      <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+      <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+      <div class="ai">Two options fit this codebase. Let me ask.</div>
+      <div class="ask">
+        <div class="q">Which auth approach should I use?</div>
+        <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+        <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+        <div class="opt"><span class="n">3</span>Other…</div>
+        <div class="foot">Tap to answer. Same as pressing 1, 2 or 3 in the terminal.</div>
+      </div>
+    </div>
+    <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Ember</b></div></div>
+
+  <div class="col"><div class="ph aurora">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>Claude · needs your input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div>Terminal</div><div class="sel">Chat</div></div>
+    <div class="strip"><span class="m">✦ Fable 5.1</span><span>xhigh</span><span>ctx 11%</span><span>$3.60</span><span>5h 38%</span><span>32m</span></div>
+    <div class="chat">
+      <div class="me">Add login to the API</div>
+      <div class="ai">I'll check how sessions are handled today.</div>
+      <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+      <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">Sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+      <div class="ai">Two options fit this codebase. Let me ask.</div>
+      <div class="ask">
+        <div class="q">Which auth approach should I use?</div>
+        <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+        <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+        <div class="opt"><span class="n">3</span>Other…</div>
+        <div class="foot">Tap to answer. Same as pressing 1, 2 or 3 in the terminal.</div>
+      </div>
+    </div>
+    <div class="composer"><div class="in">Message Claude…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Aurora</b></div></div>
+
+  <div class="col"><div class="ph phosphor">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">web-platform</div><div class="sub"><span class="dot amber"></span>claude · needs input</div></div><div class="sp"></div><span class="ic">⋮</span></div>
+    <div class="tabs"><div>terminal</div><div class="sel">chat</div></div>
+    <div class="strip"><span class="m">✦ Fable 5.1</span><span>xhigh</span><span>ctx 11%</span><span>$3.60</span><span>5h 38%</span><span>32m</span></div>
+    <div class="chat">
+      <div class="me">Add login to the API</div>
+      <div class="ai">I'll check how sessions are handled today.</div>
+      <div class="tool"><span class="ok">✓</span><span class="n">Grep</span><span class="k">"session" in src/ · 14 matches</span></div>
+      <div class="agent"><div class="r"><span>🧭</span><span class="name">Explore · find existing auth code</span><span>›</span></div><div class="meta">sub-agent · done · 5 tool uses · 3.4k tokens</div></div>
+      <div class="ai">Two options fit this codebase. Let me ask.</div>
+      <div class="ask">
+        <div class="q">Which auth approach should I use?</div>
+        <div class="opt sel"><span class="n">1</span>Session cookies<span class="rec">RECOMMENDED</span></div>
+        <div class="opt"><span class="n">2</span>JWT in Authorization header</div>
+        <div class="opt"><span class="n">3</span>Other…</div>
+        <div class="foot">tap to answer. same as pressing 1, 2 or 3 in the terminal.</div>
+      </div>
+    </div>
+    <div class="composer"><div class="in">message claude…</div><div class="send">➤</div></div>
+  </div><div class="cap"><b>Phosphor</b></div></div>
+
+</div>
+
+<div class="sec"><h3>Approved features and one to decide</h3><p>Shown in Aurora, but every theme applies. Left to right: reply straight from the notification, Settings with keep-awake and the status-strip picker, and New Session with Playbooks for you to judge.</p></div>
+<div class="row">
+
+  <!-- Notification with inline reply -->
+  <div class="col"><div class="ph aurora">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="lock">
+      <div class="time">19:42</div>
+      <div class="date">Thu, 30 Oct</div>
+      <div class="notif">
+        <div class="h"><svg class="appicon" viewBox="0 0 1024 1024"><defs><linearGradient id="gn1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9a6ff"/><stop offset="1" stop-color="#8ef0d6"/></linearGradient></defs><rect width="1024" height="1024" rx="230" fill="#0a0c18"/><path d="M300 330 L560 512 L300 694" fill="none" stroke="url(#gn1)" stroke-width="120" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="url(#gn1)" stroke-width="46" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="url(#gn1)" stroke-width="46"/></svg><span class="app">AFK</span><span>· web-platform · now</span></div>
+        <div class="ti">Claude finished</div>
+        <div class="bo">Login added with session cookies. 12 tests pass. Want me to commit and push?</div>
+        <div class="reply"><div class="f">Yes, commit and push</div><div class="s">➤</div></div>
+      </div>
+      <div class="notif">
+        <div class="h"><svg class="appicon" viewBox="0 0 1024 1024"><defs><linearGradient id="gn2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9a6ff"/><stop offset="1" stop-color="#8ef0d6"/></linearGradient></defs><rect width="1024" height="1024" rx="230" fill="#0a0c18"/><path d="M300 330 L560 512 L300 694" fill="none" stroke="url(#gn2)" stroke-width="120" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="url(#gn2)" stroke-width="46" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="url(#gn2)" stroke-width="46"/></svg><span class="app">AFK</span><span>· shop-estimator · 3m</span></div>
+        <div class="ti">Codex needs your input</div>
+        <div class="bo">Should I also migrate the legacy estimate format?</div>
+        <div class="acts"><span>Reply</span><span>Open</span></div>
+      </div>
+    </div>
+  </div><div class="cap"><b>Inline reply.</b> Tap Reply and type without opening the app. The text goes into the session as if you'd typed it in the composer.</div></div>
+
+  <!-- Settings -->
+  <div class="col"><div class="ph aurora tall">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">←</span><div><div class="t">Settings</div></div></div>
+    <div class="set">
+      <div class="grp">
+        <div class="gh">Laptop</div>
+        <div class="srow"><div class="l">AMAN-LAPTOP<small>Connected over Tailscale · 100.84.12.9</small></div><span class="dot green"></span></div>
+        <div class="srow"><div class="l">Keep laptop awake while agents work<small>Releases 10 min after the last agent goes idle</small></div><div class="sw on"><i></i></div></div>
+      </div>
+      <div class="grp">
+        <div class="gh">Appearance</div>
+        <div class="srow"><div class="l">Theme</div><div class="seg"><div>Graphite</div><div>Ember</div><div class="sel">Aurora</div><div>Phosphor</div></div></div>
+        <div class="srow"><div class="l">Mode</div><div class="seg"><div class="sel">System</div><div>Light</div><div>Dark</div></div></div>
+        <div class="srow"><div class="l">Always dark terminal<small>Keep the terminal dark even in light mode</small></div><div class="sw"><i></i></div></div>
+      </div>
+      <div class="grp">
+        <div class="gh">Status strip · pick what shows</div>
+        <div class="chips"><span class="sel">✓ Model</span><span class="sel">✓ Thinking</span><span class="sel">✓ Ctx used</span><span>Ctx size</span><span class="sel">✓ Cost</span><span class="sel">✓ 5h limit</span><span>7d limit</span><span class="sel">✓ Session time</span><span>Memory</span><span>Tokens in/out</span></div>
+      </div>
+      <div class="grp">
+        <div class="gh">Notifications</div>
+        <div class="srow"><div class="l">Needs your input</div><div class="sw on"><i></i></div></div>
+        <div class="srow"><div class="l">Task finished</div><div class="sw on"><i></i></div></div>
+        <div class="srow"><div class="l">Sub-agent finished</div><div class="sw"><i></i></div></div>
+      </div>
+    </div>
+  </div><div class="cap"><b>Settings.</b> Keep-awake is a switch. The status-strip picker chooses chips for the chat tab. Theme and mode live here too.</div></div>
+
+  <!-- New session + playbooks -->
+  <div class="col"><div class="ph aurora tall">
+    <div class="ph-status"><span>19:42</span><span>▲ ◉ ▮ 86%</span></div>
+    <div class="ph-appbar"><span class="ic">✕</span><div><div class="t">New session</div></div></div>
+    <div class="form">
+      <div class="lbl">Playbooks</div>
+      <div class="pb">
+        <div class="pbc"><div class="t">🧪 Test &amp; fix</div><div class="s">Claude · skip perms · "run tests, fix…"</div></div>
+        <div class="pbc"><div class="t">🔍 Review branch</div><div class="s">Codex · "review the diff vs main…"</div></div>
+        <div class="pbc"><div class="t">📦 Bump deps</div><div class="s">Claude · "update deps, run tests…"</div></div>
+        <div class="pbc add">＋ Save current as playbook</div>
+      </div>
+      <div class="lbl">Folder</div>
+      <div class="field">📁<span class="mono">D:\Naya Repos\personal\web-platform</span><span>▾</span></div>
+      <div class="lbl">Agent</div>
+      <div class="segw"><div class="sel">✱ Claude</div><div>◈ Codex</div><div>&gt;_ Shell</div></div>
+      <div class="lbl">Flags</div>
+      <div class="chips" style="padding:0"><span class="sel">✓ --dangerously-skip-permissions</span><span>--resume</span><span>--model</span></div>
+      <div class="lbl">First prompt · optional</div>
+      <div class="field ta">Run the test suite and fix whatever fails. Don't touch the API contract.</div>
+    </div>
+    <div class="cta">Start session</div>
+  </div><div class="cap"><b>Playbooks.</b> Just saved presets: folder, agent, flags, and a prompt. Tap one and the form fills in. Shell sessions are the same screen with Shell selected.</div></div>
+
+</div>
+
+<div class="sec"><h3>Icon, drawn as a vector</h3><p>Your first generated icon, the one with the phone screen and the long arc, is closest to the idea. I've redrawn that composition as an SVG so it's crisp at every size and the source lives in the repo. Shown at launcher, notification, and status-bar sizes.</p></div>
+<div style="display:flex; gap:2rem; align-items:flex-end; flex-wrap:wrap; padding:1rem 0 .5rem;">
+  <svg viewBox="0 0 1024 1024" width="160" height="160" style="border-radius:36px; box-shadow:0 10px 24px rgba(0,0,0,.35)"><defs><linearGradient id="gi1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9a6ff"/><stop offset="1" stop-color="#8ef0d6"/></linearGradient></defs><rect width="1024" height="1024" rx="230" fill="#0a0c18"/><path d="M300 330 L560 512 L300 694" fill="none" stroke="url(#gi1)" stroke-width="120" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="url(#gi1)" stroke-width="46" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="url(#gi1)" stroke-width="46"/><line x1="732" y1="728" x2="788" y2="728" stroke="url(#gi1)" stroke-width="24" stroke-linecap="round"/></svg>
+  <svg viewBox="0 0 1024 1024" width="72" height="72" style="border-radius:16px"><defs><linearGradient id="gi2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9a6ff"/><stop offset="1" stop-color="#8ef0d6"/></linearGradient></defs><rect width="1024" height="1024" rx="230" fill="#0a0c18"/><path d="M300 330 L560 512 L300 694" fill="none" stroke="url(#gi2)" stroke-width="120" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="url(#gi2)" stroke-width="46" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="url(#gi2)" stroke-width="46"/><line x1="732" y1="728" x2="788" y2="728" stroke="url(#gi2)" stroke-width="24" stroke-linecap="round"/></svg>
+  <svg viewBox="0 0 1024 1024" width="40" height="40" style="border-radius:9px"><defs><linearGradient id="gi3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9a6ff"/><stop offset="1" stop-color="#8ef0d6"/></linearGradient></defs><rect width="1024" height="1024" rx="230" fill="#0a0c18"/><path d="M300 330 L560 512 L300 694" fill="none" stroke="url(#gi3)" stroke-width="120" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="url(#gi3)" stroke-width="46" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="url(#gi3)" stroke-width="46"/><line x1="732" y1="728" x2="788" y2="728" stroke="url(#gi3)" stroke-width="24" stroke-linecap="round"/></svg>
+  <svg viewBox="0 0 1024 1024" width="24" height="24"><path d="M300 330 L560 512 L300 694" fill="none" stroke="#fff" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/><path d="M520 400 Q 690 270 800 440" fill="none" stroke="#fff" stroke-width="70" stroke-linecap="round"/><rect x="660" y="480" width="200" height="300" rx="44" fill="none" stroke="#fff" stroke-width="70"/></svg>
+  <div class="cap" style="max-width:360px; text-align:left">Launcher 160px, app list 72px, notification 40px, and the white status-bar glyph at 24px. Android's themed icons on 13 and up use that last monochrome shape.</div>
+</div>
+
+</div>

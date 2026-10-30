@@ -1,0 +1,17 @@
+# Brainstorm viewer sessions (mockups are copied into docs/design/mockups/)
+.superpowers/
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.gradle/
+*/build/
+local.properties
+
+# Editors and OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
