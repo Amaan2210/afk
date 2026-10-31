@@ -47,6 +47,12 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
 
     case "turn_end": {
       if (slice.subagentsRunning > 0) return { slice: { ...slice } };
+      // Codex reports a turn's end twice (rollout and notify): the second only refreshes the text.
+      if (slice.state === "finished") {
+        const same = { ...slice };
+        if (signal.lastMessage !== undefined) same.lastMessage = signal.lastMessage;
+        return { slice: same };
+      }
       const next = { ...withoutPending(slice), state: "finished" as const };
       if (signal.lastMessage !== undefined) next.lastMessage = signal.lastMessage;
       return { slice: next, notify: "finished" };

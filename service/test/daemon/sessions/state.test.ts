@@ -118,6 +118,16 @@ describe("reduce", () => {
       expect(r.slice.lastMessage).toBe("old");
     });
 
+    it("turn_end while already finished does not notify again but takes a new lastMessage", () => {
+      const finished: StateSlice = { ...initialSlice, state: "finished", lastMessage: "first" };
+      const r = reduce(finished, { kind: "turn_end", lastMessage: "second" });
+      expect(r.slice).toEqual({ ...finished, lastMessage: "second" });
+      expect(r.notify).toBeUndefined();
+      const bare = reduce(finished, { kind: "turn_end" });
+      expect(bare.slice).toEqual(finished);
+      expect(bare.notify).toBeUndefined();
+    });
+
     it("turn_end while a sub-agent runs leaves pending unchanged", () => {
       const slice: StateSlice = {
         ...initialSlice,
