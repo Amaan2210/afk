@@ -10,6 +10,8 @@ import { createFakePty } from "../../helpers/fake-pty.js";
 import { readFixtureLines } from "../../helpers/fixtures.js";
 
 const POLL_MS = 20;
+/** How long the hub keeps reading after a session's process exits (5 s in the daemon). */
+const EXIT_GRACE_MS = 150;
 const NOW = "2026-10-31T10:00:00.000Z";
 const LINE_AT = "2026-10-30T13:40:00.000Z";
 const HOUR = 3_600_000;
@@ -28,6 +30,8 @@ const MAIN_UNTIL_AGENT = MAIN.slice(0, 7);
 const QUESTION_LINE = MAIN[8];
 const ANSWER_LINE = userToolResult("u5", "toolu_3", "Session cookies");
 const ROLLOUT_IDS = ["ord-2", "c1", "ord-7"];
+/** The only assistant text in the main fixture (line a1). */
+const A1_TEXT = "I'll check how sessions are handled today.";
 
 let dir: string;
 let clock: Date;
@@ -136,6 +140,7 @@ beforeEach(async () => {
   errors = [];
   hub = new ChatHub(registry, {
     pollMs: POLL_MS,
+    exitGraceMs: EXIT_GRACE_MS,
     now: () => new Date(NOW),
     onError: (id, err) => errors.push([id, err]),
   });
@@ -253,9 +258,28 @@ describe("ChatHub with a Claude transcript", () => {
       expect(mainEvent("toolu_0")?.subagent?.threadId).toBe("toolu_0");
 
       // A question asked inside a sub-agent is shown in its thread but is not a session signal.
+      // flush reads the sub-agent's file too, at once.
       append(agentFile, askUserQuestion("s5", "toolu_s2"));
-      await vi.waitFor(() => expect(chatsFor("toolu_s2")).toHaveLength(1));
+      hub.flush(sid);
+      expect(chatsFor("toolu_s2")).toHaveLength(1);
       expect(session().pending).toBeUndefined();
+    },
+  );
+
+  onWindows(
+    "reads the main transcript before linking a sub-agent file that appeared with its Agent call",
+    async () => {
+      write(transcript, MAIN.slice(0, 6));
+      // While the main tailer is reading, the Agent call is appended and its sub-agent's file
+      // created: the watcher finds the file before the main tailer's next poll.
+      hub.once("chat", () => {
+        append(transcript, MAIN[6]);
+        mkdirSync(subagentDir, { recursive: true });
+        write(join(subagentDir, "agent-abc123.jsonl"), AGENT);
+      });
+      hub.attachClaude(sid, transcript);
+      await vi.waitFor(() => expect(hub.threads(sid)).toEqual(["main", "agent-abc123"]));
+      await vi.waitFor(() => expect(mainEvent("toolu_2")?.subagent?.threadId).toBe("agent-abc123"));
     },
   );
 
@@ -282,20 +306,60 @@ describe("ChatHub with a Claude transcript", () => {
 
     registry.signal(sid, { kind: "turn_start" });
     registry.signal(sid, { kind: "turn_end" });
-    const first = "I'll check how sessions are handled today.";
-    expect(session()).toMatchObject({ state: "finished", lastMessage: first });
+    expect(session()).toMatchObject({ state: "finished", lastMessage: A1_TEXT });
     // Set while the signal is applied, so the "finished" notification already carries it.
-    expect(notes.at(-1)).toMatchObject({ kind: "finished", session: { lastMessage: first } });
+    expect(notes.at(-1)).toMatchObject({ kind: "finished", session: { lastMessage: A1_TEXT } });
 
+    registry.signal(sid, { kind: "turn_start" });
     append(transcript, assistantText("a6", "x".repeat(300)));
     await vi.waitFor(() => expect(chatsFor("a6")).toHaveLength(1));
-    registry.signal(sid, { kind: "turn_start" });
     registry.signal(sid, { kind: "turn_end" });
-    expect(session().lastMessage).toBe(`${"x".repeat(200)}…`);
+    expect(session().lastMessage).toBe(`${"x".repeat(199)}…`);
+    expect(session().lastMessage).toHaveLength(200); // the ellipsis included
 
     registry.signal(sid, { kind: "turn_start" });
     registry.signal(sid, { kind: "turn_end", lastMessage: "From the hook." });
     expect(session().lastMessage).toBe("From the hook.");
+  });
+
+  it("flush reads the transcript now, so a Stop hook that beats the next poll gets the final reply", async () => {
+    const notes: { kind: NotifyKind; session: Session }[] = [];
+    registry.on("notify", (n) => notes.push(n));
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS));
+    registry.signal(sid, { kind: "turn_start" });
+
+    // The final reply is written and the Stop hook arrives before the tailer polls again.
+    append(transcript, assistantText("a6", "All tests pass."));
+    hub.flush(sid);
+    registry.signal(sid, { kind: "turn_end" });
+    expect(session().lastMessage).toBe("All tests pass.");
+    expect(notes.at(-1)).toMatchObject({
+      kind: "finished",
+      session: { lastMessage: "All tests pass." },
+    });
+    expect(ids(hub.history(sid, "main")).slice(-3)).toEqual(["turn-1", "a6", "turn-2"]);
+
+    hub.flush("no-such-session"); // unknown: nothing to read
+    hub.detach(sid);
+    hub.flush(sid); // detached: nothing to read
+  });
+
+  it("a reply read after the turn ended still becomes the session's lastMessage", async () => {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS));
+
+    registry.signal(sid, { kind: "turn_start" });
+    append(transcript, assistantText("a6", "Working on it."));
+    await vi.waitFor(() => expect(chatsFor("a6")).toHaveLength(1));
+    expect(session().lastMessage).toBeUndefined(); // mid-turn replies leave it alone
+
+    registry.signal(sid, { kind: "turn_end" });
+    expect(session().lastMessage).toBe("Working on it.");
+    append(transcript, assistantText("a7", "y".repeat(250))); // written after the Stop hook
+    await vi.waitFor(() => expect(session().lastMessage).toBe(`${"y".repeat(199)}…`));
   });
 });
 
@@ -356,9 +420,47 @@ describe("ChatHub with a Codex rollout", () => {
     append(rollout, codexEvent({ type: "task_started", turn_id: "t2" }));
     await vi.waitFor(() => expect(session().state).toBe("working"));
   });
+
+  it("re-attaching to a different rollout clears the session's history and strip", async () => {
+    write(rollout, ROLLOUT);
+    hub.attachCodex(sid, rollout);
+    await vi.waitFor(() => expect(hub.latestStrip(sid)).toBeDefined());
+
+    // Its ord-N ids collide with the first file's: kept history would mix the two.
+    const second = join(dir, "rollout-2.jsonl");
+    const message = {
+      timestamp: LINE_AT,
+      ordinal: 2,
+      type: "response_item",
+      payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Other" }] },
+    };
+    write(second, [ROLLOUT[0], message]);
+    hub.attachCodex(sid, second);
+    expect(hub.history(sid, "main")).toEqual([]);
+    expect(hub.latestStrip(sid)).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(hub.history(sid, "main")).toMatchObject([{ id: "ord-2", text: "Other" }]),
+    );
+  });
 });
 
 describe("ChatHub session signals", () => {
+  it("does not repeat a turn marker of the same phase", async () => {
+    const markers = (id: string) =>
+      chats.filter((c) => c.sessionId === id && c.event.kind === "turn").map((c) => c.event.turn);
+    // Codex reports a turn's end twice: from the rollout and from its notify hook.
+    registry.signal(sid, { kind: "turn_end" });
+    registry.signal(sid, { kind: "turn_end" });
+    expect(markers(sid)).toEqual([{ phase: "end" }]);
+
+    const other = await newSession();
+    for (const kind of ["turn_start", "turn_end", "turn_end", "turn_start"] as const) {
+      registry.signal(other, { kind });
+    }
+    expect(markers(other)).toEqual([{ phase: "start" }, { phase: "end" }, { phase: "start" }]);
+    expect(ids(hub.history(other, "main"))).toEqual(["turn-1", "turn-2", "turn-3"]);
+  });
+
   it("emits turn events on turn_start and turn_end signals", async () => {
     registry.signal(sid, { kind: "turn_start" });
     registry.signal(sid, { kind: "turn_end" });
@@ -392,18 +494,38 @@ describe("ChatHub session signals", () => {
     expect(hub.history(sid, "main")).toEqual([shown]);
   });
 
-  it("pending_cleared without an id resolves the last pending the hub saw", () => {
-    const perm = (id: string): Pending => ({ kind: "permission", id, tool: "Bash", summary: id });
+  it("a pending replaced by another, or cleared without an id, is shown resolved", () => {
     registry.signal(sid, { kind: "pending", pending: perm("perm-1") });
     registry.signal(sid, { kind: "pending", pending: perm("perm-2") });
-    registry.signal(sid, { kind: "pending_cleared" });
-    expect(hub.history(sid, "main")).toMatchObject([
-      { id: "perm-1", pending: { id: "perm-1" } },
-      { id: "perm-2" },
+    expect(hub.history(sid, "main")).toEqual([
+      permEvent("perm-1"),
+      { ...permEvent("perm-2"), pending: perm("perm-2") },
     ]);
-    expect(mainEvent("perm-2")?.pending).toBeUndefined();
+    registry.signal(sid, { kind: "pending_cleared" });
+    expect(hub.history(sid, "main")).toEqual([permEvent("perm-1"), permEvent("perm-2")]);
+  });
+
+  it("a permission card is resolved when a turn starts or the process exits", () => {
+    registry.signal(sid, { kind: "pending", pending: perm("perm-1") });
+    registry.signal(sid, { kind: "turn_start" });
+    expect(hub.history(sid, "main")).toMatchObject([permEvent("perm-1"), { id: "turn-1" }]);
+    expect(mainEvent("perm-1")?.pending).toBeUndefined();
+
+    registry.signal(sid, { kind: "pending", pending: perm("perm-2") });
+    fakes.last.emitExit(1);
+    expect(session().state).toBe("ended");
+    expect(mainEvent("perm-2")).toEqual(permEvent("perm-2"));
   });
 });
+
+function perm(id: string): Pending {
+  return { kind: "permission", id, tool: "Bash", summary: `run ${id}` };
+}
+
+/** A permission card as the hub shows it once resolved (no `pending`). */
+function permEvent(id: string): ChatEvent {
+  return { id, threadId: "main", at: NOW, kind: "permission" };
+}
 
 describe("ChatHub attachments", () => {
   it("detach stops tailers (no events after append) and is idempotent", async () => {
@@ -423,18 +545,53 @@ describe("ChatHub attachments", () => {
     expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS); // detaching keeps the history
   });
 
-  it("attaching an attached session again replaces the first attachment", async () => {
+  it("attaching an attached session to the same file again replaces the attachment, keeping history and strip", async () => {
     write(transcript, MAIN);
     hub.attachClaude(sid, transcript);
     await vi.waitFor(() => expect(chats).toHaveLength(9));
+    const strip: Strip = { at: NOW, contextUsedPct: 5 };
+    hub.updateStrip(sid, strip);
+    registry.signal(sid, { kind: "turn_start" });
+
     hub.attachClaude(sid, transcript);
-    await vi.waitFor(() => expect(chats).toHaveLength(18)); // the new attachment replays
+    expect(ids(hub.history(sid, "main"))).toEqual([...MAIN_IDS, "turn-1"]);
+    expect(hub.latestStrip(sid)).toEqual(strip);
+    await vi.waitFor(() => expect(chats).toHaveLength(19)); // the new attachment replays
 
     append(transcript, assistantText("a6", "Once."));
     await vi.waitFor(() => expect(chatsFor("a6")).toHaveLength(1));
     await pause(POLL_MS * 3);
     expect(chatsFor("a6")).toHaveLength(1);
+    expect(ids(hub.history(sid, "main"))).toEqual([...MAIN_IDS, "turn-1", "a6"]);
+  });
+
+  it("stops reading a session's files a grace period after its process exits, keeping history", async () => {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(chats).toHaveLength(9));
+    const strip: Strip = { at: NOW, contextUsedPct: 7 };
+    hub.updateStrip(sid, strip);
+
+    fakes.last.emitExit(0);
+    append(transcript, assistantText("a6", "Written as it exits."));
+    await vi.waitFor(() => expect(chatsFor("a6")).toHaveLength(1)); // still read in the grace
+    await pause(EXIT_GRACE_MS + POLL_MS * 2);
+    append(transcript, assistantText("a7", "Too late."));
+    await pause(POLL_MS * 5);
+    expect(chatsFor("a7")).toEqual([]);
     expect(ids(hub.history(sid, "main"))).toEqual([...MAIN_IDS, "a6"]);
+    expect(hub.latestStrip(sid)).toEqual(strip);
+  });
+
+  it("attaching again after the exit cancels the pending stop", async () => {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(chats).toHaveLength(9));
+    fakes.last.emitExit(0);
+    hub.attachClaude(sid, transcript);
+    await pause(EXIT_GRACE_MS + POLL_MS * 2);
+    append(transcript, assistantText("a6", "Still read."));
+    await vi.waitFor(() => expect(chatsFor("a6")).toHaveLength(1));
   });
 
   it("routes tailer errors to onError", async () => {

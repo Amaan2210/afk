@@ -9,7 +9,8 @@ import { JsonlTailer } from "./tail.js";
 /** Where a source delivers what it reads. The hub binds one to each session. */
 export interface SourceSink {
   readonly pollMs: number;
-  chat(threadId: string, event: ChatEvent): void;
+  /** `live`: the event comes from a line appended after its file was first read to the end. */
+  chat(threadId: string, event: ChatEvent, live: boolean): void;
   /** A thread's file was truncated or replaced: its history is about to be read again. */
   clear(threadId: string): void;
   thread(threadId: string): void;
@@ -49,6 +50,10 @@ class ThreadTail {
 
   stop(): void {
     this.tailer.stop();
+  }
+
+  drain(): void {
+    this.tailer.drain();
   }
 }
 
@@ -94,9 +99,14 @@ export class ClaudeSource implements AttachedSource {
     for (const tail of this.subagentTails) tail.stop();
   }
 
+  flush(): void {
+    this.mainTail.drain();
+    for (const tail of this.subagentTails) tail.drain();
+  }
+
   private mainLine(obj: unknown, live: boolean): void {
     const before = this.main.pendingQuestion;
-    for (const event of this.main.push(obj)) this.sink.chat(MAIN_THREAD, event);
+    for (const event of this.main.push(obj)) this.sink.chat(MAIN_THREAD, event, live);
     const after = this.main.pendingQuestion;
     if (!live || after?.id === before?.id) return;
     if (after !== undefined) this.sink.signal({ kind: "pending", pending: after });
@@ -109,10 +119,10 @@ export class ClaudeSource implements AttachedSource {
     let normalizer = new ClaudeTranscriptNormalizer(threadId);
     let first = true;
     const tail = new ThreadTail(path, this.sink, {
-      line: (obj) => {
+      line: (obj, live) => {
         if (first) this.link(threadId, obj);
         first = false;
-        for (const event of normalizer.push(obj)) this.sink.chat(threadId, event);
+        for (const event of normalizer.push(obj)) this.sink.chat(threadId, event, live);
       },
       reset: () => {
         this.sink.clear(threadId);
@@ -125,14 +135,16 @@ export class ClaudeSource implements AttachedSource {
 
   /**
    * Points the main thread's running Agent call at the thread whose file starts with `line`: the
-   * call its `fork-context-ref` names, else the oldest one not yet linked.
+   * call its `fork-context-ref` names, else the oldest one not yet linked. The main transcript is
+   * read first, as the call that started the sub-agent may have been written since its last poll.
    */
   private link(threadId: string, line: unknown): void {
+    this.mainTail.drain();
     const parentUuid = parentUuidOf(line);
     let linked: ChatEvent | undefined;
     if (parentUuid !== undefined) linked = this.main.linkSubagentByParent(parentUuid, threadId);
     linked ??= this.main.linkNextSubagent(threadId);
-    if (linked !== undefined) this.sink.chat(MAIN_THREAD, linked);
+    if (linked !== undefined) this.sink.chat(MAIN_THREAD, linked, false);
   }
 }
 
@@ -166,9 +178,13 @@ export class CodexSource implements AttachedSource {
     this.tail.stop();
   }
 
+  flush(): void {
+    this.tail.drain();
+  }
+
   private line(obj: unknown, live: boolean): void {
     const { events, signals, strip, meta } = this.rollout.push(obj);
-    for (const event of events) this.sink.chat(MAIN_THREAD, event);
+    for (const event of events) this.sink.chat(MAIN_THREAD, event, live);
     if (strip !== undefined) this.sink.strip(strip);
     if (meta !== undefined) this.sink.meta(meta);
     if (live) for (const signal of signals) this.sink.signal(signal);

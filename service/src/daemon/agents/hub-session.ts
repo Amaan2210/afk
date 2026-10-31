@@ -3,12 +3,16 @@ import type { ChatEvent, Strip } from "../../protocol/index.js";
 /** The thread of the session's own conversation; sub-agent threads are named after their files. */
 export const MAIN_THREAD = "main";
 
+export type TurnPhase = "start" | "end";
+
 /** An agent log being read into a session's chat. */
 export interface AttachedSource {
   /** Text of the main thread's latest assistant message. */
   readonly lastAssistantText: string | undefined;
   start(): void;
   stop(): void;
+  /** Reads what the files hold now: the main one first, then the sub-agents'. */
+  flush(): void;
 }
 
 /**
@@ -19,10 +23,14 @@ export interface AttachedSource {
 export class HubSession {
   private readonly histories = new Map<string, Map<string, ChatEvent>>([[MAIN_THREAD, new Map()]]);
   private turns = 0;
+  private lastPhase: TurnPhase | undefined;
   strip: Strip | undefined;
-  /** Id of the last pending the session was given, for a `pending_cleared` that names none. */
+  /** Id of the last pending the session was given and the hub has not shown resolved yet. */
   lastPendingId: string | undefined;
   private source: AttachedSource | undefined;
+  /** The file last attached, kept after detaching. */
+  private path: string | undefined;
+  private stopTimer: NodeJS.Timeout | undefined;
 
   /** `main`, then the sub-agent threads in the order they were discovered. */
   threads(): string[] {
@@ -51,8 +59,13 @@ export class HubSession {
     this.histories.get(threadId)?.clear();
   }
 
-  /** `turn-1`, `turn-2`, … for this session's turn markers. */
-  nextTurnId(): string {
+  /**
+   * The id of the next turn marker (`turn-1`, `turn-2`, …), or undefined when the previous marker
+   * had the same phase: a turn reported ended twice gets one marker.
+   */
+  turnMarkerId(phase: TurnPhase): string | undefined {
+    if (phase === this.lastPhase) return undefined;
+    this.lastPhase = phase;
     this.turns += 1;
     return `turn-${this.turns}`;
   }
@@ -61,14 +74,32 @@ export class HubSession {
     return this.source;
   }
 
-  /** Starts reading `source`, after stopping whatever was attached before. */
-  attach(source: AttachedSource): void {
+  /**
+   * Starts reading `source` from `path`, after stopping whatever was attached before. A file other
+   * than the one last attached starts the chat afresh: its event ids may repeat the old file's.
+   */
+  attach(source: AttachedSource, path: string): void {
     this.detach();
+    if (this.path !== undefined && this.path !== path) {
+      this.histories.clear();
+      this.histories.set(MAIN_THREAD, new Map());
+      this.strip = undefined;
+    }
+    this.path = path;
     this.source = source;
     source.start();
   }
 
+  /** Detaches after `ms` unless detached or attached again first. */
+  detachAfter(ms: number): void {
+    clearTimeout(this.stopTimer);
+    this.stopTimer = setTimeout(() => this.detach(), ms).unref();
+  }
+
+  /** Stops reading; the history and strip stay. */
   detach(): void {
+    clearTimeout(this.stopTimer);
+    this.stopTimer = undefined;
     this.source?.stop();
     this.source = undefined;
   }

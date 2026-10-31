@@ -8,7 +8,8 @@ import { ClaudeSource, CodexSource, type SourceSink } from "./hub-sources.js";
 import { truncate } from "./summarize.js";
 
 const DEFAULT_POLL_MS = 250;
-/** Longest `lastMessage` taken from a transcript. */
+const DEFAULT_EXIT_GRACE_MS = 5000;
+/** Longest `lastMessage` taken from a transcript, the ellipsis included. */
 const LAST_MESSAGE_MAX = 200;
 
 type TurnKind = "turn_start" | "turn_end";
@@ -16,6 +17,8 @@ type TurnKind = "turn_start" | "turn_end";
 export interface ChatHubOptions {
   /** How often transcripts and sub-agent folders are polled. */
   pollMs?: number;
+  /** How long a session's files are still read after its process exits. */
+  exitGraceMs?: number;
   /** An I/O failure reading one of a session's files; ignored by default. */
   onError?: (sessionId: string, err: Error) => void;
   now?: () => Date;
@@ -39,11 +42,13 @@ export interface ChatHubEvents {
  * already in a file when it is attached become history only; lines appended later also signal
  * the session (a question opening or closing, a Codex turn starting or ending).
  *
- * The hub keeps state only for sessions the registry has, and drops it when one is removed.
+ * The hub keeps state only for sessions the registry has, stops reading a session's files a
+ * grace period after its process exits, and drops its state when the session is removed.
  */
 export class ChatHub extends EventEmitter<ChatHubEvents> {
   private readonly sessions = new Map<string, HubSession>();
   private readonly pollMs: number;
+  private readonly exitGraceMs: number;
   private readonly onError: (sessionId: string, err: Error) => void;
   private readonly now: () => Date;
 
@@ -53,24 +58,34 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
   ) {
     super();
     this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+    this.exitGraceMs = opts.exitGraceMs ?? DEFAULT_EXIT_GRACE_MS;
     this.onError = opts.onError ?? (() => undefined);
     this.now = opts.now ?? (() => new Date());
     registry.on("signal", (sessionId, signal) => this.onSignal(sessionId, signal));
+    registry.on("exit", (sessionId) => this.onExit(sessionId));
     registry.on("removed", (sessionId) => this.remove(sessionId));
   }
 
   /** Reads a Claude transcript into the main thread and its sub-agents' files into theirs. */
   attachClaude(sessionId: string, transcriptPath: string): void {
-    this.attach(sessionId, (sink) => new ClaudeSource(transcriptPath, sink));
+    this.attach(sessionId, transcriptPath, (sink) => new ClaudeSource(transcriptPath, sink));
   }
 
   attachCodex(sessionId: string, rolloutPath: string): void {
-    this.attach(sessionId, (sink) => new CodexSource(rolloutPath, sink));
+    this.attach(sessionId, rolloutPath, (sink) => new CodexSource(rolloutPath, sink));
   }
 
   /** Stops reading the session's files; its history stays. */
   detach(sessionId: string): void {
     this.sessions.get(sessionId)?.detach();
+  }
+
+  /**
+   * Reads what the session's files hold now instead of at the next poll. Call it before applying
+   * a hook's signal, so the lines the agent wrote before the hook ran come first.
+   */
+  flush(sessionId: string): void {
+    this.sessions.get(sessionId)?.attached?.flush();
   }
 
   history(sessionId: string, threadId: string): ChatEvent[] {
@@ -92,9 +107,13 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     this.emit("strip", { sessionId, strip });
   }
 
-  private attach(sessionId: string, create: (sink: SourceSink) => AttachedSource): void {
+  private attach(
+    sessionId: string,
+    path: string,
+    create: (sink: SourceSink) => AttachedSource,
+  ): void {
     const session = this.session(sessionId);
-    session?.attach(create(this.sinkFor(sessionId, session)));
+    session?.attach(create(this.sinkFor(sessionId, session)), path);
   }
 
   /** The hub's state for a session the registry has, created on first use. */
@@ -107,6 +126,12 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     return session;
   }
 
+  /** The agent may still be flushing its last lines: keep reading a little, then stop. */
+  private onExit(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session?.attached !== undefined) session.detachAfter(this.exitGraceMs);
+  }
+
   private remove(sessionId: string): void {
     this.sessions.get(sessionId)?.detach();
     this.sessions.delete(sessionId);
@@ -115,7 +140,12 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
   private sinkFor(sessionId: string, session: HubSession): SourceSink {
     return {
       pollMs: this.pollMs,
-      chat: (threadId, event) => this.show(sessionId, session, threadId, event),
+      chat: (threadId, event, live) => {
+        this.show(sessionId, session, threadId, event);
+        if (live && threadId === MAIN_THREAD && event.kind === "assistant" && event.text) {
+          this.lateReply(sessionId, event.text);
+        }
+      },
       clear: (threadId) => session.clear(threadId),
       thread: (threadId) => session.addThread(threadId),
       signal: (signal) => {
@@ -132,6 +162,12 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     this.emit("chat", { sessionId, threadId, event });
   }
 
+  /** A reply read after the turn ended (the Stop hook won the race) is still its last message. */
+  private lateReply(sessionId: string, text: string): void {
+    if (this.registry.get(sessionId)?.session.state !== "finished") return;
+    this.registry.setMeta(sessionId, { lastMessage: lastMessageOf(text) });
+  }
+
   /** The rollout's thread id names the Codex conversation unless something already has. */
   private codexMeta(sessionId: string, meta: RolloutMeta): void {
     const record = this.registry.get(sessionId);
@@ -140,8 +176,12 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     this.registry.setMeta(sessionId, { agentSessionId: meta.threadId });
   }
 
-  /** Runs inside `registry.signal`, after the reducer and before "updated" and "notify". */
+  /**
+   * Runs inside `registry.signal`, after the reducer and before "updated" and "notify", so it must
+   * not read files: callers flush first.
+   */
   private onSignal(sessionId: string, signal: AgentSignal): void {
+    this.resolveDropped(sessionId);
     switch (signal.kind) {
       case "turn_start":
       case "turn_end":
@@ -155,20 +195,38 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     }
   }
 
+  /**
+   * The reducer drops a session's pending on more than `pending_cleared`: a newer pending, a turn
+   * boundary, the process exiting. Whatever dropped it, its card is shown resolved.
+   */
+  private resolveDropped(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    const id = session?.lastPendingId;
+    if (session === undefined || id === undefined) return;
+    if (this.registry.get(sessionId)?.session.pending?.id === id) return;
+    session.lastPendingId = undefined;
+    this.resolve(sessionId, session, id);
+  }
+
   /** Marks a turn boundary in the main thread; a bare turn_end takes the transcript's text. */
   private turn(sessionId: string, signal: Extract<AgentSignal, { kind: TurnKind }>): void {
     const session = this.session(sessionId);
     if (session === undefined) return;
-    this.show(sessionId, session, MAIN_THREAD, {
-      id: session.nextTurnId(),
-      threadId: MAIN_THREAD,
-      at: this.now().toISOString(),
-      kind: "turn",
-      turn: { phase: signal.kind === "turn_start" ? "start" : "end" },
-    });
+    const phase = signal.kind === "turn_start" ? "start" : "end";
+    const id = session.turnMarkerId(phase);
+    if (id !== undefined) {
+      const at = this.now().toISOString();
+      this.show(sessionId, session, MAIN_THREAD, {
+        id,
+        threadId: MAIN_THREAD,
+        at,
+        kind: "turn",
+        turn: { phase },
+      });
+    }
     const text = session.attached?.lastAssistantText;
     if (signal.kind === "turn_end" && signal.lastMessage === undefined && text !== undefined) {
-      this.registry.setMeta(sessionId, { lastMessage: truncate(text, LAST_MESSAGE_MAX) });
+      this.registry.setMeta(sessionId, { lastMessage: lastMessageOf(text) });
     }
   }
 
@@ -195,17 +253,25 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     this.show(sessionId, session, MAIN_THREAD, event);
   }
 
-  /** Shows the cleared pending's event resolved (without `pending`), unless it already is. */
   private pendingCleared(sessionId: string, pendingId?: string): void {
     const session = this.sessions.get(sessionId);
-    if (session === undefined) return;
-    const id = pendingId ?? session.lastPendingId;
-    if (id === undefined) return;
+    const id = pendingId ?? session?.lastPendingId;
+    if (session === undefined || id === undefined) return;
     if (id === session.lastPendingId) session.lastPendingId = undefined;
+    this.resolve(sessionId, session, id);
+  }
+
+  /** Shows the event with this id without its `pending`, unless it is already shown so. */
+  private resolve(sessionId: string, session: HubSession, id: string): void {
     const shown = session.find(MAIN_THREAD, id);
     if (shown?.pending === undefined) return;
     const resolved = { ...shown };
     delete resolved.pending;
     this.show(sessionId, session, MAIN_THREAD, resolved);
   }
+}
+
+/** `text` as a session's `lastMessage`: at most LAST_MESSAGE_MAX characters, ellipsis included. */
+function lastMessageOf(text: string): string {
+  return text.length > LAST_MESSAGE_MAX ? truncate(text, LAST_MESSAGE_MAX - 1) : text;
 }
