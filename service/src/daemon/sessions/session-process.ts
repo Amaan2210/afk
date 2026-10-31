@@ -83,8 +83,8 @@ export class SessionProcess {
     this.height = rows;
   }
 
+  /** Passed through even after exit: the pty owns its own clean-up and knows when kill is moot. */
   kill(): void {
-    if (this.lastSnapshot) return;
     this.pty.kill();
   }
 

@@ -109,17 +109,22 @@ describe("SessionProcess", () => {
     expect(exit).not.toHaveBeenCalled();
   });
 
-  it("after exit, keeps the last snapshot and ignores write, resize and kill", () => {
+  it("after exit, keeps the last snapshot and ignores write and resize", () => {
     const { p, fake } = start();
     fake.emitData("bye\r\n");
     fake.emitExit(0);
     p.write(Buffer.from("x"));
     p.resize(100, 30);
-    p.kill();
     expect(fake.written).toEqual([]);
     expect(fake.size).toEqual({ cols: 80, rows: 24 });
-    expect(fake.killed).toBe(false);
     expect(p.snapshot()).toMatchObject({ cols: 80, rows: 24 });
     expect(p.snapshot().data.toString()).toContain("bye");
+  });
+
+  it("after exit, still passes kill to the pty, which owns any clean-up", () => {
+    const { p, fake } = start();
+    fake.emitExit(0);
+    p.kill();
+    expect(fake.killed).toBe(true);
   });
 });
