@@ -26,6 +26,8 @@ export interface HttpDeps {
   /** Codex rollout locate loop timing after `agent-start` (defaults 2000 / 30000 ms). */
   locateIntervalMs?: number;
   locateTimeoutMs?: number;
+  /** Clock for the agent-start time a rollout must not predate. */
+  now?: () => Date;
 }
 
 /** The request listener; call `dispose()` to cancel pending Codex locate timers. */
@@ -71,12 +73,18 @@ const ROUTES: Route[] = [
   },
 ];
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  extraHeaders: Record<string, string> = {},
+): void {
   if (res.writableEnded) return;
   const text = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Content-Length": Buffer.byteLength(text),
+    ...extraHeaders,
   });
   res.end(text);
 }
@@ -118,6 +126,7 @@ export function createHttpHandler(deps: HttpDeps): HttpHandler {
     sessionsDir: deps.codexSessionsDir,
     intervalMs: deps.locateIntervalMs ?? 2000,
     timeoutMs: deps.locateTimeoutMs ?? 30_000,
+    now: deps.now ?? (() => new Date()),
   });
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -165,10 +174,9 @@ export function createHttpHandler(deps: HttpDeps): HttpHandler {
           res,
           err.status,
           withMessage ? { error: err.code, message: err.message } : { error: err.code },
+          err.status === 413 ? { Connection: "close" } : {},
         );
-        if (err.status === 413) {
-          res.once("finish", () => socket.destroy());
-        }
+        if (err.status === 413) res.once("finish", () => socket.destroy());
         return;
       }
       log.error({ err, route, sessionId }, "relay failed");

@@ -69,9 +69,12 @@ export const codexNotify: RouteHandler = async (ctx) => {
   const { signals, meta } = mapCodexNotify(ctx.body);
   const threadId = meta?.agentSessionId;
   if (threadId !== undefined) {
+    const before = registry.get(ctx.sessionId);
+    const known =
+      before?.session.agentSessionId === threadId && before.meta.rolloutPath !== undefined;
     registry.setMeta(ctx.sessionId, { agentSessionId: threadId });
     // The thread id is authoritative: it overrides whatever the early locate loop picked.
-    const rollout = await findRolloutFile(codexSessionsDir, { threadId });
+    const rollout = known ? undefined : await findRolloutFile(codexSessionsDir, { threadId });
     const record = registry.get(ctx.sessionId);
     if (record && rollout !== undefined && rollout !== record.meta.rolloutPath) {
       registry.setMeta(ctx.sessionId, { rolloutPath: rollout });
@@ -92,13 +95,10 @@ export const agentStart: RouteHandler = (ctx) => {
   if (kind !== "claude" && kind !== "codex") {
     throw new HttpError(400, "bad_request", 'kind must be "claude" or "codex"');
   }
-  const { registry } = ctx.deps;
-  registry.setMeta(ctx.sessionId, { kind });
-  if (kind === "codex" && registry.get(ctx.sessionId)?.meta.rolloutPath === undefined) {
-    ctx.locator.start(ctx.sessionId);
-  } else {
-    ctx.locator.stop(ctx.sessionId);
-  }
+  ctx.deps.registry.setMeta(ctx.sessionId, { kind });
+  // A rollout from an earlier run in this shell is replaced when a newer one appears.
+  if (kind === "codex") ctx.locator.start(ctx.sessionId);
+  else ctx.locator.stop(ctx.sessionId);
 };
 
 export const agentExit: RouteHandler = (ctx) => {

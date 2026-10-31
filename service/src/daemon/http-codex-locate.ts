@@ -10,6 +10,7 @@ export interface CodexLocatorDeps {
   sessionsDir: string;
   intervalMs: number;
   timeoutMs: number;
+  now: () => Date;
 }
 
 interface Loop {
@@ -26,12 +27,16 @@ export class CodexLocator {
 
   constructor(private readonly deps: CodexLocatorDeps) {}
 
-  /** Starts (or restarts) the loop for a session; the first attempt runs immediately. */
+  /**
+   * Starts (or restarts) the loop for a session; the first attempt runs immediately. Only a
+   * rollout that started at or after now matches, so an earlier run's file is never picked.
+   */
   start(sessionId: string): void {
     this.stop(sessionId);
     const loop: Loop = { cancelled: false };
     this.loops.set(sessionId, loop);
-    void this.attempt(sessionId, loop, Date.now() + this.deps.timeoutMs);
+    const since = this.deps.now();
+    this.run(sessionId, loop, since, Date.now() + this.deps.timeoutMs);
   }
 
   stop(sessionId: string): void {
@@ -46,10 +51,22 @@ export class CodexLocator {
     for (const id of [...this.loops.keys()]) this.stop(id);
   }
 
-  private async attempt(sessionId: string, loop: Loop, deadline: number): Promise<void> {
+  private run(sessionId: string, loop: Loop, since: Date, deadline: number): void {
+    this.attempt(sessionId, loop, since, deadline).catch((err: unknown) => {
+      this.deps.log.error({ err, sessionId }, "codex rollout attach failed");
+      this.stop(sessionId);
+    });
+  }
+
+  private async attempt(
+    sessionId: string,
+    loop: Loop,
+    since: Date,
+    deadline: number,
+  ): Promise<void> {
     const { registry, hub, log, sessionsDir } = this.deps;
     const record = registry.get(sessionId);
-    if (!record || record.session.state === "ended" || record.meta.rolloutPath !== undefined) {
+    if (!record || record.session.state === "ended") {
       this.stop(sessionId);
       return;
     }
@@ -57,17 +74,20 @@ export class CodexLocator {
     try {
       found = await findRolloutFile(sessionsDir, {
         cwd: record.session.cwd,
-        since: new Date(record.session.createdAt),
+        since,
       });
     } catch (err) {
       log.warn({ err, sessionId }, "codex rollout lookup failed");
     }
     if (loop.cancelled) return;
-    if (found !== undefined && registry.get(sessionId)) {
-      registry.setMeta(sessionId, { rolloutPath: found });
-      hub.attachCodex(sessionId, found);
-      log.debug({ sessionId, rolloutPath: found }, "codex rollout located");
+    const current = registry.get(sessionId);
+    if (found !== undefined && current) {
       this.stop(sessionId);
+      if (current.meta.rolloutPath !== found) {
+        registry.setMeta(sessionId, { rolloutPath: found });
+        hub.attachCodex(sessionId, found);
+        log.debug({ sessionId, rolloutPath: found }, "codex rollout located");
+      }
       return;
     }
     if (Date.now() >= deadline) {
@@ -75,10 +95,7 @@ export class CodexLocator {
       this.stop(sessionId);
       return;
     }
-    loop.timer = setTimeout(
-      () => void this.attempt(sessionId, loop, deadline),
-      this.deps.intervalMs,
-    );
+    loop.timer = setTimeout(() => this.run(sessionId, loop, since, deadline), this.deps.intervalMs);
     loop.timer.unref();
   }
 }
