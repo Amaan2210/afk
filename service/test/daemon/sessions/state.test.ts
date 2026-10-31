@@ -207,9 +207,9 @@ describe("reduce", () => {
       const r = reduce(slice, { kind: "agent_exit" });
       expect(r.slice).toEqual({ state: "idle", subagentsRunning: 0, lastMessage: "m" });
       expect(r.notify).toBeUndefined();
-      expect(reduce({ ...initialSlice, state: "working" }, { kind: "agent_exit" }).slice.state).toBe(
-        "idle",
-      );
+      expect(
+        reduce({ ...initialSlice, state: "working" }, { kind: "agent_exit" }).slice.state,
+      ).toBe("idle");
     });
 
     it("agent_exit leaves an ended session ended", () => {
