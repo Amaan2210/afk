@@ -34,6 +34,9 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.1.0",
     "pino": "^10.4.0",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.25.2"
