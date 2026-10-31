@@ -1,0 +1,83 @@
+import type { Pending, SessionState } from "../../protocol/index.js";
+
+export type AgentSignal =
+  | { kind: "turn_start" }
+  | { kind: "turn_end"; lastMessage?: string }
+  | { kind: "pending"; pending: Pending }
+  | { kind: "pending_cleared"; pendingId?: string }
+  | { kind: "subagent_start" }
+  | { kind: "subagent_stop" }
+  | { kind: "user_input" }
+  | { kind: "process_exit"; exitCode: number };
+
+export type NotifyKind = "needs_input" | "finished" | "subagent_finished";
+
+export interface StateSlice {
+  state: SessionState;
+  pending?: Pending;
+  subagentsRunning: number;
+  lastMessage?: string;
+  exitCode?: number;
+}
+
+export interface ReduceResult {
+  slice: StateSlice;
+  notify?: NotifyKind;
+}
+
+export const initialSlice: StateSlice = { state: "idle", subagentsRunning: 0 };
+
+function withoutPending(slice: StateSlice): StateSlice {
+  const next = { ...slice };
+  delete next.pending;
+  return next;
+}
+
+/** Pure transition function: never mutates `slice` and performs no I/O. */
+export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
+  if (slice.state === "ended") return { slice: { ...slice } };
+
+  switch (signal.kind) {
+    case "turn_start":
+      return { slice: { ...withoutPending(slice), state: "working" } };
+
+    case "turn_end": {
+      if (slice.subagentsRunning > 0) return { slice: { ...slice } };
+      const next = { ...withoutPending(slice), state: "finished" as const };
+      if (signal.lastMessage !== undefined) next.lastMessage = signal.lastMessage;
+      return { slice: next, notify: "finished" };
+    }
+
+    case "pending":
+      return {
+        slice: { ...slice, state: "needs_input", pending: signal.pending },
+        notify: "needs_input",
+      };
+
+    case "pending_cleared": {
+      if (!slice.pending) return { slice: { ...slice } };
+      if (signal.pendingId !== undefined && signal.pendingId !== slice.pending.id) {
+        return { slice: { ...slice } };
+      }
+      const next = withoutPending(slice);
+      if (next.state === "needs_input") next.state = "working";
+      return { slice: next };
+    }
+
+    case "subagent_start":
+      return { slice: { ...slice, subagentsRunning: slice.subagentsRunning + 1 } };
+
+    case "subagent_stop":
+      if (slice.subagentsRunning === 0) return { slice: { ...slice } };
+      return {
+        slice: { ...slice, subagentsRunning: slice.subagentsRunning - 1 },
+        notify: "subagent_finished",
+      };
+
+    case "user_input":
+      return { slice: slice.state === "finished" ? { ...slice, state: "idle" } : { ...slice } };
+
+    case "process_exit":
+      return { slice: { ...withoutPending(slice), state: "ended", exitCode: signal.exitCode } };
+  }
+}
