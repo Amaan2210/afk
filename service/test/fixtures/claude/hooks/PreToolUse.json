@@ -1,0 +1,1 @@
+{"session_id":"sess-1","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_use_id":"toolu_3","tool_input":{"questions":[{"question":"Which auth approach should I use?","header":"Auth","multiSelect":false,"options":[{"label":"Session cookies (Recommended)","description":"Matches"},{"label":"JWT"}]}]}}
