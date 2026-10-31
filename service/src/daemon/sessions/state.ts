@@ -8,7 +8,9 @@ export type AgentSignal =
   | { kind: "subagent_start" }
   | { kind: "subagent_stop" }
   | { kind: "user_input" }
-  | { kind: "process_exit"; exitCode: number };
+  | { kind: "process_exit"; exitCode: number }
+  /** The agent inside the session's shell exited; the shell lives on. */
+  | { kind: "agent_exit" };
 
 export type NotifyKind = "needs_input" | "finished" | "subagent_finished";
 
@@ -90,6 +92,9 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
 
     case "process_exit":
       return { slice: { ...withoutPending(slice), state: "ended", exitCode: signal.exitCode } };
+
+    case "agent_exit":
+      return { slice: { ...withoutPending(slice), state: "idle", subagentsRunning: 0 } };
 
     default:
       return assertNever(signal);

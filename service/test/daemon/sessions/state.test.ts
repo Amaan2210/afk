@@ -196,5 +196,25 @@ describe("reduce", () => {
       expect(slice).toEqual(copy);
       expect(r.slice).not.toBe(slice);
     });
+
+    it("agent_exit returns any live state to idle, clearing pending and sub-agents, without notify", () => {
+      const slice: StateSlice = {
+        state: "needs_input",
+        pending: q,
+        subagentsRunning: 2,
+        lastMessage: "m",
+      };
+      const r = reduce(slice, { kind: "agent_exit" });
+      expect(r.slice).toEqual({ state: "idle", subagentsRunning: 0, lastMessage: "m" });
+      expect(r.notify).toBeUndefined();
+      expect(reduce({ ...initialSlice, state: "working" }, { kind: "agent_exit" }).slice.state).toBe(
+        "idle",
+      );
+    });
+
+    it("agent_exit leaves an ended session ended", () => {
+      const slice: StateSlice = { state: "ended", subagentsRunning: 0, exitCode: 1 };
+      expect(reduce(slice, { kind: "agent_exit" }).slice).toEqual(slice);
+    });
   });
 });
