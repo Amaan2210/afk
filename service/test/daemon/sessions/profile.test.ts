@@ -165,6 +165,16 @@ describe.skipIf(process.platform !== "win32")("session profile under Windows Pow
       ["exec", "claude", "--dangerously-skip-permissions", 'Fix "it"'],
     ]);
   }, 40_000);
+
+  it("delivers a multi-line prompt from a launch line as one argument", () => {
+    const line = buildLaunchLine("claude", [], "line1\nline2 and more")!;
+    const r = spawnSync("powershell.exe", ["-NoProfile", ...shellArgs(profile)], {
+      input: `${line}exit\r`,
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    expect(receivedArgv(r.stdout)).toEqual([["exec", "claude", "line1\nline2 and more"]]);
+  }, 40_000);
 });
 
 /** The argv (from `exec` on) of each call the echo script recorded. */
