@@ -1,0 +1,104 @@
+import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
+import { WebSocketServer } from "ws";
+import type { DaemonConfig } from "../config.js";
+import { DeviceStore } from "../devices.js";
+import { wireBroadcasts } from "./broadcasts.js";
+import { ClientConn } from "./client-conn.js";
+import { CLOSE_GOING_AWAY, type WsContext, type WsDeps } from "./context.js";
+
+export type { WsDeps } from "./context.js";
+
+const WS_PATH = "/ws";
+const MAX_PAYLOAD_BYTES = 1024 * 1024;
+const DEFAULT_AUTH_TIMEOUT_MS = 5000;
+const DEFAULT_HEARTBEAT_MS = 30_000;
+const DEFAULT_ANSWER_CHUNK_DELAY_MS = 50;
+/** How long `close()` lets clients finish the closing handshake before cutting them off. */
+const CLOSE_GRACE_MS = 1000;
+
+export interface WsServer {
+  /** Closes every client (1001), stops listening for upgrades and resolves when all are gone. */
+  close(): Promise<void>;
+  /** Authenticated clients. */
+  clientCount(): number;
+}
+
+/** Runs `save` calls one after another: concurrent writes of one file would race. */
+function serialized(save: (c: DaemonConfig) => Promise<void>): (c: DaemonConfig) => Promise<void> {
+  let last: Promise<void> = Promise.resolve();
+  return (c) => {
+    const run = last.then(() => save(c));
+    last = run.catch(() => undefined);
+    return run;
+  };
+}
+
+function pathOf(req: IncomingMessage): string | undefined {
+  try {
+    return new URL(req.url ?? "/", "http://localhost").pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Answers an upgrade on any other path with a 404 and drops the socket. */
+function refuse(socket: Duplex): void {
+  socket.on("error", () => socket.destroy());
+  socket.once("finish", () => socket.destroy());
+  socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+}
+
+/**
+ * The authenticated WebSocket API at `/ws` on `server` (see protocol/protocol.md): a handshake per
+ * socket, requests handled by `handlers.ts`, and the daemon's events broadcast to the clients
+ * subscribed to them.
+ */
+export function attachWsServer(server: Server, deps: WsDeps): WsServer {
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
+  const conns = new Set<ClientConn>();
+  const save = serialized(deps.saveConfig);
+  let nextId = 1;
+
+  const ctx: WsContext = {
+    deps,
+    devices: new DeviceStore(deps.config, save),
+    authTimeoutMs: deps.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS,
+    answerChunkDelayMs: deps.answerChunkDelayMs ?? DEFAULT_ANSWER_CHUNK_DELAY_MS,
+    save: () => save(deps.config),
+    clients: () => [...conns].filter((c) => c.authenticated),
+    broadcast(msg, filter) {
+      const text = JSON.stringify(msg);
+      for (const c of conns) if (c.authenticated && (filter?.(c) ?? true)) c.sendText(text);
+    },
+    remove: (conn) => conns.delete(conn),
+  };
+
+  wss.on("connection", (ws) => conns.add(new ClientConn(`c${nextId++}`, ws, ctx)));
+  const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    if (pathOf(req) !== WS_PATH) return refuse(socket);
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  };
+  server.on("upgrade", onUpgrade);
+  const unwire = wireBroadcasts(ctx);
+  const heartbeat = setInterval(() => {
+    for (const c of conns) c.heartbeat();
+  }, deps.heartbeatMs ?? DEFAULT_HEARTBEAT_MS);
+  heartbeat.unref();
+
+  return {
+    clientCount: () => ctx.clients().length,
+    async close() {
+      clearInterval(heartbeat);
+      server.off("upgrade", onUpgrade);
+      unwire();
+      for (const c of conns) c.close(CLOSE_GOING_AWAY, "daemon shutting down");
+      const cutOff = setTimeout(() => {
+        for (const c of conns) c.terminate();
+      }, CLOSE_GRACE_MS);
+      cutOff.unref();
+      await new Promise<void>((resolve) => wss.close(() => resolve()));
+      clearTimeout(cutOff);
+    },
+  };
+}
