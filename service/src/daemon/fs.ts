@@ -1,4 +1,5 @@
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export interface DirListing {
@@ -16,10 +17,14 @@ async function isDirectory(p: string): Promise<boolean> {
   }
 }
 
-/** Most-recently-used working folders, persisted as a JSON array of paths. */
+/**
+ * Most-recently-used working folders, persisted as a JSON array of paths.
+ * Two instances on one file are not coordinated; the daemon uses a single instance.
+ */
 export class RecentFolders {
   private readonly win32 = process.platform === "win32";
   private queue: Promise<void> = Promise.resolve();
+  private writes = 0;
 
   constructor(
     private readonly file: string,
@@ -27,7 +32,8 @@ export class RecentFolders {
   ) {}
 
   private key(p: string): string {
-    return this.win32 ? p.toLowerCase() : p;
+    const trimmed = p.replace(/[\\/]+$/, "");
+    return this.win32 ? trimmed.toLowerCase() : trimmed;
   }
 
   async add(folder: string): Promise<void> {
@@ -59,9 +65,14 @@ export class RecentFolders {
 
   private async write(list: string[]): Promise<void> {
     await mkdir(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(list, null, 2));
-    await rename(tmp, this.file);
+    const tmp = `${this.file}.${process.pid}.${this.writes++}.${randomBytes(4).toString("hex")}.tmp`;
+    try {
+      await writeFile(tmp, JSON.stringify(list, null, 2));
+      await rename(tmp, this.file);
+    } catch (err) {
+      await unlink(tmp).catch(() => undefined);
+      throw err;
+    }
   }
 }
 
@@ -80,6 +91,8 @@ export async function listDirs(
   recent: RecentFolders,
   platform: NodeJS.Platform = process.platform,
 ): Promise<DirListing> {
+  if (dir !== undefined && !path.isAbsolute(dir))
+    throw new Error("bad_request: path must be absolute");
   const recentList = await recent.list();
   if (dir === undefined) {
     const dirs = platform === "win32" ? await driveRoots() : [{ name: "/", path: "/" }];

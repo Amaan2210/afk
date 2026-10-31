@@ -30,6 +30,13 @@ interface PromptKeys {
 /** Digit keys address options 1-9 only. */
 const MAX_DIGIT_OPTIONS = 9;
 
+function hasControlChar(text: string): boolean {
+  return [...text].some((ch) => {
+    const c = ch.codePointAt(0) ?? 0;
+    return c < 0x20 || c === 0x7f;
+  });
+}
+
 function digit(index: number): string {
   if (index >= MAX_DIGIT_OPTIONS)
     throw badRequest(`option ${index + 1} cannot be addressed by digit`);
@@ -43,9 +50,10 @@ function digit(index: number): string {
  *   text and Enter. The digit must be a separate chunk or the text is lost and option 1 is chosen.
  * - multi-select: digits do NOT toggle; Down moves, Space toggles, Enter on the Submit row (the row
  *   after "Type something") opens a review screen, whose default "Submit answers" Enter confirms
- *   (that last Enter is UNVERIFIED).
- * - permission: "1" yes, "2" yes-always, no Enter. "No" is "3" normally but "4" when the
- *   switch-to-auto-mode option is offered (and "3" would then change the mode), so deny is Esc.
+ *   (that last Enter is UNVERIFIED). Free text on a multi-select is rejected (not probed).
+ * - permission: "1" yes (verified), "2" yes-always (UNVERIFIED, not pressed). "No" is "3" normally
+ *   but "4" when the switch-to-auto-mode option is offered (and "3" would then change the mode), so
+ *   deny is Esc (UNVERIFIED: the footer says "Esc to cancel", not pressed).
  */
 const CLAUDE_QUESTIONS = {
   single: (i: number) => [digit(i)],
@@ -56,7 +64,9 @@ const CLAUDE_QUESTIONS = {
       nav += DOWN.repeat(i - cursor) + " ";
       cursor = i;
     }
-    const submitRow = q.options.length + 1;
+    // Claude's AskUserQuestion always shows the "Type something" row before Submit (our parsers
+    // always set allowsText: true), so Submit sits after it.
+    const submitRow = q.options.length + (q.allowsText ? 1 : 0);
     return [nav + DOWN.repeat(submitRow - cursor) + "\r", "\r"];
   },
   text: (text: string, q: Question) => [digit(q.options.length), text + "\r"],
@@ -89,6 +99,13 @@ function questionChunks(keys: PromptKeys, q: Question, a: Answer): string[] {
   }
   if (a.text !== undefined) {
     if (!q.allowsText) throw badRequest("this question does not accept free text");
+    if (q.multiSelect) {
+      throw badRequest(
+        "free text on a multi-select question is not supported yet; use the terminal view",
+      );
+    }
+    if (a.text.trim() === "") throw badRequest("text must not be empty");
+    if (hasControlChar(a.text)) throw badRequest("text must not contain control characters");
     return keys.text(a.text, q);
   }
   const picks = a.choiceIndices ?? [];

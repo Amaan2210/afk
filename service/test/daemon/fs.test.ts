@@ -77,6 +77,11 @@ describe("listDirs", () => {
     expect([...paths].sort()).toEqual(paths);
   });
 
+  it("throws bad_request for a relative path", async () => {
+    const recent = new RecentFolders(path.join(tmp, "r.json"));
+    await expect(listDirs("relative/dir", recent)).rejects.toThrow(/^bad_request:/);
+  });
+
   it("undefined path on non-win32 lists the filesystem root", async () => {
     const res = await listDirs(undefined, new RecentFolders(path.join(tmp, "r.json")), "linux");
     expect(res.dirs).toEqual([{ name: "/", path: "/" }]);
@@ -101,6 +106,23 @@ describe("RecentFolders", () => {
     await r.add(a!);
     await r.add(a!.toUpperCase());
     expect(await r.list()).toHaveLength(1);
+  });
+
+  it("dedupes a path with and without a trailing separator", async () => {
+    const [a] = await dirs("a");
+    const r = new RecentFolders(path.join(tmp, "recent.json"));
+    await r.add(a! + path.sep);
+    await r.add(a!);
+    expect(await r.list()).toEqual([path.normalize(a!)]);
+  });
+
+  it("keeps every entry across concurrent adds", async () => {
+    const names = ["a", "b", "c", "d", "e"];
+    const made = await dirs(...names);
+    const r = new RecentFolders(path.join(tmp, "recent.json"));
+    await Promise.all(made.map((d) => r.add(d)));
+    expect((await r.list()).sort()).toEqual([...made].sort());
+    expect(await readdir(tmp)).not.toContain(expect.stringMatching(/.tmp$/));
   });
 
   it("filters folders that no longer exist without rewriting the file", async () => {

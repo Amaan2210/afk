@@ -59,3 +59,14 @@ login/welcome animation (no authenticated session on this machine), so no approv
 Re-run the probe once Codex is signed in. The probe also started Codex's managed app-server
 daemon (`codex.exe app-server --managed-daemon`), which outlives the TUI and had to be stopped by
 hand.
+
+## Known limitation (v1)
+
+Free text on a multi-select question is rejected with `bad_request:` ("free text on a multi-select
+question is not supported yet; use the terminal view"). Digits do nothing in multi-select, so the
+single-select recipe (digit, then text) would send the text nowhere and Enter would act on row 1.
+A variant that moves Down to the "Type something" row and types there has not been probed; the
+Task 19 manual check may try it.
+
+Free text is also rejected when empty or whitespace-only, or when it contains a control character
+(U+0000-U+001F, U+007F), since those would be typed into the prompt as keys.

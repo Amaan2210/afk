@@ -15,6 +15,10 @@ const tenOptions: Pending = {
   ...q,
   options: Array.from({ length: 10 }, (_, i) => ({ label: `o${i}` })),
 } as Pending;
+const nineOptions: Pending = {
+  ...q,
+  options: Array.from({ length: 9 }, (_, i) => ({ label: `o${i}` })),
+} as Pending;
 const perm: Pending = { kind: "permission", id: "p2", tool: "Bash", summary: "echo hi" };
 
 const DOWN = "\x1b[B";
@@ -62,6 +66,16 @@ describe("keystrokesForAnswer", () => {
   it("Codex question behaves like Claude's", () =>
     expect(keys("codex", q, { choiceIndices: [2] })).toBe("3"));
 
+  it("the ninth option (index 8) is addressable by digit", () =>
+    expect(keys("claude", nineOptions, { choiceIndices: [8] })).toBe("9"));
+
+  it("multi-select without the Type-something row submits right after the options", () =>
+    expect(
+      chunks("claude", { ...multi, allowsText: false } as Pending, { choiceIndices: [0] }),
+    ).toEqual([` ${DOWN}${DOWN}${DOWN}\r`, "\r"]));
+
+  it("keeps non-ASCII text", () => expect(keys("claude", q, { text: "café ✓" })).toBe("4café ✓\r"));
+
   it("shell sessions have no prompts", () =>
     expect(() => keys("shell", q, { choiceIndices: [0] })).toThrow(/^bad_request:/));
 
@@ -80,5 +94,12 @@ describe("keystrokesForAnswer", () => {
     ["a tenth option picked by digit", tenOptions, { choiceIndices: [9] }],
     ["free text on a question with nine options or more", tenOptions, { text: "x" }],
     ["text when allowsText is false", noText, { text: "x" }],
+    ["free text on a multi-select question", multi, { text: "x" }],
+    ["empty text", q, { text: "" }],
+    ["whitespace-only text", q, { text: "  " }],
+    ["text with a newline", q, { text: "a" + String.fromCharCode(10) + "b" }],
+    ["text with an escape", q, { text: "a" + String.fromCharCode(27) + "b" }],
+    ["text with DEL", q, { text: "a" + String.fromCharCode(127) }],
+    ["an unknown decision", perm, { decision: "maybe" }],
   ])("rejects %s", (_name, p, a) => expect(() => keys("claude", p, a)).toThrow(/^bad_request:/));
 });
