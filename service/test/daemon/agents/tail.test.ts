@@ -36,6 +36,7 @@ beforeEach(async () => {
 afterEach(async () => {
   tailer?.stop();
   tailer = undefined;
+  vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
@@ -105,5 +106,42 @@ describe("JsonlTailer", () => {
     appendFileSync(file, '{"n":2}\n');
     await pause(POLL_MS * 5);
     expect(lines).toHaveLength(1);
+  });
+
+  it("keeps delivering lines when a listener throws, and re-throws it as uncaught", async () => {
+    // The tailer re-throws a listener's exception on the next tick. Run nextTick callbacks
+    // through a catch so the test can see that exception instead of it failing the run.
+    const rethrown: unknown[] = [];
+    const realNextTick = process.nextTick.bind(process);
+    vi.spyOn(process, "nextTick").mockImplementation((callback, ...args) =>
+      realNextTick(() => {
+        try {
+          callback(...args);
+        } catch (err) {
+          rethrown.push(err);
+        }
+      }),
+    );
+    writeFileSync(file, "");
+    const { lines, errors } = startTailer();
+    const bug = new Error("listener bug");
+    const before: unknown[] = [];
+    tailer!.prependListener("line", (obj: unknown) => {
+      before.push(obj);
+      if (before.length === 1) throw bug;
+    });
+    // Two complete lines and a partial third arrive in one read.
+    appendFileSync(file, '{"n":1}\n{"n":2}\n{"n":');
+    await vi.waitFor(() => expect(before).toHaveLength(2));
+    appendFileSync(file, "3}\n");
+    await vi.waitFor(() => expect(lines).toHaveLength(2));
+    // The throwing listener got every line; the one after it missed only the line it threw on.
+    expect(before).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+    expect(lines).toEqual([
+      [{ n: 2 }, 2],
+      [{ n: 3 }, 3],
+    ]);
+    await vi.waitFor(() => expect(rethrown).toEqual([bug]));
+    expect(errors).toEqual([]); // not reported as an I/O error
   });
 });

@@ -276,6 +276,7 @@ describe("push (rulings 2 to 4)", () => {
     const long = { command: "y".repeat(5000) };
     const [run] = m.push(assistant("x1", [toolUse("toolu_a", "Bash", long)]));
     expect(run.tool!.input).toBe(JSON.stringify(long).slice(0, 4000) + "…");
+    expect(run.tool!.summary).toBe("y".repeat(120) + "…"); // summaries are capped too
     m.push(assistant("x2", [toolUse("toolu_b", "Read", { file_path: "a.ts" })]));
     m.push(assistant("x3", [toolUse("toolu_c", "Read", { file_path: "b.ts" })]));
     const [a, b, c] = m.push(

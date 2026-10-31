@@ -22,12 +22,17 @@ export interface JsonlTailerEvents {
   error: [err: Error];
 }
 
+type Line = [obj: unknown, lineNo: number];
+
 /**
  * Follows a JSONL file that another process appends to and emits each complete line as parsed
  * JSON. It polls instead of using `fs.watch`, which misses appends on Windows, and reads only the
  * bytes appended since the last poll. A partial trailing line, including a UTF-8 sequence split
  * across two writes, is carried as raw bytes until its newline arrives, so it is decoded whole.
  * Malformed lines are skipped. A missing file is retried on every poll until it appears.
+ *
+ * A listener that throws does not stop the tailer: the exception is re-thrown on the next tick,
+ * where it surfaces as an uncaught exception, and the remaining lines are still delivered.
  */
 export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
   private readonly pollMs: number;
@@ -77,48 +82,74 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
       return;
     }
     try {
-      const size = fstatSync(fd).size;
-      if (size < this.offset) this.reset();
+      const size = this.io(() => fstatSync(fd).size);
+      if (size === undefined) return;
+      if (size < this.offset) this.restart();
       while (this.running && this.offset < size) {
         const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, size - this.offset));
-        const read = readSync(fd, chunk, 0, chunk.length, this.offset);
-        if (read === 0) break;
+        const read = this.io(() => readSync(fd, chunk, 0, chunk.length, this.offset));
+        if (!read) return; // failed, or the file shrank under us: the next poll sorts it out
         this.offset += read;
-        this.consume(chunk.subarray(0, read));
+        for (const [obj, lineNo] of this.split(chunk.subarray(0, read))) {
+          if (!this.running) return;
+          this.deliver(() => this.emit("line", obj, lineNo));
+        }
       }
-    } catch (err) {
-      this.fail(err);
     } finally {
-      closeSync(fd);
+      this.io(() => closeSync(fd));
     }
   }
 
-  private reset(): void {
+  private restart(): void {
     this.offset = 0;
     this.carry = Buffer.alloc(0);
     this.lineNo = 0;
-    this.emit("reset");
+    this.deliver(() => this.emit("reset"));
   }
 
-  /** Emits every complete line in `carry + chunk` and keeps the incomplete tail as bytes. */
-  private consume(chunk: Buffer): void {
+  /**
+   * Parses every complete line in `carry + chunk` and keeps the incomplete tail as bytes. Emits
+   * nothing, so the carry is settled before any listener runs.
+   */
+  private split(chunk: Buffer): Line[] {
     const data = this.carry.length > 0 ? Buffer.concat([this.carry, chunk]) : chunk;
+    const lines: Line[] = [];
     let start = 0;
-    let newline = data.indexOf(NEWLINE);
-    while (newline !== -1 && this.running) {
-      const text = data.toString("utf8", start, newline);
-      start = newline + 1;
+    for (let nl = data.indexOf(NEWLINE); nl !== -1; nl = data.indexOf(NEWLINE, start)) {
+      const text = data.toString("utf8", start, nl);
+      start = nl + 1;
       this.lineNo++;
       const parsed = parseJson(text);
-      if (parsed.ok) this.emit("line", parsed.value, this.lineNo);
-      newline = data.indexOf(NEWLINE, start);
+      if (parsed.ok) lines.push([parsed.value, this.lineNo]);
     }
     this.carry = Buffer.from(data.subarray(start));
+    return lines;
+  }
+
+  /** Runs one file-system call, reporting a failure as an I/O error. */
+  private io<T>(call: () => T): T | undefined {
+    try {
+      return call();
+    } catch (err) {
+      this.fail(err);
+      return undefined;
+    }
+  }
+
+  /** Emits to listeners. A listener's exception is its own bug, not the tailer's: re-throw it. */
+  private deliver(emit: () => void): void {
+    try {
+      emit();
+    } catch (err) {
+      process.nextTick(() => {
+        throw err;
+      });
+    }
   }
 
   private fail(err: unknown): void {
     if (this.listenerCount("error") === 0) return;
-    this.emit("error", err instanceof Error ? err : new Error(String(err)));
+    this.deliver(() => this.emit("error", err instanceof Error ? err : new Error(String(err))));
   }
 }
 
