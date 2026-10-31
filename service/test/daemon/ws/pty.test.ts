@@ -247,4 +247,66 @@ describe("pending.answer", () => {
     });
     expect(reply).toMatchObject({ type: "error", code: "session_ended" });
   });
+
+  it("a session that ends mid-answer gets one session_ended error and no ack", async () => {
+    await h.stop();
+    h = await startHarness({ answerChunkDelayMs: 40 });
+    const { session, pty } = await h.session("claude");
+    h.registry.signal(session.id, { kind: "pending", pending: question });
+    const write = pty.write.bind(pty);
+    vi.spyOn(pty, "write").mockImplementation((data) => {
+      write(data);
+      if (String(data) === "3") setImmediate(() => pty.emitExit(0)); // after the first chunk
+    });
+    const c = await h.client();
+    const reply = await c.request({
+      type: "pending.answer",
+      sessionId: session.id,
+      pendingId: "toolu_q",
+      text: "Ferrets",
+    });
+    expect(reply).toMatchObject({ type: "error", code: "session_ended" });
+    await c.sync();
+    expect(c.replies(String(reply.id))).toHaveLength(1);
+    expect(pty.written.map(String)).toContain("3");
+    expect(pty.written.map(String)).not.toContain("Ferrets\r");
+  });
+
+  it("a repeated answer to the same pending is refused: keys are never typed twice", async () => {
+    const { session, pty } = await h.session("claude");
+    h.registry.signal(session.id, { kind: "pending", pending: question });
+    const c = await h.client();
+    const before = pty.written.length;
+    const answer = { type: "pending.answer", sessionId: session.id, pendingId: "toolu_q" };
+    // A double tap: the second arrives while the first is still being typed.
+    c.send({ ...answer, id: "tap1", text: "Ferrets" });
+    c.send({ ...answer, id: "tap2", text: "Ferrets" });
+    await vi.waitFor(() => expect([...c.replies("tap1"), ...c.replies("tap2")]).toHaveLength(2));
+    await c.sync();
+    expect(c.replies("tap1")).toEqual([{ type: "ack", id: "tap1" }]);
+    expect(c.replies("tap2")).toEqual([
+      {
+        type: "error",
+        id: "tap2",
+        code: "bad_request",
+        message: expect.stringMatching(/already answered/),
+      },
+    ]);
+    expect(pty.written.slice(before).map(String)).toEqual(["3", "Ferrets\r"]);
+
+    // Once typed, it stays answered while the agent still shows it.
+    expect(await c.request({ ...answer, choiceIndices: [0] })).toMatchObject({
+      type: "error",
+      code: "bad_request",
+    });
+    expect(pty.written.slice(before)).toHaveLength(2);
+
+    // The agent's next question is a new pending, which can be answered.
+    const next: Pending = { ...question, id: "toolu_q2" };
+    h.registry.signal(session.id, { kind: "pending", pending: next });
+    expect(await c.request({ ...answer, pendingId: "toolu_q2", choiceIndices: [0] })).toMatchObject(
+      { type: "ack" },
+    );
+    expect(pty.written.slice(before).map(String)).toEqual(["3", "Ferrets\r", "1"]);
+  });
 });

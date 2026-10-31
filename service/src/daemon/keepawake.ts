@@ -42,8 +42,9 @@ export class KeepAwakeController {
     }
   }
 
-  /** A release already pending is re-armed with the new grace, counted from now. */
+  /** A release already pending is re-armed with a changed grace, counted from now. */
   setGraceMs(ms: number): void {
+    if (ms === this.graceMs) return;
     this.graceMs = ms;
     if (!this.releaseTimer) return;
     this.cancelRelease();

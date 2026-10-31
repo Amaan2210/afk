@@ -70,6 +70,21 @@ describe("DeviceStore", () => {
     await expect(store.remove(id)).rejects.toThrow(/^not_found:/);
   });
 
+  it("a failed save undoes add and remove", async () => {
+    const { id } = await store.add("Pixel");
+    const saved = structuredClone(cfg.devices);
+    save.mockRejectedValue(new Error("disk full"));
+
+    await expect(store.add("Tablet")).rejects.toThrow("disk full");
+    expect(cfg.devices).toEqual(saved);
+
+    await store.add("x").catch(() => undefined);
+    cfg.devices.push({ id: "dev_last", name: "Last", tokenHash: "h", createdAt: "t" });
+    const before = structuredClone(cfg.devices);
+    await expect(store.remove(id)).rejects.toThrow("disk full");
+    expect(cfg.devices).toEqual(before); // back at its index, ahead of dev_last
+  });
+
   it("markSeen stamps lastSeenAt at once and saves", async () => {
     const { id } = await store.add("Pixel");
     save.mockClear();

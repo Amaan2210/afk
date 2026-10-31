@@ -1,6 +1,7 @@
 import type { ChatMessage } from "../agents/hub.js";
 import type { Session, Stats, Strip } from "../../protocol/index.js";
 import type { NotifyKind } from "../sessions/state.js";
+import type { ClientConn } from "./client-conn.js";
 import type { WsContext } from "./context.js";
 import { chatSnapshotFrame, notifyFrame, ptyDataFrame } from "./frames.js";
 
@@ -32,9 +33,11 @@ export function wireBroadcasts(ctx: WsContext): () => void {
   const notify = guard("notify", (n: { kind: NotifyKind; session: Session }) =>
     ctx.broadcast(notifyFrame(n.kind, n.session)),
   );
-  const data = guard("data", (sessionId: string, chunk: Buffer) =>
-    ctx.broadcast(ptyDataFrame(sessionId, chunk), (c) => c.pty.has(sessionId)),
-  );
+  const data = guard("data", (sessionId: string, chunk: Buffer) => {
+    const subscribed = (c: ClientConn) => c.pty.has(sessionId);
+    // Output is the busiest event: encode it only when someone is watching.
+    if (ctx.clients().some(subscribed)) ctx.broadcast(ptyDataFrame(sessionId, chunk), subscribed);
+  });
   // An ended session prints nothing more; its subscribers get its state from session.updated.
   const exit = guard("exit", (sessionId: string) => {
     for (const c of ctx.clients()) c.pty.delete(sessionId);

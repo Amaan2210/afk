@@ -9,7 +9,8 @@ export type DeviceInfo = Omit<DeviceRecord, "tokenHash">;
 
 /**
  * The devices paired with the daemon, kept in its config. A device's token is handed out once, by
- * `add`; only its hash is stored. Every change is written through `save`.
+ * `add`; only its hash is stored. Every change is written through `save`, and undone in memory
+ * when the save fails.
  */
 export class DeviceStore {
   constructor(
@@ -25,21 +26,33 @@ export class DeviceStore {
     }
     const token = generateToken();
     const id = this.newId();
-    this.cfg.devices.push({
+    const record: DeviceRecord = {
       id,
       name: trimmed,
       tokenHash: hashToken(token),
       createdAt: new Date().toISOString(),
-    });
-    await this.save(this.cfg);
+    };
+    this.cfg.devices.push(record);
+    try {
+      await this.save(this.cfg);
+    } catch (err) {
+      const at = this.cfg.devices.indexOf(record);
+      if (at >= 0) this.cfg.devices.splice(at, 1);
+      throw err;
+    }
     return { id, token };
   }
 
   async remove(id: string): Promise<void> {
     const index = this.cfg.devices.findIndex((d) => d.id === id);
     if (index < 0) throw new Error(`not_found: no device ${id}`);
-    this.cfg.devices.splice(index, 1);
-    await this.save(this.cfg);
+    const [record] = this.cfg.devices.splice(index, 1);
+    try {
+      await this.save(this.cfg);
+    } catch (err) {
+      this.cfg.devices.splice(index, 0, record);
+      throw err;
+    }
   }
 
   list(): DeviceInfo[] {

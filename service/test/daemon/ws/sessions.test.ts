@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { startHarness, type Harness } from "./harness.js";
 
 let h: Harness;
@@ -44,6 +46,21 @@ describe("sessions", () => {
       code: "bad_request",
       message: "a shell session takes no args or prompt",
     });
+  });
+
+  it("session.create in a folder that does not exist, or in a file, → bad_request", async () => {
+    const file = join(h.dir, "notes.txt");
+    await writeFile(file, "x");
+    const c = await h.client();
+    for (const cwd of [join(h.dir, "missing"), file]) {
+      expect(await c.request({ type: "session.create", cwd, kind: "shell", args: [] })).toEqual({
+        type: "error",
+        id: expect.any(String),
+        code: "bad_request",
+        message: `${cwd} is not a folder`,
+      });
+    }
+    expect(h.registry.list()).toEqual([]);
   });
 
   it("session.create still acks when the folder cannot be remembered", async () => {

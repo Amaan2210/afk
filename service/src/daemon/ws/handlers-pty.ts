@@ -90,6 +90,9 @@ export const ptyHandlers: Pick<HandlerMap, PtyType> = {
     const pending = session.pending;
     if (pending?.id !== pendingId) throw notFound(`no pending ${pendingId} on ${sessionId}`);
     const chunks = chunksForAnswer(session.kind, pending, { choiceIndices, text, decision });
+    if (!ctx.answered.claim(sessionId, pendingId)) {
+      throw badRequest(`pending ${pendingId} was already answered`);
+    }
     for (const [i, chunk] of chunks.entries()) {
       if (i > 0) await sleep(ctx.answerChunkDelayMs);
       liveSessionOf(ctx, sessionId);

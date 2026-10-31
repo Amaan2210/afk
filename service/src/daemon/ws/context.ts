@@ -8,6 +8,7 @@ import type { KeepAwakeController } from "../keepawake.js";
 import type { AfkPaths } from "../paths.js";
 import type { SessionRegistry } from "../sessions/registry.js";
 import type { StatsSampler } from "../stats.js";
+import type { AnsweredPendings } from "./answered.js";
 import type { ClientConn } from "./client-conn.js";
 
 export interface WsDeps {
@@ -29,6 +30,8 @@ export interface WsDeps {
   authTimeoutMs?: number;
   /** Ping interval; a socket that has not answered the previous ping is dropped (default 30 s). */
   heartbeatMs?: number;
+  /** How long `close()` waits for clients to finish the closing handshake (default 1 s). */
+  closeGraceMs?: number;
 }
 
 /** Close codes the daemon uses besides the standard ones. */
@@ -40,6 +43,8 @@ export const CLOSE_GOING_AWAY = 1001;
 export interface WsContext {
   readonly deps: WsDeps;
   readonly devices: DeviceStore;
+  /** Pendings already answered, so a repeated answer types nothing. */
+  readonly answered: AnsweredPendings;
   readonly authTimeoutMs: number;
   readonly answerChunkDelayMs: number;
   /** Saves `deps.config`; saves run one at a time, as they all write the same file. */

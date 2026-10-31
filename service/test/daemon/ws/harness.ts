@@ -52,6 +52,8 @@ export interface Harness {
   dir: string;
   url: string;
   ws: ReturnType<typeof attachWsServer>;
+  /** The http servers the API is attached to. */
+  servers: Server[];
   registry: SessionRegistry;
   hub: ChatHub;
   stats: StatsSampler;
@@ -62,16 +64,24 @@ export interface Harness {
   saveConfig: Mock<(c: DaemonConfig) => Promise<void>>;
   /** Every log line the server wrote, parsed. */
   logs: Record<string, unknown>[];
-  /** Connects without authenticating. */
-  connect(path?: string, opts?: ClientOptions): Promise<TestClient>;
+  /** Connects to http server number `server` without authenticating. */
+  connect(path?: string, opts?: ClientOptions, server?: number): Promise<TestClient>;
   /** Connects and authenticates; the greeting has arrived when it resolves. */
-  client(token?: string): Promise<TestClient>;
+  client(token?: string, server?: number): Promise<TestClient>;
   /** A session on a fake pty that has printed its prompt (so a claude launch line is typed). */
   session(kind?: SessionKind): Promise<{ session: Session; pty: FakePty }>;
   stop(): Promise<void>;
 }
 
-export async function startHarness(extra: Partial<WsDeps> = {}): Promise<Harness> {
+export interface HarnessOptions {
+  /** How many http servers (one per bound address in the daemon) share the WebSocket API. */
+  servers?: number;
+}
+
+export async function startHarness(
+  extra: Partial<WsDeps> = {},
+  opts: HarnessOptions = {},
+): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), "afk-ws-"));
   const fakes = createFakePty();
   const registry = new SessionRegistry({
@@ -100,10 +110,14 @@ export async function startHarness(extra: Partial<WsDeps> = {}): Promise<Harness
   const logs: Record<string, unknown>[] = [];
   const log = pino({ level: "debug" }, { write: (line: string) => logs.push(JSON.parse(line)) });
 
-  const server: Server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const ws = attachWsServer(server, {
+  const servers: Server[] = [];
+  for (let i = 0; i < (opts.servers ?? 1); i++) {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    servers.push(server);
+  }
+  const bases = servers.map((s) => `ws://127.0.0.1:${(s.address() as AddressInfo).port}`);
+  const ws = attachWsServer(servers.length === 1 ? servers[0] : servers, {
     config,
     paths: afkPaths(dir),
     registry,
@@ -120,16 +134,17 @@ export async function startHarness(extra: Partial<WsDeps> = {}): Promise<Harness
   });
 
   const clients: TestClient[] = [];
-  const connect: Harness["connect"] = async (path = "/ws", opts) => {
-    const c = await TestClient.open(base + path, opts);
+  const connect: Harness["connect"] = async (path = "/ws", options, server = 0) => {
+    const c = await TestClient.open(bases[server] + path, options);
     clients.push(c);
     return c;
   };
 
   return {
     dir,
-    url: `${base}/ws`,
+    url: `${bases[0]}/ws`,
     ws,
+    servers,
     registry,
     hub,
     stats,
@@ -140,8 +155,8 @@ export async function startHarness(extra: Partial<WsDeps> = {}): Promise<Harness
     saveConfig,
     logs,
     connect,
-    async client(token = LOCAL_TOKEN) {
-      const c = await connect();
+    async client(token = LOCAL_TOKEN, server = 0) {
+      const c = await connect("/ws", undefined, server);
       await c.auth(token);
       return c;
     },
@@ -154,8 +169,10 @@ export async function startHarness(extra: Partial<WsDeps> = {}): Promise<Harness
     async stop() {
       for (const c of clients) c.terminate();
       await ws.close();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      for (const server of servers) {
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
       for (const s of registry.list()) hub.detach(s.id);
       registry.stopAll();
       keepAwake.dispose();

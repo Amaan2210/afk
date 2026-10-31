@@ -72,6 +72,13 @@ export class TestClient {
     }, WAIT);
   }
 
+  /** Every ack or error received for request `id`: a request should get exactly one. */
+  replies(id: string): Reply[] {
+    return this.frames.filter(
+      (f): f is Reply => (f.type === "ack" || f.type === "error") && f.id === id,
+    );
+  }
+
   /** Sends `msg` with a fresh id and waits for the ack or error carrying it. */
   async request(msg: Record<string, unknown>): Promise<Reply> {
     const id = `r${this.nextId++}`;

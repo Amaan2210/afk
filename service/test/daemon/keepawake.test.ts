@@ -117,6 +117,15 @@ describe("KeepAwakeController", () => {
     expect(req.releases).toBe(1);
   });
 
+  it("setGraceMs with the current grace leaves a pending release alone", () => {
+    c.update(["working"]);
+    c.update(["idle"]);
+    vi.advanceTimersByTime(600);
+    c.setGraceMs(1000); // unchanged, e.g. a settings change that touched only retentionHours
+    vi.advanceTimersByTime(400);
+    expect(req.held).toBe(false);
+  });
+
   it("setGraceMs with no release pending arms nothing and applies to the next release", () => {
     c.setGraceMs(200);
     expect(vi.getTimerCount()).toBe(0);

@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import type { DaemonConfig } from "../config.js";
 import { DeviceStore } from "../devices.js";
+import { AnsweredPendings } from "./answered.js";
 import { wireBroadcasts } from "./broadcasts.js";
 import { ClientConn } from "./client-conn.js";
 import { CLOSE_GOING_AWAY, type WsContext, type WsDeps } from "./context.js";
@@ -14,8 +15,7 @@ const MAX_PAYLOAD_BYTES = 1024 * 1024;
 const DEFAULT_AUTH_TIMEOUT_MS = 5000;
 const DEFAULT_HEARTBEAT_MS = 30_000;
 const DEFAULT_ANSWER_CHUNK_DELAY_MS = 50;
-/** How long `close()` lets clients finish the closing handshake before cutting them off. */
-const CLOSE_GRACE_MS = 1000;
+const DEFAULT_CLOSE_GRACE_MS = 1000;
 
 export interface WsServer {
   /** Closes every client (1001), stops listening for upgrades and resolves when all are gone. */
@@ -50,11 +50,13 @@ function refuse(socket: Duplex): void {
 }
 
 /**
- * The authenticated WebSocket API at `/ws` on `server` (see protocol/protocol.md): a handshake per
+ * The authenticated WebSocket API at `/ws` on `servers` (see protocol/protocol.md): a handshake per
  * socket, requests handled by `handlers.ts`, and the daemon's events broadcast to the clients
- * subscribed to them.
+ * subscribed to them. With one http server per bound address, all of them share one set of
+ * clients, devices and config saves, so a change made over one address reaches the others.
  */
-export function attachWsServer(server: Server, deps: WsDeps): WsServer {
+export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServer {
+  const httpServers = Array.isArray(servers) ? servers : [servers];
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
   const conns = new Set<ClientConn>();
   const save = serialized(deps.saveConfig);
@@ -63,6 +65,7 @@ export function attachWsServer(server: Server, deps: WsDeps): WsServer {
   const ctx: WsContext = {
     deps,
     devices: new DeviceStore(deps.config, save),
+    answered: new AnsweredPendings(deps.registry),
     authTimeoutMs: deps.authTimeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS,
     answerChunkDelayMs: deps.answerChunkDelayMs ?? DEFAULT_ANSWER_CHUNK_DELAY_MS,
     save: () => save(deps.config),
@@ -79,7 +82,7 @@ export function attachWsServer(server: Server, deps: WsDeps): WsServer {
     if (pathOf(req) !== WS_PATH) return refuse(socket);
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   };
-  server.on("upgrade", onUpgrade);
+  for (const server of httpServers) server.on("upgrade", onUpgrade);
   const unwire = wireBroadcasts(ctx);
   const heartbeat = setInterval(() => {
     for (const c of conns) c.heartbeat();
@@ -90,12 +93,13 @@ export function attachWsServer(server: Server, deps: WsDeps): WsServer {
     clientCount: () => ctx.clients().length,
     async close() {
       clearInterval(heartbeat);
-      server.off("upgrade", onUpgrade);
+      for (const server of httpServers) server.off("upgrade", onUpgrade);
       unwire();
+      ctx.answered.dispose();
       for (const c of conns) c.close(CLOSE_GOING_AWAY, "daemon shutting down");
       const cutOff = setTimeout(() => {
         for (const c of conns) c.terminate();
-      }, CLOSE_GRACE_MS);
+      }, deps.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS);
       cutOff.unref();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       clearTimeout(cutOff);

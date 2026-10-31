@@ -1,10 +1,18 @@
+import { stat } from "node:fs/promises";
+import { badRequest } from "./errors.js";
 import type { HandlerMap } from "./handlers.js";
 
 type SessionType = "session.create" | "session.kill" | "session.resume" | "session.rename";
 
+async function requireFolder(cwd: string): Promise<void> {
+  const info = await stat(cwd).catch(() => undefined);
+  if (!info?.isDirectory()) throw badRequest(`${cwd} is not a folder`);
+}
+
 export const sessionHandlers: Pick<HandlerMap, SessionType> = {
   async "session.create"(conn, msg, { deps }) {
     const { cwd, kind, args, name, prompt } = msg;
+    await requireFolder(cwd);
     const session = await deps.registry.create({ cwd, kind, args, name, prompt });
     // The session exists either way: failing the request now would invite a duplicate on retry.
     await deps.recent

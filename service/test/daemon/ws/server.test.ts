@@ -1,3 +1,4 @@
+import { connect, type Socket } from "node:net";
 import os from "node:os";
 import WebSocket from "ws";
 import type { Pending, Stats } from "../../../src/protocol/index.js";
@@ -10,14 +11,34 @@ import {
   TAILSCALE_IP,
   startHarness,
   type Harness,
+  type HarnessOptions,
 } from "./harness.js";
 
 let h: Harness;
 
 /** Replaces the default harness with one built with `extra`. */
-async function restart(extra: Partial<WsDeps>): Promise<void> {
+async function restart(extra: Partial<WsDeps>, opts?: HarnessOptions): Promise<void> {
   await h.stop();
-  h = await startHarness(extra);
+  h = await startHarness(extra, opts);
+}
+
+/** A bare TCP socket that completes the WebSocket upgrade and then ignores everything. */
+async function rawUpgrade(url: string): Promise<Socket> {
+  const { hostname, port } = new URL(url);
+  const socket = connect(Number(port), hostname);
+  socket.on("error", () => undefined);
+  const response = new Promise<string>((resolve) => socket.once("data", (d) => resolve(String(d))));
+  const request = [
+    "GET /ws HTTP/1.1",
+    `Host: ${hostname}`,
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+    "Sec-WebSocket-Version: 13",
+  ];
+  socket.write(`${request.join("\r\n")}\r\n\r\n`);
+  expect(await response).toMatch(/^HTTP\/1\.1 101/);
+  return socket;
 }
 
 beforeEach(async () => {
@@ -155,6 +176,21 @@ describe("broadcasts", () => {
       pending,
     });
 
+    const question: Pending = {
+      kind: "question",
+      id: "toolu_q",
+      text: "Which pet?",
+      multiSelect: false,
+      allowsText: true,
+      options: [{ label: "Cats" }],
+    };
+    h.registry.signal(session.id, { kind: "pending", pending: question });
+    expect(await c.next("notify", (n) => n.pending?.id === "toolu_q")).toMatchObject({
+      event: "needs_input",
+      body: "Which pet?",
+      pending: question,
+    });
+
     h.registry.signal(session.id, { kind: "subagent_start" });
     h.registry.signal(session.id, { kind: "subagent_stop" });
     expect(await c.next("notify", (n) => n.event === "subagent_finished")).toMatchObject({
@@ -178,7 +214,10 @@ describe("broadcasts", () => {
       type: "stats",
       ...sample,
     });
-    expect(pending.frames).toEqual([]);
+    // A frame sent to it before it authenticated would arrive ahead of hello.
+    await pending.auth(LOCAL_TOKEN);
+    expect(pending.types()[0]).toBe("hello");
+    expect(pending.of("stats").filter((s) => s.cpuPercent === 3)).toEqual([]);
   });
 
   it("unauthenticated sockets receive no broadcasts", async () => {
@@ -186,7 +225,9 @@ describe("broadcasts", () => {
     const watcher = await h.client();
     const { session } = await h.session();
     await watcher.next("session.updated", (u) => u.session.id === session.id);
-    expect(pending.frames).toEqual([]);
+    // A frame sent to it before it authenticated would arrive ahead of hello.
+    await pending.auth(LOCAL_TOKEN);
+    expect(pending.types()).toEqual(["hello", "sessions.snapshot", "stats", "daemon.settings"]);
   });
 
   it("a send that throws for one client does not stop the event reaching the others", async () => {
@@ -261,18 +302,18 @@ describe("broadcasts", () => {
 
 describe("lifecycle", () => {
   it("terminates a client that stops answering pings and keeps one that answers", async () => {
-    // Long enough that a busy test worker does not miss a pong between two beats.
-    await restart({ heartbeatMs: 150 });
+    // Long enough that a busy test worker reads every pong before the next beat.
+    await restart({ heartbeatMs: 500 });
     const silent = await h.connect("/ws", { autoPong: false });
     await silent.auth(LOCAL_TOKEN);
     const lively = await h.client();
     let pings = 0;
     lively.ws.on("ping", () => pings++);
     expect((await silent.closed).code).toBe(1006); // terminated: no close frame
-    await vi.waitFor(() => expect(pings).toBeGreaterThanOrEqual(3), { timeout: 3000 });
+    await vi.waitFor(() => expect(pings).toBeGreaterThanOrEqual(3), { timeout: 5000 });
     expect(lively.isOpen).toBe(true);
     expect(h.ws.clientCount()).toBe(1);
-  });
+  }, 10_000);
 
   it("closes a socket that sends a frame over 1 MiB (1009) and keeps serving the others", async () => {
     const big = await h.client();
@@ -295,5 +336,57 @@ describe("lifecycle", () => {
     expect(h.registry.listenerCount("updated")).toBe(0);
     expect(h.hub.listenerCount("chat")).toBe(0);
     expect(h.stats.listenerCount("sample")).toBe(0);
+  });
+
+  it("close() cuts off a socket that never answers the close frame", async () => {
+    await restart({ closeGraceMs: 50 });
+    const raw = await rawUpgrade(h.url);
+    const gone = new Promise<void>((resolve) => raw.once("close", () => resolve()));
+    // Without the cut-off, ws waits 30 s for the closing handshake.
+    await h.ws.close();
+    await gone;
+    expect(raw.destroyed).toBe(true);
+  });
+});
+
+describe("several http servers (one per bound address)", () => {
+  it("share one set of clients: settings, resizes and device removal reach every server", async () => {
+    await restart({}, { servers: 2 });
+    const cli = await h.client(LOCAL_TOKEN, 0);
+    const phone = await h.client(PIXEL_TOKEN, 1);
+    const watcher = await h.client(LOCAL_TOKEN, 1);
+    expect(h.ws.clientCount()).toBe(3);
+
+    cli.send({ type: "daemon.settings.set", id: "set1", settings: { retentionHours: 12 } });
+    await cli.next("daemon.settings", (s) => s.id === "set1");
+    for (const c of [phone, watcher]) {
+      expect(await c.next("daemon.settings", (s) => s.settings.retentionHours === 12)).toEqual({
+        type: "daemon.settings",
+        settings: { keepAwake: true, keepAwakeGraceMin: 10, retentionHours: 12 },
+      });
+    }
+
+    const { session } = await h.session();
+    await watcher.request({ type: "pty.subscribe", sessionId: session.id, cols: 120, rows: 30 });
+    cli.send({ type: "pty.resize", sessionId: session.id, cols: 90, rows: 20 });
+    expect(await watcher.next("pty.resized")).toEqual({
+      type: "pty.resized",
+      sessionId: session.id,
+      cols: 90,
+      rows: 20,
+    });
+
+    expect(await cli.request({ type: "device.remove", deviceId: PIXEL.id })).toMatchObject({
+      type: "ack",
+    });
+    expect(await phone.closed).toMatchObject({ code: 4001 });
+    expect(watcher.isOpen).toBe(true);
+  });
+
+  it("listens for upgrades on every server until close()", async () => {
+    await restart({}, { servers: 2 });
+    expect(h.servers.map((s) => s.listenerCount("upgrade"))).toEqual([1, 1]);
+    await h.ws.close();
+    expect(h.servers.map((s) => s.listenerCount("upgrade"))).toEqual([0, 0]);
   });
 });
