@@ -66,10 +66,33 @@ Start-Process -FilePath "C:\Users\amank\.local\bin\claude.exe" `
 Result: `SessionStart` fired, and 1.5 s later the probe was called as `statusline`. Its stdin
 carried the status JSON with keys session_id, transcript_path, cwd, scratchpad_dir, effort,
 model, workspace, version, output_style, cost, context_window, exceeds_200k_tokens, fast_mode,
-thinking, rate_limits. Claude Code runs one status-line command. It ran ours, not the user's
-`npx -y ccstatusline@latest`, so the `--settings` value takes precedence. **No fallback needed:
-`renderClaudeSettings` keeps `statusLine`.** Task 18's `afk statusline` must therefore chain to
-the user's own command itself, as the spec says.
+thinking, rate_limits.
+
+That alone does not prove precedence: the user's statusLine might never load in a nested child.
+So the same hidden interactive launch was repeated twice more. Each time, a 250 ms poll of
+`Win32_Process` walked the `ParentProcessId` tree under the started `claude.exe`. Only its own
+descendants counted; the outer Claude Code session runs ccstatusline too.
+
+| Run | Arguments | ccstatusline under that claude | AFK probe called as `statusline` |
+|---|---|---|---|
+| A | none | yes, at 5.5 s: `bash.exe -c "npx -y ccstatusline@latest"` | n/a |
+| B | `--settings <generated file>` | never (watched for 20 s) | yes, at 6.3 s |
+
+Run A shows the user-level statusLine does load in this environment. Run B shows that once a
+`--settings` file sets `statusLine`, only that command runs. **The `--settings` statusLine takes
+precedence over the user's, so no fallback is needed and `renderClaudeSettings` keeps
+`statusLine`.** Task 18's `afk statusline` must therefore chain to the user's own command itself,
+as the spec says.
+
+The process trees also show that **Claude Code on Windows runs hook and status-line commands
+through Git Bash**:
+
+```
+"C:\Program Files\Git\bin\bash.exe" -c "\"C:\Program Files\nodejs\node.exe\" \"<scratch>\afk probe\relay.cjs\" ..."
+```
+
+Double-quoted Windows paths survive bash unchanged: backslashes before ordinary characters are
+kept. A `$` or a backtick inside a path would be expanded by bash.
 
 ## Claude Code: hooks merge across sources
 
@@ -92,10 +115,10 @@ hooks for the same event, not substituted for them.**
 The user's `~/.claude/settings.json` (read, never written) has `Notification`, `Stop`,
 `SubagentStart` and `SubagentStop` hooks that run `~/.claude/hooks/notify.ps1`. Their `Stop`
 branch rewrites `~/.claude/hooks/active-agents.json` on every call. That file was not touched
-by any of the nested runs above. That includes a control run **without** `--settings`
-(`claude --print "say hi"`, same environment). So whatever stops the user-level hooks from
-leaving a trace in these nested runs is not `--settings`. Watching Telegram was not possible
-from here.
+by any of the nested `--print` runs above. That includes a control run **without** `--settings`
+(`claude --print "say hi"`, same environment). So whatever stops the user's `Stop` hook from
+leaving a trace in these nested `--print` runs is not `--settings`. User-level settings do load
+in this environment: see run A above. Watching Telegram was not possible from here.
 
 To confirm, run this from a normal terminal (not inside Claude Code) and check that the usual
 "Task Complete" Telegram message arrives:
