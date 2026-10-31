@@ -33,6 +33,10 @@ function withoutPending(slice: StateSlice): StateSlice {
   return next;
 }
 
+function assertNever(value: never): never {
+  throw new Error(`Unhandled signal: ${JSON.stringify(value)}`);
+}
+
 /** Pure transition function: never mutates `slice` and performs no I/O. */
 export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
   if (slice.state === "ended") return { slice: { ...slice } };
@@ -49,6 +53,7 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
     }
 
     case "pending":
+      if (signal.pending.id === slice.pending?.id) return { slice: { ...slice } };
       return {
         slice: { ...slice, state: "needs_input", pending: signal.pending },
         notify: "needs_input",
@@ -79,5 +84,8 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
 
     case "process_exit":
       return { slice: { ...withoutPending(slice), state: "ended", exitCode: signal.exitCode } };
+
+    default:
+      return assertNever(signal);
   }
 }

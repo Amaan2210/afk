@@ -161,6 +161,24 @@ describe("reduce", () => {
       expect(r.notify).toBeUndefined();
     });
 
+    it("pending with the same id as the current pending is a no-op without notify", () => {
+      const slice: StateSlice = { ...initialSlice, state: "needs_input", pending: q };
+      const r = reduce(slice, { kind: "pending", pending: { ...q } });
+      expect(r.slice).toEqual(slice);
+      expect(r.slice).not.toBe(slice);
+      expect(r.notify).toBeUndefined();
+    });
+
+    it("pending with a different id replaces the pending and notifies", () => {
+      const q2: Pending = { ...q, id: "q2", text: "Again?" };
+      const r = reduce(
+        { ...initialSlice, state: "needs_input", pending: q },
+        { kind: "pending", pending: q2 },
+      );
+      expect(r.slice.pending).toEqual(q2);
+      expect(r.notify).toBe("needs_input");
+    });
+
     it("reduce does not mutate its input", () => {
       const slice: StateSlice = { ...initialSlice, state: "needs_input", pending: q };
       const copy = structuredClone(slice);
