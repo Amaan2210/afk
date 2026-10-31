@@ -13,7 +13,6 @@ import {
 } from "./harness.js";
 
 let h: Harness;
-const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Replaces the default harness with one built with `extra`. */
 async function restart(extra: Partial<WsDeps>): Promise<void> {
@@ -262,12 +261,15 @@ describe("broadcasts", () => {
 
 describe("lifecycle", () => {
   it("terminates a client that stops answering pings and keeps one that answers", async () => {
-    await restart({ heartbeatMs: 20 });
+    // Long enough that a busy test worker does not miss a pong between two beats.
+    await restart({ heartbeatMs: 150 });
     const silent = await h.connect("/ws", { autoPong: false });
     await silent.auth(LOCAL_TOKEN);
     const lively = await h.client();
+    let pings = 0;
+    lively.ws.on("ping", () => pings++);
     expect((await silent.closed).code).toBe(1006); // terminated: no close frame
-    await pause(50);
+    await vi.waitFor(() => expect(pings).toBeGreaterThanOrEqual(3), { timeout: 3000 });
     expect(lively.isOpen).toBe(true);
     expect(h.ws.clientCount()).toBe(1);
   });

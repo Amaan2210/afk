@@ -210,6 +210,30 @@ describe("pending.answer", () => {
     expect(pty.written.slice(before).map(String)).toEqual(["3", "Ferrets\r"]);
   });
 
+  it("pauses between chunks so the prompt can re-render", async () => {
+    await h.stop();
+    h = await startHarness({ answerChunkDelayMs: 40 });
+    const { session, pty } = await h.session("claude");
+    h.registry.signal(session.id, { kind: "pending", pending: question });
+    const writes: number[] = [];
+    const write = pty.write.bind(pty);
+    vi.spyOn(pty, "write").mockImplementation((data) => {
+      writes.push(performance.now());
+      write(data);
+    });
+    const c = await h.client();
+    const reply = await c.request({
+      type: "pending.answer",
+      sessionId: session.id,
+      pendingId: "toolu_q",
+      text: "Ferrets",
+    });
+    expect(reply).toMatchObject({ type: "ack" });
+    expect(writes).toHaveLength(2);
+    // Timers may fire a little early on Windows: allow some slack below the 40 ms.
+    expect(writes[1] - writes[0]).toBeGreaterThanOrEqual(30);
+  });
+
   it("answering an ended session → session_ended", async () => {
     const { session, pty } = await h.session("claude");
     h.registry.signal(session.id, { kind: "pending", pending: question });
