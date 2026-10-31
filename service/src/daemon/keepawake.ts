@@ -10,7 +10,7 @@ interface KeepAwakeOpts {
 
 /** Holds a power request while any session is busy; releases after a grace period. */
 export class KeepAwakeController {
-  private readonly graceMs: number;
+  private graceMs: number;
   private readonly setTimer: typeof setTimeout;
   private readonly clearTimer: typeof clearTimeout;
   private enabled = true;
@@ -42,6 +42,14 @@ export class KeepAwakeController {
     }
   }
 
+  /** A release already pending is re-armed with the new grace, counted from now. */
+  setGraceMs(ms: number): void {
+    this.graceMs = ms;
+    if (!this.releaseTimer) return;
+    this.cancelRelease();
+    this.armRelease();
+  }
+
   update(states: SessionState[]): void {
     this.states = states;
     if (this.enabled) this.evaluate();
@@ -60,12 +68,16 @@ export class KeepAwakeController {
         this.req.hold();
       }
     } else if (this.held && !this.releaseTimer) {
-      this.releaseTimer = this.setTimer(() => {
-        this.releaseTimer = undefined;
-        this.releaseNow();
-      }, this.graceMs);
-      (this.releaseTimer as { unref?: () => void }).unref?.();
+      this.armRelease();
     }
+  }
+
+  private armRelease(): void {
+    this.releaseTimer = this.setTimer(() => {
+      this.releaseTimer = undefined;
+      this.releaseNow();
+    }, this.graceMs);
+    (this.releaseTimer as { unref?: () => void }).unref?.();
   }
 
   private cancelRelease(): void {

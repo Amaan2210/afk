@@ -96,6 +96,40 @@ describe("KeepAwakeController", () => {
     expect(c.active).toBe(true);
   });
 
+  it("setGraceMs re-arms a pending release with the new grace, counted from now", () => {
+    c.update(["working"]);
+    c.update(["idle"]);
+    vi.advanceTimersByTime(600);
+    c.setGraceMs(3000);
+    vi.advanceTimersByTime(2999);
+    expect(req.held).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(req.held).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("setGraceMs shortening the grace releases sooner", () => {
+    c.update(["working"]);
+    c.update(["idle"]);
+    c.setGraceMs(100);
+    vi.advanceTimersByTime(100);
+    expect(req.held).toBe(false);
+    expect(req.releases).toBe(1);
+  });
+
+  it("setGraceMs with no release pending arms nothing and applies to the next release", () => {
+    c.setGraceMs(200);
+    expect(vi.getTimerCount()).toBe(0);
+    c.update(["working"]);
+    c.setGraceMs(300);
+    expect(vi.getTimerCount()).toBe(0); // still busy: nothing to re-arm
+    c.update(["idle"]);
+    vi.advanceTimersByTime(299);
+    expect(req.held).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(req.held).toBe(false);
+  });
+
   it("dispose clears timers and releases", () => {
     c.update(["working"]);
     c.update(["idle"]);
