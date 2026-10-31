@@ -41,6 +41,7 @@ let hub: ChatHub;
 let sid: string;
 let chats: { sessionId: string; threadId: string; event: ChatEvent }[];
 let strips: { sessionId: string; strip: Strip }[];
+let resets: { sessionId: string; threadId: string }[];
 let errors: [string, Error][];
 let transcript: string;
 let subagentDir: string;
@@ -137,6 +138,7 @@ beforeEach(async () => {
   sid = await newSession();
   chats = [];
   strips = [];
+  resets = [];
   errors = [];
   hub = new ChatHub(registry, {
     pollMs: POLL_MS,
@@ -146,6 +148,7 @@ beforeEach(async () => {
   });
   hub.on("chat", (c) => chats.push(c));
   hub.on("strip", (s) => strips.push(s));
+  hub.on("reset", (r) => resets.push(r));
 });
 
 afterEach(async () => {
@@ -297,6 +300,34 @@ describe("ChatHub with a Claude transcript", () => {
     },
   );
 
+  onWindows(
+    "re-attaching to a different transcript resets every thread, sub-agent threads included",
+    async () => {
+      write(transcript, MAIN_UNTIL_AGENT);
+      mkdirSync(subagentDir, { recursive: true });
+      write(join(subagentDir, "agent-abc123.jsonl"), AGENT);
+      hub.attachClaude(sid, transcript);
+      await vi.waitFor(() => expect(hub.threads(sid)).toEqual(["main", "agent-abc123"]));
+      expect(resets).toEqual([]);
+
+      hub.attachClaude(sid, join(dir, "sess-2.jsonl"));
+      expect(resets).toEqual([
+        { sessionId: sid, threadId: "main" },
+        { sessionId: sid, threadId: "agent-abc123" },
+      ]);
+      expect(hub.threads(sid)).toEqual(["main"]);
+    },
+  );
+
+  it("a truncated transcript resets the main thread before it is replayed", async () => {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS));
+    write(transcript, MAIN.slice(0, 4)); // shorter than what was read: metadata, u1, a1
+    await vi.waitFor(() => expect(resets).toEqual([{ sessionId: sid, threadId: "main" }]));
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(["u1", "a1"]));
+  });
+
   it("turn_end without a lastMessage takes the transcript's last assistant text, cut to 200 characters", async () => {
     const notes: { kind: NotifyKind; session: Session }[] = [];
     registry.on("notify", (n) => notes.push(n));
@@ -411,10 +442,13 @@ describe("ChatHub with a Codex rollout", () => {
       type: "response_item",
       payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Again" }] },
     };
+    expect(resets).toEqual([]);
     write(rollout, [ROLLOUT[0], ROLLOUT[1], restart]); // shorter than what was read: a reset
     await vi.waitFor(() =>
       expect(hub.history(sid, "main")).toMatchObject([{ id: "ord-2", text: "Again" }]),
     );
+    // Subscribers are told the thread was cleared, so they can take a fresh snapshot.
+    expect(resets).toEqual([{ sessionId: sid, threadId: "main" }]);
     expect(session().state).toBe("idle"); // the rewritten task_started was replayed
 
     append(rollout, codexEvent({ type: "task_started", turn_id: "t2" }));
@@ -435,7 +469,9 @@ describe("ChatHub with a Codex rollout", () => {
       payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Other" }] },
     };
     write(second, [ROLLOUT[0], message]);
+    expect(resets).toEqual([]);
     hub.attachCodex(sid, second);
+    expect(resets).toEqual([{ sessionId: sid, threadId: "main" }]);
     expect(hub.history(sid, "main")).toEqual([]);
     expect(hub.latestStrip(sid)).toBeUndefined();
     await vi.waitFor(() =>
@@ -556,6 +592,7 @@ describe("ChatHub attachments", () => {
     hub.attachClaude(sid, transcript);
     expect(ids(hub.history(sid, "main"))).toEqual([...MAIN_IDS, "turn-1"]);
     expect(hub.latestStrip(sid)).toEqual(strip);
+    expect(resets).toEqual([]); // nothing was cleared
     await vi.waitFor(() => expect(chats).toHaveLength(19)); // the new attachment replays
 
     append(transcript, assistantText("a6", "Once."));

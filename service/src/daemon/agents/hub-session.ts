@@ -77,10 +77,13 @@ export class HubSession {
   /**
    * Starts reading `source` from `path`, after stopping whatever was attached before. A file other
    * than the one last attached starts the chat afresh: its event ids may repeat the old file's.
+   * Returns the threads whose history that cleared (none when the file is the same).
    */
-  attach(source: AttachedSource, path: string): void {
+  attach(source: AttachedSource, path: string): string[] {
     this.detach();
+    let cleared: string[] = [];
     if (this.path !== undefined && this.path !== path) {
+      cleared = this.threads();
       this.histories.clear();
       this.histories.set(MAIN_THREAD, new Map());
       this.strip = undefined;
@@ -88,6 +91,7 @@ export class HubSession {
     this.path = path;
     this.source = source;
     source.start();
+    return cleared;
   }
 
   /** Detaches after `ms` unless detached or attached again first. */

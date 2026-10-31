@@ -34,6 +34,8 @@ export interface ChatHubEvents {
   /** An event to show, new or replacing the earlier one with the same id (an upsert). */
   chat: [message: ChatMessage];
   strip: [update: { sessionId: string; strip: Strip }];
+  /** A thread's history was cleared and is about to be read again: re-fetch it with `history`. */
+  reset: [thread: { sessionId: string; threadId: string }];
 }
 
 /**
@@ -113,7 +115,9 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     create: (sink: SourceSink) => AttachedSource,
   ): void {
     const session = this.session(sessionId);
-    session?.attach(create(this.sinkFor(sessionId, session)), path);
+    if (session === undefined) return;
+    const cleared = session.attach(create(this.sinkFor(sessionId, session)), path);
+    for (const threadId of cleared) this.emit("reset", { sessionId, threadId });
   }
 
   /** The hub's state for a session the registry has, created on first use. */
@@ -146,7 +150,10 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
           this.lateReply(sessionId, event.text);
         }
       },
-      clear: (threadId) => session.clear(threadId),
+      clear: (threadId) => {
+        session.clear(threadId);
+        this.emit("reset", { sessionId, threadId });
+      },
       thread: (threadId) => session.addThread(threadId),
       signal: (signal) => {
         if (this.registry.get(sessionId) !== undefined) this.registry.signal(sessionId, signal);
