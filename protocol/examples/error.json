@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "id": "r2",
+  "code": "not_found",
+  "message": "No session s_unknown"
+}

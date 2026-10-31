@@ -1,0 +1,8 @@
+{
+  "type": "notify",
+  "event": "finished",
+  "sessionId": "s_abcdefghijkl",
+  "sessionName": "remote-dev",
+  "title": "remote-dev finished",
+  "body": "Schemas are done."
+}

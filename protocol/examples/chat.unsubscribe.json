@@ -1,0 +1,5 @@
+{
+  "type": "chat.unsubscribe",
+  "sessionId": "s_abcdefghijkl",
+  "threadId": "main"
+}

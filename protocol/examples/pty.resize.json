@@ -1,0 +1,6 @@
+{
+  "type": "pty.resize",
+  "sessionId": "s_abcdefghijkl",
+  "cols": 100,
+  "rows": 30
+}

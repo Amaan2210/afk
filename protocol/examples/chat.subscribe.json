@@ -1,0 +1,6 @@
+{
+  "type": "chat.subscribe",
+  "id": "r6",
+  "sessionId": "s_abcdefghijkl",
+  "threadId": "main"
+}

@@ -1,0 +1,9 @@
+{
+  "type": "pending.answer",
+  "id": "r7",
+  "sessionId": "s_abcdefghijkl",
+  "pendingId": "q_01",
+  "choiceIndices": [
+    0
+  ]
+}

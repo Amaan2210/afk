@@ -1,0 +1,59 @@
+{
+  "type": "sessions.snapshot",
+  "sessions": [
+    {
+      "id": "s_abcdefghijkl",
+      "name": "remote-dev",
+      "cwd": "D:\\Naya Repos\\personal\\remote-dev",
+      "kind": "claude",
+      "state": "needs_input",
+      "createdAt": "2026-10-30T13:00:00.000Z",
+      "lastActivityAt": "2026-10-30T13:05:12.000Z",
+      "gitBranch": "feat/service",
+      "agentSessionId": "7c1d2e9a-4b3f-4f6e-9a21-5d0c8e7b1a42",
+      "lastMessage": "Which database should the service use?",
+      "subagentsRunning": 0,
+      "pending": {
+        "kind": "question",
+        "id": "q_01",
+        "text": "Which database should the service use?",
+        "multiSelect": false,
+        "allowsText": true,
+        "options": [
+          {
+            "label": "SQLite",
+            "description": "Single file, no server",
+            "recommended": true
+          },
+          {
+            "label": "Postgres",
+            "description": "Separate server process"
+          }
+        ]
+      }
+    },
+    {
+      "id": "s_mnopqrstuvwx",
+      "name": "scratch",
+      "cwd": "D:\\scratch",
+      "kind": "shell",
+      "state": "idle",
+      "createdAt": "2026-10-30T13:00:00.000Z",
+      "lastActivityAt": "2026-10-30T13:00:00.000Z",
+      "subagentsRunning": 0
+    },
+    {
+      "id": "s_234567abcdef",
+      "name": "api",
+      "cwd": "D:\\api",
+      "kind": "codex",
+      "state": "ended",
+      "createdAt": "2026-10-30T13:00:00.000Z",
+      "lastActivityAt": "2026-10-30T13:05:12.000Z",
+      "endedAt": "2026-10-30T13:05:12.000Z",
+      "exitCode": 0,
+      "agentSessionId": "thread_9f2b",
+      "subagentsRunning": 0
+    }
+  ]
+}

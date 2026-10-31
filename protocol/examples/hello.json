@@ -1,0 +1,14 @@
+{
+  "type": "hello",
+  "protocol": 1,
+  "daemon": {
+    "version": "0.1.0",
+    "hostname": "AMAN-LAPTOP",
+    "platform": "win32",
+    "tailscaleIp": "100.84.12.9"
+  },
+  "device": {
+    "id": "dev_8f3a",
+    "name": "Pixel 8"
+  }
+}

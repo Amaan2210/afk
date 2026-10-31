@@ -1,0 +1,20 @@
+{
+  "type": "strip.update",
+  "sessionId": "s_abcdefghijkl",
+  "strip": {
+    "at": "2026-10-30T13:05:12.000Z",
+    "model": {
+      "id": "claude-sonnet-5-5",
+      "name": "Sonnet 5.5"
+    },
+    "thinking": "high",
+    "contextUsedPct": 42,
+    "contextSize": 200000,
+    "costUsd": 1.37,
+    "durationMs": 312000,
+    "fiveHourPct": 23,
+    "sevenDayPct": 8,
+    "tokensIn": 84210,
+    "tokensOut": 6120
+  }
+}

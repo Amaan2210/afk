@@ -1,0 +1,11 @@
+{
+  "type": "session.create",
+  "id": "r1",
+  "cwd": "D:\\Naya Repos\\personal\\remote-dev",
+  "kind": "claude",
+  "args": [
+    "--dangerously-skip-permissions"
+  ],
+  "name": "remote-dev",
+  "prompt": "Start on the service plan"
+}

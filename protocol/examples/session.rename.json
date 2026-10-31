@@ -1,0 +1,6 @@
+{
+  "type": "session.rename",
+  "id": "r4",
+  "sessionId": "s_abcdefghijkl",
+  "name": "afk service"
+}

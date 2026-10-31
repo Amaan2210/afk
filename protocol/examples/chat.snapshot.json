@@ -1,0 +1,92 @@
+{
+  "type": "chat.snapshot",
+  "sessionId": "s_abcdefghijkl",
+  "threadId": "main",
+  "events": [
+    {
+      "id": "ev_user_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:00:00.000Z",
+      "kind": "user",
+      "text": "Add the protocol schemas"
+    },
+    {
+      "id": "ev_turn_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:00:00.000Z",
+      "kind": "turn",
+      "turn": {
+        "phase": "start"
+      }
+    },
+    {
+      "id": "ev_tool_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:05:12.000Z",
+      "kind": "tool",
+      "tool": {
+        "name": "Bash",
+        "summary": "npm test",
+        "status": "ok",
+        "input": "npm test",
+        "result": "Tests 12 passed"
+      }
+    },
+    {
+      "id": "ev_sub_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:05:12.000Z",
+      "kind": "subagent",
+      "subagent": {
+        "threadId": "agent_a1",
+        "name": "reviewer",
+        "task": "Review the schemas",
+        "status": "running",
+        "toolUses": 3
+      }
+    },
+    {
+      "id": "ev_asst_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:05:12.000Z",
+      "kind": "assistant",
+      "text": "Schemas are **done**."
+    },
+    {
+      "id": "ev_q_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:05:12.000Z",
+      "kind": "question",
+      "pending": {
+        "kind": "question",
+        "id": "q_01",
+        "text": "Which database should the service use?",
+        "multiSelect": false,
+        "allowsText": true,
+        "options": [
+          {
+            "label": "SQLite",
+            "description": "Single file, no server",
+            "recommended": true
+          },
+          {
+            "label": "Postgres",
+            "description": "Separate server process"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ev_p_01",
+      "threadId": "main",
+      "at": "2026-10-30T13:05:12.000Z",
+      "kind": "permission",
+      "pending": {
+        "kind": "permission",
+        "id": "p_01",
+        "tool": "Bash",
+        "summary": "npm install zod"
+      }
+    }
+  ]
+}

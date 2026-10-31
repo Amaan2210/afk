@@ -1,0 +1,19 @@
+{
+  "type": "fs.dirs",
+  "id": "r8",
+  "path": "D:\\Naya Repos",
+  "parent": "D:\\\\",
+  "dirs": [
+    {
+      "name": "personal",
+      "path": "D:\\Naya Repos\\personal"
+    },
+    {
+      "name": "work",
+      "path": "D:\\Naya Repos\\work"
+    }
+  ],
+  "recent": [
+    "D:\\Naya Repos\\personal\\remote-dev"
+  ]
+}

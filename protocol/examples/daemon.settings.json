@@ -1,0 +1,9 @@
+{
+  "type": "daemon.settings",
+  "id": "r9",
+  "settings": {
+    "keepAwake": true,
+    "keepAwakeGraceMin": 10,
+    "retentionHours": 24
+  }
+}
