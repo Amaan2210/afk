@@ -13,7 +13,7 @@ const exampleFiles = readdirSync(examplesDir)
 it.each(exampleFiles)("example %s parses with the matching schema", (file) => {
   const msg = JSON.parse(readFileSync(file, "utf8"));
   const parsed = isClientType(msg.type) ? parseClientMessage(msg) : parseServerMessage(msg);
-  expect(parsed.type).toBe(msg.type);
+  expect(parsed).toEqual(msg);
 });
 
 it("has an example for every message type", () => {

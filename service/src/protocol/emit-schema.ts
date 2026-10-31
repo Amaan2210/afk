@@ -25,7 +25,9 @@ export function buildJsonSchema(): object {
   };
   const out: Record<string, unknown> = {};
   for (const [name, schema] of Object.entries(definitions)) {
-    const body: Record<string, unknown> = { ...zodToJsonSchema(schema, { $refStrategy: "none" }) };
+    const body: Record<string, unknown> = {
+      ...zodToJsonSchema(schema, { $refStrategy: "none", removeAdditionalStrategy: "strict" }),
+    };
     delete body["$schema"];
     out[name] = body;
   }
