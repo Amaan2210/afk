@@ -271,12 +271,12 @@ describe("CodexRolloutNormalizer tools", () => {
     });
   });
 
-  it("a bad arguments string does not throw and gives an empty summary", () => {
+  it("a bad arguments string does not throw and is summarised as plain text", () => {
     const n = new CodexRolloutNormalizer();
     const out = n.push(
       item({ type: "function_call", name: "shell", arguments: "{oops", call_id: "b" }),
     );
-    expect(out.events[0].tool).toMatchObject({ name: "shell", summary: "", input: "{oops" });
+    expect(out.events[0].tool).toMatchObject({ name: "shell", summary: "{oops", input: "{oops" });
   });
 
   it("non-shell tools use summarizeToolInput on the parsed arguments", () => {
@@ -334,6 +334,56 @@ describe("CodexRolloutNormalizer tools", () => {
       item({ type: "function_call_output", call_id: "L", output: "y".repeat(5000) }),
     );
     expect(done.events[0].tool?.result).toHaveLength(4001);
+  });
+
+  it("summarises a plain-string input by its first line (apply_patch)", () => {
+    const n = new CodexRolloutNormalizer();
+    const patch = "*** Begin Patch\n*** Update File: a.ts\n*** End Patch";
+    const out = n.push(
+      item({ type: "custom_tool_call", name: "apply_patch", input: patch, call_id: "ap" }),
+    );
+    expect(out.events[0].tool).toMatchObject({
+      summary: "*** Begin Patch…",
+      input: patch,
+    });
+    const long = n.push(
+      item({ type: "custom_tool_call", name: "x", input: "z".repeat(300), call_id: "lg" }),
+    );
+    expect(long.events[0].tool?.summary).toBe(`${"z".repeat(120)}…`);
+  });
+
+  it("summarises only the first line of a multi-line shell command", () => {
+    const n = new CodexRolloutNormalizer();
+    const args = JSON.stringify({ command: ["bash", "-lc", "cat <<EOF\nhello\nEOF"] });
+    const out = n.push(
+      item({ type: "function_call", name: "shell", arguments: args, call_id: "m" }),
+    );
+    expect(out.events[0].tool?.summary).toBe("bash -lc cat <<EOF…");
+  });
+
+  it("keeps input and summary when arguments is an object", () => {
+    const n = new CodexRolloutNormalizer();
+    const shell = n.push(
+      item({
+        type: "function_call",
+        name: "shell",
+        arguments: { command: ["ls", "-la"] },
+        call_id: "s",
+      }),
+    );
+    expect(shell.events[0].tool).toMatchObject({
+      summary: "ls -la",
+      input: '{"command":["ls","-la"]}',
+    });
+    const read = n.push(
+      item({
+        type: "function_call",
+        name: "Read",
+        arguments: { file_path: "a.ts" },
+        call_id: "r2",
+      }),
+    );
+    expect(read.events[0].tool).toMatchObject({ summary: "a.ts", input: '{"file_path":"a.ts"}' });
   });
 
   it("returns fresh objects: an earlier event is not changed by its result", () => {

@@ -24,7 +24,7 @@ export function truncate(text: string, max: number): string {
 }
 
 /** The first line of `text`, at most `max` characters, ending in "…" when anything was cut. */
-function firstLine(text: string, max: number): string {
+export function firstLine(text: string, max: number): string {
   const trimmed = text.trimStart();
   const newline = trimmed.indexOf("\n");
   if (newline === -1) return truncate(trimmed, max);

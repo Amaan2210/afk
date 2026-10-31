@@ -1,11 +1,13 @@
 import type { ChatEvent, Strip } from "../../../protocol/index.js";
 import { isRecord } from "../../../util/is-record.js";
 import type { AgentSignal } from "../../sessions/state.js";
-import { summarizeToolInput, truncate } from "../summarize.js";
+import { firstLine, summarizeToolInput, truncate } from "../summarize.js";
 
 /** Longest tool input or result carried in a chat event. */
 const MAX_TOOL_TEXT = 4000;
 const SHELL_TOOL = "shell";
+/** Longest tool card summary. */
+const SUMMARY_MAX = 120;
 const UNKNOWN_TOOL = "unknown";
 /** Codex injects these as user-role messages; they are not something the user typed. */
 const INJECTED_PREFIXES = ["<environment_context>", "<user_instructions>"];
@@ -182,11 +184,11 @@ export class CodexRolloutNormalizer {
     out: RolloutResult,
   ): void {
     if (typeof name !== "string" || typeof id !== "string") return;
-    const raw = typeof args === "string" ? args : undefined;
+    const { summary, raw } = describeArgs(name, args);
     const event = this.event(id, at, "tool", {
       tool: {
         name,
-        summary: summarize(name, raw),
+        summary,
         status: "running",
         ...(raw !== undefined && { input: truncate(raw, MAX_TOOL_TEXT) }),
       },
@@ -245,22 +247,43 @@ function joinText(content: unknown): string | undefined {
   return texts.length > 0 ? texts.join("\n\n") : undefined;
 }
 
-/** A tool card summary: the shell command joined by spaces, else the generic input summary. */
-function summarize(name: string, raw: string | undefined): string {
-  if (raw === undefined) return "";
-  let parsed: unknown = raw;
+/**
+ * A tool call's arguments as a card summary and the raw input text. A string is parsed as JSON; one
+ * that is not a JSON object (an `apply_patch` patch, say) is summarised by its own first line. An
+ * object is taken as already-parsed arguments.
+ */
+function describeArgs(name: string, args: unknown): { summary: string; raw?: string } {
+  if (typeof args === "string") {
+    const parsed = parseObject(args);
+    return {
+      summary: parsed ? summarizeArgs(name, parsed) : firstLine(args, SUMMARY_MAX),
+      raw: args,
+    };
+  }
+  if (isRecord(args)) return { summary: summarizeArgs(name, args), raw: JSON.stringify(args) };
+  return { summary: "" };
+}
+
+function parseObject(text: string): Record_ | undefined {
   try {
-    parsed = JSON.parse(raw) as unknown;
+    const parsed = JSON.parse(text) as unknown;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
-    // Not JSON: summarise the raw string (which yields an empty summary).
+    return undefined;
   }
-  if (name === SHELL_TOOL && isRecord(parsed)) {
-    const command = parsed.command;
-    if (Array.isArray(command) && command.every((part) => typeof part === "string")) {
-      return truncate(command.join(" "), 120);
-    }
+}
+
+/** The shell command joined by spaces (first line only), else the generic input summary. */
+function summarizeArgs(name: string, args: Record_): string {
+  const command = args.command;
+  if (
+    name === SHELL_TOOL &&
+    Array.isArray(command) &&
+    command.every((p) => typeof p === "string")
+  ) {
+    return firstLine(command.join(" "), SUMMARY_MAX);
   }
-  return summarizeToolInput(name, parsed);
+  return summarizeToolInput(name, args);
 }
 
 /** A tool output as text: a string as is, an object's string `content`, else its JSON. */
