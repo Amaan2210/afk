@@ -1,0 +1,5 @@
+{"type":"fork-context-ref","agentId":"abc123","parentSessionId":"sess-1","parentLastUuid":"a3","contextLength":10}
+{"parentUuid":null,"isSidechain":true,"agentId":"abc123","type":"user","uuid":"s1","timestamp":"2026-10-30T13:35:06.000Z","message":{"role":"user","content":"Find auth code"}}
+{"parentUuid":"s1","isSidechain":true,"agentId":"abc123","type":"assistant","uuid":"s2","timestamp":"2026-10-30T13:35:07.000Z","message":{"id":"msg_s1","type":"message","role":"assistant","model":"claude-fable-5-1","content":[{"type":"tool_use","id":"toolu_s1","name":"Read","input":{"file_path":"src/auth.ts"}}]}}
+{"parentUuid":"s2","isSidechain":true,"agentId":"abc123","type":"user","uuid":"s3","timestamp":"2026-10-30T13:35:08.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_s1","content":"export function login(){}"}]}}
+{"parentUuid":"s3","isSidechain":true,"agentId":"abc123","type":"assistant","uuid":"s4","timestamp":"2026-10-30T13:35:09.000Z","message":{"id":"msg_s2","type":"message","role":"assistant","model":"claude-fable-5-1","content":[{"type":"text","text":"Auth lives in src/auth.ts"}]}}

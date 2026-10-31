@@ -1,0 +1,139 @@
+import { EventEmitter } from "node:events";
+import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
+
+const DEFAULT_POLL_MS = 250;
+/** Most bytes read per `readSync`, so a large backlog is not loaded in one allocation. */
+const READ_CHUNK_BYTES = 64 * 1024;
+const NEWLINE = 0x0a;
+
+export interface JsonlTailerOptions {
+  /** How often to look for appended bytes. */
+  pollMs?: number;
+  /** Emit the lines already in the file (default), or only those appended after `start()`. */
+  fromStart?: boolean;
+}
+
+export interface JsonlTailerEvents {
+  /** A complete line that parsed as JSON. `lineNo` is 1-based from where reading began. */
+  line: [obj: unknown, lineNo: number];
+  /** The file shrank (truncated or replaced); reading restarts from its first byte. */
+  reset: [];
+  /** An I/O failure other than the file not existing. Emitted only when someone listens. */
+  error: [err: Error];
+}
+
+/**
+ * Follows a JSONL file that another process appends to and emits each complete line as parsed
+ * JSON. It polls instead of using `fs.watch`, which misses appends on Windows, and reads only the
+ * bytes appended since the last poll. A partial trailing line, including a UTF-8 sequence split
+ * across two writes, is carried as raw bytes until its newline arrives, so it is decoded whole.
+ * Malformed lines are skipped. A missing file is retried on every poll until it appears.
+ */
+export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
+  private readonly pollMs: number;
+  private readonly fromStart: boolean;
+  private running = false;
+  private timer: NodeJS.Timeout | undefined;
+  private offset = 0;
+  private carry = Buffer.alloc(0);
+  private lineNo = 0;
+
+  constructor(
+    readonly path: string,
+    opts: JsonlTailerOptions = {},
+  ) {
+    super();
+    this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+    this.fromStart = opts.fromStart ?? true;
+  }
+
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    if (!this.fromStart) this.offset = sizeOf(this.path) ?? 0;
+    this.schedule(0);
+  }
+
+  stop(): void {
+    this.running = false;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+
+  private schedule(delayMs: number): void {
+    this.timer = setTimeout(() => {
+      this.poll();
+      if (this.running) this.schedule(this.pollMs);
+    }, delayMs);
+  }
+
+  /** Reads what was appended since the last poll. Synchronous, so polls never overlap. */
+  private poll(): void {
+    let fd: number;
+    try {
+      fd = openSync(this.path, "r");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") this.fail(err);
+      return;
+    }
+    try {
+      const size = fstatSync(fd).size;
+      if (size < this.offset) this.reset();
+      while (this.running && this.offset < size) {
+        const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, size - this.offset));
+        const read = readSync(fd, chunk, 0, chunk.length, this.offset);
+        if (read === 0) break;
+        this.offset += read;
+        this.consume(chunk.subarray(0, read));
+      }
+    } catch (err) {
+      this.fail(err);
+    } finally {
+      closeSync(fd);
+    }
+  }
+
+  private reset(): void {
+    this.offset = 0;
+    this.carry = Buffer.alloc(0);
+    this.lineNo = 0;
+    this.emit("reset");
+  }
+
+  /** Emits every complete line in `carry + chunk` and keeps the incomplete tail as bytes. */
+  private consume(chunk: Buffer): void {
+    const data = this.carry.length > 0 ? Buffer.concat([this.carry, chunk]) : chunk;
+    let start = 0;
+    let newline = data.indexOf(NEWLINE);
+    while (newline !== -1 && this.running) {
+      const text = data.toString("utf8", start, newline);
+      start = newline + 1;
+      this.lineNo++;
+      const parsed = parseJson(text);
+      if (parsed.ok) this.emit("line", parsed.value, this.lineNo);
+      newline = data.indexOf(NEWLINE, start);
+    }
+    this.carry = Buffer.from(data.subarray(start));
+  }
+
+  private fail(err: unknown): void {
+    if (this.listenerCount("error") === 0) return;
+    this.emit("error", err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
+function sizeOf(path: string): number | undefined {
+  try {
+    return statSync(path).size;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
