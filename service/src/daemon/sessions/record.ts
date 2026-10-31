@@ -20,8 +20,15 @@ export interface SessionRecord {
   killRequested: boolean;
 }
 
+/** The agent a session was first launched with, and its args, which `resume` reuses. */
+export interface Origin {
+  kind: SessionKind;
+  args: string[];
+}
+
 /** A record and the registry's private bookkeeping for it. */
 export interface Entry extends SessionRecord {
+  origin: Origin;
   /** Typed into the shell on its first output, or when the fallback timer fires. */
   launchLine?: string;
   launchTimer?: NodeJS.Timeout;
@@ -40,6 +47,7 @@ export interface NewEntry {
   gitBranch: string | undefined;
   process: SessionProcess;
   launchLine: string | undefined;
+  origin: Origin;
 }
 
 export function newEntry(o: NewEntry): Entry {
@@ -59,6 +67,7 @@ export function newEntry(o: NewEntry): Entry {
     process: o.process,
     meta: {},
     killRequested: false,
+    origin: o.origin,
     lastUpdatedAt: 0,
     unsubscribe: [],
   };

@@ -36,6 +36,13 @@ describe("buildLaunchLine", () => {
     ).toBe('claude --model=opus --add-dir "D:\\Naya Repos\\café" "@splat" "a,b" "--%" ""\r');
   });
 
+  it("quotes a bare -- so PowerShell does not consume it as the end of parameters", () => {
+    expect(buildLaunchLine("claude", ["--", "x"])).toBe('claude "--" x\r');
+    expect(buildLaunchLine("claude", ["--model", "opus", "--", "-x"])).toBe(
+      'claude --model opus "--" -x\r',
+    );
+  });
+
   it("escapes variables, backticks and typographic quotes in the prompt", () => {
     expect(buildLaunchLine("codex", [], "cost $5 `x` \u201Cq\u201D")).toBe(
       'codex "cost `$5 ``x`` `\u201Cq`\u201D"\r',

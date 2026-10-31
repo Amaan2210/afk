@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Session, SessionKind } from "../../protocol/index.js";
 import { newSessionId } from "../../util/ids.js";
@@ -15,6 +15,7 @@ import {
   notFound,
   setOptional,
   type Entry,
+  type NewEntry,
   type SessionRecord,
 } from "./record.js";
 import { SessionProcess } from "./session-process.js";
@@ -68,20 +69,10 @@ export interface RegistryEvents {
   signal: [sessionId: string, signal: AgentSignal];
 }
 
-interface SpawnPlan {
-  cwd: string;
-  kind: SessionKind;
-  name: string;
-  launchLine: string | undefined;
+type SpawnPlan = Omit<NewEntry, "id" | "at" | "gitBranch" | "process"> & {
   cols: number;
   rows: number;
-}
-
-function processEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
-  return env;
-}
+};
 
 /**
  * The daemon's sessions. Each one is a PowerShell running the session profile, into which the
@@ -99,7 +90,8 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
   constructor(private readonly deps: RegistryDeps) {
     super();
     this.now = deps.now ?? (() => new Date());
-    this.baseEnv = deps.baseEnv ?? processEnv();
+    // process.env only ever holds strings; its type allows undefined for keys that are absent.
+    this.baseEnv = deps.baseEnv ?? ({ ...process.env } as Record<string, string>);
   }
 
   async create(o: CreateOptions): Promise<Session> {
@@ -109,6 +101,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
       kind: o.kind,
       name: o.name || folderName(o.cwd),
       launchLine,
+      origin: { kind: o.kind, args: [...o.args] },
       cols: o.cols ?? DEFAULT_COLS,
       rows: o.rows ?? DEFAULT_ROWS,
     });
@@ -134,20 +127,25 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     this.emitUpdated(rec);
   }
 
-  /** A new session in the same folder that resumes the ended session's agent conversation. */
+  /**
+   * A new session in the same folder resuming the ended one's conversation, reusing the original
+   * args if the agent is unchanged: `claude <args> --resume <id>`, `codex <args> resume <id>`.
+   */
   async resume(id: string): Promise<Session> {
-    const source = this.require(id).session;
+    const { session: source, origin } = this.require(id);
     const agentId = source.agentSessionId;
     if (source.state !== "ended") throw badRequest(`session ${id} has not ended`);
     if (agentId === undefined || source.kind === "shell") {
       throw badRequest(`session ${id} has no agent conversation to resume`);
     }
-    const args = source.kind === "claude" ? ["--resume", agentId] : ["resume", agentId];
+    const args = origin.kind === source.kind ? origin.args : [];
+    const resumeArgs = source.kind === "claude" ? ["--resume", agentId] : ["resume", agentId];
     return this.spawn({
       cwd: source.cwd,
       kind: source.kind,
       name: source.name,
-      launchLine: buildLaunchLine(source.kind, args),
+      launchLine: buildLaunchLine(source.kind, [...args, ...resumeArgs]),
+      origin: { kind: source.kind, args },
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
     });
@@ -176,12 +174,16 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     this.apply(rec, { kind: "user_input" });
   }
 
+  /** Forgets sessions that ended more than `retentionHours` ago and deletes their folders. */
   pruneEnded(): void {
     const cutoff = this.now().getTime() - this.deps.retentionHours * 3_600_000;
     for (const [id, rec] of this.records) {
       const endedAt = rec.session.endedAt;
       if (endedAt === undefined || Date.parse(endedAt) >= cutoff) continue;
       this.records.delete(id);
+      const dir = path.join(this.deps.sessionsDir, id);
+      // Best effort: nothing reads a pruned session's folder again.
+      rm(dir, { recursive: true, force: true }).catch(() => undefined);
       this.emit("removed", id);
     }
   }

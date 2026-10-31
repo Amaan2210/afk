@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -418,11 +419,12 @@ describe("SessionRegistry lifecycle", () => {
 });
 
 describe("SessionRegistry.resume", () => {
-  it("resume creates a new session running claude --resume <id>", async () => {
+  it("resume creates a new session running claude <original args> --resume <id>", async () => {
     const src = await reg.create({
       cwd: "D:\\Naya Repos\\p",
       kind: "claude",
-      args: ["--model", "opus"],
+      args: ["--dangerously-skip-permissions", "--model", "opus"],
+      prompt: "Add login",
       name: "auth work",
     });
     reg.setMeta(src.id, { agentSessionId: "abc" });
@@ -436,8 +438,19 @@ describe("SessionRegistry.resume", () => {
       state: "idle",
     });
     fake.emitData("PS D:\\Naya Repos\\p> ");
-    expect(fake.written.map(String)).toEqual(["claude --resume abc\r"]);
+    expect(fake.written.map(String)).toEqual([
+      "claude --dangerously-skip-permissions --model opus --resume abc\r",
+    ]);
     expect(reg.list().map((x) => x.id)).toEqual([src.id, s.id]);
+
+    // Resuming the resumed session keeps the original args and does not stack --resume.
+    reg.setMeta(s.id, { agentSessionId: "def" });
+    fake.emitExit(0);
+    await reg.resume(s.id);
+    fake.emitData("PS> ");
+    expect(fake.written.map(String)).toEqual([
+      "claude --dangerously-skip-permissions --model opus --resume def\r",
+    ]);
   });
 
   it("resumes a codex session with codex resume <id>", async () => {
@@ -448,6 +461,34 @@ describe("SessionRegistry.resume", () => {
     expect(s.kind).toBe("codex");
     fake.emitData("PS> ");
     expect(fake.written.map(String)).toEqual(["codex resume 019a-thread\r"]);
+  });
+
+  it("puts a codex session's original args before the resume subcommand", async () => {
+    const src = await reg.create({
+      cwd: "D:\\p",
+      kind: "codex",
+      args: ["--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5"],
+    });
+    reg.setMeta(src.id, { agentSessionId: "th-1" });
+    fake.emitExit(0);
+    await reg.resume(src.id);
+    fake.emitData("PS> ");
+    expect(fake.written.map(String)).toEqual([
+      "codex --dangerously-bypass-approvals-and-sandbox -m gpt-5 resume th-1\r",
+    ]);
+  });
+
+  it("does not hand one agent's args to another after the session's kind changed", async () => {
+    const src = await reg.create({
+      cwd: "D:\\p",
+      kind: "claude",
+      args: ["--dangerously-skip-permissions"],
+    });
+    reg.setMeta(src.id, { kind: "codex", agentSessionId: "th-2" });
+    fake.emitExit(0);
+    await reg.resume(src.id);
+    fake.emitData("PS> ");
+    expect(fake.written.map(String)).toEqual(["codex resume th-2\r"]);
   });
 
   it("refuses a live session or one without an agent session id", async () => {
@@ -479,6 +520,20 @@ describe("SessionRegistry retention", () => {
     expect(removed).toEqual([ended.id]);
     expect(reg.get(ended.id)).toBeUndefined();
     expect(reg.list().map((s) => s.id)).toEqual([live.id]);
+  });
+
+  it("pruneEnded deletes the pruned session's folder and keeps the others", async () => {
+    const ended = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const endedPty = fake;
+    const live = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    endedPty.emitExit(0);
+    const endedDir = join(deps.sessionsDir, ended.id);
+    expect(existsSync(join(endedDir, "profile.ps1"))).toBe(true);
+
+    advance(25 * HOUR);
+    reg.pruneEnded();
+    await vi.waitFor(() => expect(existsSync(endedDir)).toBe(false));
+    expect(existsSync(join(deps.sessionsDir, live.id, "profile.ps1"))).toBe(true);
   });
 
   it("uses the configured retention", async () => {

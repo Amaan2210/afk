@@ -3,8 +3,10 @@ import type { SessionKind } from "../../protocol/index.js";
 /**
  * Args typed bare. Anything else is quoted: spaces, non-ASCII, and characters PowerShell reads as
  * syntax (`@` splats, `,` builds an array, `--%` stops parsing, `$` expands, `;` ends a command).
+ * A bare `--` is quoted too: PowerShell takes it as the end of parameters and drops it.
  */
 const BARE_ARG = /^[A-Za-z0-9_\-./=+]+$/;
+const END_OF_PARAMETERS = "--";
 
 const CONTROL_ESCAPES: Record<string, string> = { "\n": "`n", "\r": "`r", "\t": "`t" };
 
@@ -22,7 +24,7 @@ function psQuote(s: string): string {
 }
 
 function psArg(arg: string): string {
-  return BARE_ARG.test(arg) ? arg : psQuote(arg);
+  return BARE_ARG.test(arg) && arg !== END_OF_PARAMETERS ? arg : psQuote(arg);
 }
 
 /**
