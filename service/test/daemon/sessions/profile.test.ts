@@ -51,39 +51,61 @@ describe("renderSessionProfile", () => {
     expect(q).toContain('& "C:\\a``b\\node.exe" "D:\\`$HOME\\`"x`"\\cli.js" exec claude @args');
   });
 
-  it.skipIf(process.platform !== "win32")(
-    "runs under Windows PowerShell with a non-ASCII path containing spaces",
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "afk-profile-"));
-      try {
-        const dir = join(root, "café dir");
-        mkdirSync(dir);
-        const cliEntry = join(dir, "cli.js");
-        writeFileSync(
-          cliEntry,
-          "const e = process.env;\n" +
-            "console.log('AFK ' + JSON.stringify([process.argv.slice(2), e.AFK_SESSION_ID, e.AFK_PORT]));\n",
-        );
-        const profile = join(dir, "profile.ps1");
-        writeFileSync(
-          profile,
-          renderSessionProfile({
-            sessionId: "s_t",
-            port: 2351,
-            nodeExe: process.execPath,
-            cliEntry,
-          }),
-        );
-        const r = spawnSync("powershell.exe", ["-NoProfile", ...shellArgs(profile)], {
-          input: "claude --print 'say hi'\r\nexit\r\n",
-          encoding: "utf8",
-          timeout: 30_000,
-        });
-        expect(r.stdout).toContain('AFK [["exec","claude","--print","say hi"],"s_t","2351"]');
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
-    },
-    40_000,
-  );
+  it("removes aliases that would shadow the session functions, right before defining them", () => {
+    const lines = p.split("\r\n");
+    const at = (prefix: string) => lines.findIndex((l) => l.startsWith(prefix));
+    expect(lines).toContain(
+      "Remove-Item Alias:claude,Alias:codex -Force -ErrorAction SilentlyContinue",
+    );
+    expect(at("$env:AFK_PORT")).toBeLessThan(at("Remove-Item Alias:"));
+    expect(at("Remove-Item Alias:") + 1).toBe(at("function claude"));
+    expect(at("function claude") + 1).toBe(at("function codex"));
+  });
+});
+
+describe.skipIf(process.platform !== "win32")("session profile under Windows PowerShell", () => {
+  const echoArgv = 'AFK [["exec","claude","--print","say hi"],"s_t","2351"]';
+  let root = "";
+  let profile = "";
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "afk-profile-"));
+    const dir = join(root, "café dir");
+    mkdirSync(dir);
+    const cliEntry = join(dir, "cli.js");
+    writeFileSync(
+      cliEntry,
+      "const e = process.env;\n" +
+        "console.log('AFK ' + JSON.stringify([process.argv.slice(2), e.AFK_SESSION_ID, e.AFK_PORT]));\n",
+    );
+    profile = join(dir, "profile.ps1");
+    writeFileSync(
+      profile,
+      renderSessionProfile({ sessionId: "s_t", port: 2351, nodeExe: process.execPath, cliEntry }),
+    );
+  });
+
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("runs with a non-ASCII path containing spaces", () => {
+    const r = spawnSync("powershell.exe", ["-NoProfile", ...shellArgs(profile)], {
+      input: "claude --print 'say hi'\r\nexit\r\n",
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    expect(r.stdout).toContain(echoArgv);
+  }, 40_000);
+
+  it("wins over a claude alias the user's profile defined first", () => {
+    // Stands in for the user's profile, which shellArgs lets load before the session profile.
+    const script = `Set-Alias claude Get-Date; . '${profile.replace(/'/g, "''")}'; claude --print 'say hi'`;
+    const r = spawnSync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { encoding: "utf8", timeout: 30_000 },
+    );
+    expect(r.stdout).toContain(echoArgv);
+  }, 40_000);
 });

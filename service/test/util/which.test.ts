@@ -36,6 +36,14 @@ describe("findOnPath", () => {
     expect(findOnPath("tool", { env, platform: "win32" })).toBe(join(e, "tool.ps1"));
   });
 
+  it("prefers the exact PATH and PATHEXT keys over stale differently-cased copies", () => {
+    // `{ ...process.env, PATH: x }` on Windows carries the spread-in `Path` as well.
+    const stale = withFiles("tool.bat", "tool.cmd");
+    const fresh = withFiles("tool.bat", "tool.cmd");
+    const env = { Path: stale, PathExt: ".BAT", PATH: fresh, PATHEXT: ".CMD" };
+    expect(findOnPath("tool", { env, platform: "win32" })).toBe(join(fresh, "tool.cmd"));
+  });
+
   it("falls back to the bare name on win32 when no extension matches", () => {
     const d = withFiles("tool");
     expect(findOnPath("tool", { env: { PATH: d }, platform: "win32" })).toBe(join(d, "tool"));

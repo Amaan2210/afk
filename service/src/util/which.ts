@@ -10,13 +10,17 @@ export interface FindOnPathOptions {
 
 const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
 
-/** Environment lookup; Windows variable names are case-insensitive (`Path` vs `PATH`). */
+/**
+ * Environment lookup. Windows variable names are case-insensitive (`Path` vs `PATH`), but a copy
+ * such as `{ ...process.env, PATH: x }` holds both keys, so the exact key wins.
+ */
 function readEnv(
   env: NodeJS.ProcessEnv,
   name: string,
   platform: NodeJS.Platform,
 ): string | undefined {
-  if (platform !== "win32") return env[name];
+  const exact = env[name];
+  if (exact !== undefined || platform !== "win32") return exact;
   const key = Object.keys(env).find((k) => k.toUpperCase() === name);
   return key === undefined ? undefined : env[key];
 }
