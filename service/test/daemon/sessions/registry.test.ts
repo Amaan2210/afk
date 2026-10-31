@@ -1,0 +1,505 @@
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { renderSessionProfile } from "../../../src/daemon/sessions/profile.js";
+import { SessionRegistry, type RegistryDeps } from "../../../src/daemon/sessions/registry.js";
+import type { AgentSignal, NotifyKind } from "../../../src/daemon/sessions/state.js";
+import type { Pending, Session } from "../../../src/protocol/index.js";
+import { createFakePty, type FakePty } from "../../helpers/fake-pty.js";
+
+const HOUR = 3_600_000;
+
+let deps: RegistryDeps;
+let reg: SessionRegistry;
+/** The most recently spawned fake pty. */
+let fake: FakePty;
+let clock: Date;
+
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+const advance = (ms: number) => (clock = new Date(clock.getTime() + ms));
+
+function collect(r: SessionRegistry = reg) {
+  const updates: Session[] = [];
+  const notes: { kind: NotifyKind; session: Session }[] = [];
+  const signals: [string, AgentSignal][] = [];
+  const removed: string[] = [];
+  const exits: [string, number][] = [];
+  r.on("updated", (s) => updates.push(s));
+  r.on("notify", (n) => notes.push(n));
+  r.on("signal", (id, s) => signals.push([id, s]));
+  r.on("removed", (id) => removed.push(id));
+  r.on("exit", (id, code) => exits.push([id, code]));
+  return { updates, notes, signals, removed, exits };
+}
+
+beforeEach(async () => {
+  const fakes = createFakePty();
+  clock = new Date("2026-10-31T10:00:00.000Z");
+  deps = {
+    ptyFactory: (o) => (fake = fakes.factory(o) as FakePty),
+    shell: {
+      exe: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      kind: "powershell",
+    },
+    sessionsDir: await mkdtemp(join(tmpdir(), "afk-registry-")),
+    port: 2350,
+    nodeExe: "C:\\Program Files\\nodejs\\node.exe",
+    cliEntry: "D:\\Naya Repos\\afk\\service\\dist\\cli.js",
+    ringBufferBytes: 4096,
+    snapshotScrollback: 100,
+    retentionHours: 24,
+    now: () => clock,
+    baseEnv: { Path: "C:\\Windows", AFK_SESSION_ID: "stale" },
+  };
+  reg = new SessionRegistry(deps);
+});
+
+afterEach(async () => {
+  vi.useRealTimers();
+  await rm(deps.sessionsDir, { recursive: true, force: true });
+});
+
+describe("SessionRegistry.create", () => {
+  it("create spawns the shell with the session profile in cwd and names after the folder", async () => {
+    const s = await reg.create({
+      cwd: "D:\\Naya Repos\\web-platform",
+      kind: "shell",
+      args: [],
+    });
+    expect(s.name).toBe("web-platform");
+    expect(s.state).toBe("idle");
+    expect(s.kind).toBe("shell");
+    expect(fake.lastSpawn.args).toEqual([
+      "-NoLogo",
+      "-NoExit",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      join(deps.sessionsDir, s.id, "profile.ps1"),
+    ]);
+    expect(fake.lastSpawn.env.AFK_SESSION_ID).toBe(s.id);
+  });
+
+  it("spawns the configured shell in cwd with AFK_* merged over the base environment", async () => {
+    const { updates } = collect();
+    const s = await reg.create({
+      cwd: "D:\\Naya Repos\\web-platform",
+      kind: "shell",
+      args: [],
+    });
+    expect(fake.lastSpawn).toMatchObject({
+      exe: deps.shell.exe,
+      cwd: "D:\\Naya Repos\\web-platform",
+      env: { Path: "C:\\Windows", AFK_SESSION_ID: s.id, AFK_PORT: "2350" },
+    });
+    expect(s).toMatchObject({
+      createdAt: clock.toISOString(),
+      lastActivityAt: clock.toISOString(),
+      subagentsRunning: 0,
+    });
+    expect(updates).toEqual([s]);
+    expect(reg.list()).toEqual([s]);
+  });
+
+  it("writes the generated profile, byte order mark included, into the session folder", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const bytes = await readFile(join(deps.sessionsDir, s.id, "profile.ps1"));
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(bytes.toString("utf8")).toBe(
+      renderSessionProfile({
+        sessionId: s.id,
+        port: 2350,
+        nodeExe: deps.nodeExe,
+        cliEntry: deps.cliEntry,
+      }),
+    );
+  });
+
+  it("create for claude types the launch line after the first output chunk", async () => {
+    const s = await reg.create({
+      cwd: "D:\\p",
+      kind: "claude",
+      args: ["--dangerously-skip-permissions"],
+      prompt: "Add login",
+    });
+    fake.emitData("PS D:\\p> ");
+    await tick();
+    expect(fake.written.map(String)).toContain(
+      'claude --dangerously-skip-permissions "Add login"\r',
+    );
+    expect(s.kind).toBe("claude");
+  });
+
+  it("types the launch line once, as one write, however much output follows", async () => {
+    await reg.create({ cwd: "D:\\p", kind: "claude", args: ["--add-dir", "D:\\Naya Repos\\café"] });
+    fake.emitData("PS D:\\p> ");
+    fake.emitData("more");
+    expect(fake.written.map(String)).toEqual(['claude --add-dir "D:\\Naya Repos\\café"\r']);
+  });
+
+  it("types the launch line after 3 s when the shell prints nothing", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await reg.create({ cwd: "D:\\p", kind: "codex", args: [], prompt: "hi" });
+    vi.advanceTimersByTime(2999);
+    expect(fake.written).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(fake.written.map(String)).toEqual(['codex "hi"\r']);
+    fake.emitData("PS D:\\p> ");
+    expect(fake.written).toHaveLength(1);
+  });
+
+  it("never types the launch line into a session that was killed or exited first", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const killed = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const killedPty = fake;
+    reg.kill(killed.id);
+    killedPty.emitData("bye");
+    await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    fake.emitExit(0);
+    vi.advanceTimersByTime(3000);
+    expect(killedPty.written).toEqual([]);
+    expect(fake.written).toEqual([]);
+  });
+
+  it("types nothing into a plain shell", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    fake.emitData("PS D:\\p> ");
+    vi.advanceTimersByTime(3000);
+    expect(fake.written).toEqual([]);
+  });
+
+  it("refuses shell args before spawning or writing anything", async () => {
+    await expect(reg.create({ cwd: "D:\\p", kind: "shell", args: ["-x"] })).rejects.toThrow(
+      /^bad_request:/,
+    );
+    expect(await readdir(deps.sessionsDir)).toEqual([]);
+    expect(reg.list()).toEqual([]);
+  });
+
+  it("defaults to 120x30 and names after the last path segment", async () => {
+    await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    expect(fake.lastSpawn).toMatchObject({ cols: 120, rows: 30 });
+    const named = await reg.create({
+      cwd: "D:\\p",
+      kind: "shell",
+      args: [],
+      name: "mine",
+      cols: 80,
+      rows: 24,
+    });
+    expect(named.name).toBe("mine");
+    expect(fake.lastSpawn).toMatchObject({ cols: 80, rows: 24 });
+    expect((await reg.create({ cwd: "D:\\Naya Repos\\p\\", kind: "shell", args: [] })).name).toBe(
+      "p",
+    );
+    expect((await reg.create({ cwd: "C:/Users/amank/", kind: "shell", args: [] })).name).toBe(
+      "amank",
+    );
+    expect((await reg.create({ cwd: "D:\\", kind: "shell", args: [] })).name).toBe("D:");
+  });
+
+  it("reads the git branch on create and refreshes it on each signal", async () => {
+    const repo = join(deps.sessionsDir, "repo");
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await writeFile(join(repo, ".git", "HEAD"), "ref: refs/heads/main\n");
+    const s = await reg.create({ cwd: join(repo, "src"), kind: "shell", args: [] });
+    expect(s.gitBranch).toBe("main");
+
+    const { updates } = collect();
+    await writeFile(join(repo, ".git", "HEAD"), "ref: refs/heads/feature\n");
+    reg.signal(s.id, { kind: "turn_start" });
+    await vi.waitFor(() => expect(reg.get(s.id)!.session.gitBranch).toBe("feature"));
+    expect(updates.map((u) => [u.state, u.gitBranch])).toEqual([
+      ["working", "main"],
+      ["working", "feature"],
+    ]);
+
+    reg.signal(s.id, { kind: "turn_start" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(updates).toHaveLength(2);
+  });
+});
+
+describe("SessionRegistry lifecycle", () => {
+  it("kill ends the session and emits updated with state ended", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const { updates, exits } = collect();
+    reg.kill(s.id);
+    expect(fake.killed).toBe(true);
+    expect(reg.get(s.id)!.killRequested).toBe(true);
+    expect(reg.list()[0].state).toBe("idle");
+
+    advance(1000);
+    fake.emitExit(1);
+    expect(reg.list()[0]).toMatchObject({
+      state: "ended",
+      exitCode: 1,
+      endedAt: clock.toISOString(),
+    });
+    expect(updates.at(-1)!.state).toBe("ended");
+    expect(exits).toEqual([[s.id, 1]]);
+
+    fake.killed = false;
+    reg.kill(s.id);
+    expect(fake.killed).toBe(false);
+  });
+
+  it("records the exit code the pty reports, -1 when it is not an integer", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const { signals, exits } = collect();
+    fake.emitExit(undefined as unknown as number);
+    expect(reg.get(s.id)!.killRequested).toBe(false);
+    expect(reg.get(s.id)!.session).toMatchObject({ state: "ended", exitCode: -1 });
+    expect(signals).toEqual([[s.id, { kind: "process_exit", exitCode: -1 }]]);
+    expect(exits).toEqual([[s.id, -1]]);
+  });
+
+  it("orders events: signal, updated, notify on a signal; signal, updated, exit on exit", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const events: string[] = [];
+    reg.on("signal", () => events.push("signal"));
+    reg.on("updated", () => events.push("updated"));
+    reg.on("notify", () => events.push("notify"));
+    reg.on("exit", () => events.push("exit"));
+    reg.signal(s.id, { kind: "turn_end", lastMessage: "Done" });
+    expect(events).toEqual(["signal", "updated", "notify"]);
+    events.length = 0;
+    fake.emitExit(0);
+    expect(events).toEqual(["signal", "updated", "exit"]);
+  });
+
+  it("emits every signal it applies, from signal(), input and exit", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const { signals } = collect();
+    reg.signal(s.id, { kind: "turn_start" });
+    reg.signal(s.id, { kind: "turn_start" });
+    reg.input(s.id, Buffer.from("y"));
+    fake.emitExit(0);
+    expect(signals).toEqual([
+      [s.id, { kind: "turn_start" }],
+      [s.id, { kind: "turn_start" }],
+      [s.id, { kind: "user_input" }],
+      [s.id, { kind: "process_exit", exitCode: 0 }],
+    ]);
+  });
+
+  it("signal applies the reducer and emits notify", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const { updates, notes } = collect();
+    reg.signal(s.id, { kind: "turn_start" });
+    reg.signal(s.id, { kind: "turn_end", lastMessage: "All done" });
+    expect(updates.map((u) => u.state)).toEqual(["working", "finished"]);
+    expect(updates[1].lastMessage).toBe("All done");
+    expect(notes).toEqual([{ kind: "finished", session: updates[1] }]);
+    expect(reg.get(s.id)!.session).toMatchObject({ state: "finished", lastMessage: "All done" });
+  });
+
+  it("sets and clears a pending question without re-notifying for the same id", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const { updates, notes, signals } = collect();
+    const pending: Pending = {
+      kind: "permission",
+      id: "perm-1",
+      tool: "Bash",
+      summary: "npm test",
+    };
+    reg.signal(s.id, { kind: "pending", pending });
+    reg.signal(s.id, { kind: "pending", pending: { ...pending } });
+    expect(signals).toHaveLength(2);
+    expect(updates.map((u) => u.state)).toEqual(["needs_input"]);
+    expect(notes.map((n) => n.kind)).toEqual(["needs_input"]);
+    expect(reg.get(s.id)!.session.pending).toEqual(pending);
+
+    reg.signal(s.id, { kind: "pending_cleared", pendingId: "perm-1" });
+    expect("pending" in reg.get(s.id)!.session).toBe(false);
+    expect(updates).toHaveLength(2);
+    expect(updates[1].state).toBe("working");
+    expect(updates[1].pending).toBeUndefined();
+  });
+
+  it("input writes bytes and moves finished to idle", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    reg.signal(s.id, { kind: "turn_end" });
+    const { updates } = collect();
+    reg.input(s.id, Buffer.from("x"));
+    expect(fake.written.map(String)).toContain("x");
+    expect(reg.get(s.id)!.session.state).toBe("idle");
+    expect(updates.map((u) => u.state)).toEqual(["idle"]);
+
+    reg.input(s.id, Buffer.from("y"));
+    expect(fake.written.map(String)).toContain("y");
+    expect(updates).toHaveLength(1);
+  });
+
+  it("emits data per chunk but activity updates at most once per 5 s", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const { updates } = collect();
+    const data: [string, Buffer][] = [];
+    reg.on("data", (id, chunk) => data.push([id, chunk]));
+
+    advance(1000);
+    fake.emitData("a");
+    expect(updates).toHaveLength(0);
+    expect(reg.get(s.id)!.session.lastActivityAt).toBe(clock.toISOString());
+
+    advance(4000);
+    fake.emitData("b");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].lastActivityAt).toBe(clock.toISOString());
+
+    advance(4999);
+    fake.emitData("c");
+    expect(updates).toHaveLength(1);
+    advance(1);
+    fake.emitData("d");
+    expect(updates).toHaveLength(2);
+
+    reg.signal(s.id, { kind: "turn_start" });
+    expect(updates).toHaveLength(3);
+
+    expect(data.map(([id, chunk]) => [id, chunk.toString()])).toEqual(
+      ["a", "b", "c", "d"].map((c) => [s.id, c]),
+    );
+    expect(Buffer.isBuffer(data[0][1])).toBe(true);
+  });
+
+  it("setMeta merges meta and the named session fields and emits updated", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const { updates } = collect();
+    advance(60_000);
+    reg.setMeta(s.id, {
+      transcriptPath: "C:\\t.jsonl",
+      kind: "claude",
+      agentSessionId: "sess-1",
+      lastMessage: "hi",
+    });
+    reg.setMeta(s.id, { rolloutPath: "C:\\r.jsonl" });
+    const rec = reg.get(s.id)!;
+    expect(rec.meta).toEqual({ transcriptPath: "C:\\t.jsonl", rolloutPath: "C:\\r.jsonl" });
+    expect(rec.session).toMatchObject({
+      kind: "claude",
+      agentSessionId: "sess-1",
+      lastMessage: "hi",
+      state: "idle",
+      lastActivityAt: s.lastActivityAt,
+    });
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).toMatchObject({ kind: "claude", agentSessionId: "sess-1" });
+  });
+
+  it("rename changes the name and emits updated", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const { updates } = collect();
+    reg.rename(s.id, "auth work");
+    expect(reg.get(s.id)!.session.name).toBe("auth work");
+    expect(updates.map((u) => u.name)).toEqual(["auth work"]);
+  });
+
+  it("hands out copies, so callers cannot change the registry's sessions", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    s.name = "changed";
+    reg.list()[0].name = "changed";
+    expect(reg.get(s.id)!.session.name).toBe("p");
+  });
+
+  it("throws not_found for an unknown session id", async () => {
+    const calls = [
+      () => reg.kill("s_nope"),
+      () => reg.rename("s_nope", "x"),
+      () => reg.signal("s_nope", { kind: "turn_start" }),
+      () => reg.input("s_nope", Buffer.from("x")),
+      () => reg.setMeta("s_nope", { kind: "claude" }),
+    ];
+    for (const call of calls) expect(call).toThrow(/^not_found:/);
+    await expect(reg.resume("s_nope")).rejects.toThrow(/^not_found:/);
+    expect(reg.get("s_nope")).toBeUndefined();
+  });
+});
+
+describe("SessionRegistry.resume", () => {
+  it("resume creates a new session running claude --resume <id>", async () => {
+    const src = await reg.create({
+      cwd: "D:\\Naya Repos\\p",
+      kind: "claude",
+      args: ["--model", "opus"],
+      name: "auth work",
+    });
+    reg.setMeta(src.id, { agentSessionId: "abc" });
+    fake.emitExit(0);
+    const s = await reg.resume(src.id);
+    expect(s.id).not.toBe(src.id);
+    expect(s).toMatchObject({
+      cwd: "D:\\Naya Repos\\p",
+      kind: "claude",
+      name: "auth work",
+      state: "idle",
+    });
+    fake.emitData("PS D:\\Naya Repos\\p> ");
+    expect(fake.written.map(String)).toEqual(["claude --resume abc\r"]);
+    expect(reg.list().map((x) => x.id)).toEqual([src.id, s.id]);
+  });
+
+  it("resumes a codex session with codex resume <id>", async () => {
+    const src = await reg.create({ cwd: "D:\\p", kind: "codex", args: [] });
+    reg.setMeta(src.id, { agentSessionId: "019a-thread" });
+    fake.emitExit(0);
+    const s = await reg.resume(src.id);
+    expect(s.kind).toBe("codex");
+    fake.emitData("PS> ");
+    expect(fake.written.map(String)).toEqual(["codex resume 019a-thread\r"]);
+  });
+
+  it("refuses a live session or one without an agent session id", async () => {
+    const live = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    reg.setMeta(live.id, { agentSessionId: "abc" });
+    await expect(reg.resume(live.id)).rejects.toThrow(/^bad_request:/);
+
+    const anonymous = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    fake.emitExit(0);
+    await expect(reg.resume(anonymous.id)).rejects.toThrow(/^bad_request:/);
+    expect(reg.list()).toHaveLength(2);
+  });
+});
+
+describe("SessionRegistry retention", () => {
+  it("pruneEnded removes ended sessions older than retentionHours", async () => {
+    const ended = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const endedPty = fake;
+    const live = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    endedPty.emitExit(0);
+    const { removed } = collect();
+
+    advance(23 * HOUR);
+    reg.pruneEnded();
+    expect(removed).toEqual([]);
+
+    advance(2 * HOUR);
+    reg.pruneEnded();
+    expect(removed).toEqual([ended.id]);
+    expect(reg.get(ended.id)).toBeUndefined();
+    expect(reg.list().map((s) => s.id)).toEqual([live.id]);
+  });
+
+  it("uses the configured retention", async () => {
+    const short = new SessionRegistry({ ...deps, retentionHours: 1 });
+    const s = await short.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    fake.emitExit(0);
+    const { removed } = collect(short);
+    advance(HOUR + 1);
+    short.pruneEnded();
+    expect(removed).toEqual([s.id]);
+  });
+
+  it("stopAll kills every live session", async () => {
+    const a = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const aPty = fake;
+    const b = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const bPty = fake;
+    const c = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    fake.emitExit(0);
+    reg.stopAll();
+    expect([aPty.killed, bPty.killed, fake.killed]).toEqual([true, true, false]);
+    expect([a, b, c].map((s) => reg.get(s.id)!.killRequested)).toEqual([true, true, false]);
+  });
+});
