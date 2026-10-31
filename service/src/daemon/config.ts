@@ -41,26 +41,40 @@ async function writeLocalToken(paths: AfkPaths): Promise<string> {
   return hashToken(token);
 }
 
+/** Fresh copy of the defaults; never share nested objects with `defaultConfig`. */
+function freshDefaults(): Omit<DaemonConfig, "localTokenHash"> {
+  return structuredClone(defaultConfig);
+}
+
 /** Merge untrusted parsed JSON over defaults; unknown keys are kept. */
 function normalize(raw: Record<string, unknown>): DaemonConfig {
+  const defaults = freshDefaults();
   const settings = DaemonSettingsSchema.partial().safeParse(raw.settings);
   const merged = {
-    ...defaultConfig,
+    ...defaults,
     ...raw,
-    settings: { ...defaultConfig.settings, ...(settings.success ? settings.data : {}) },
+    settings: { ...defaults.settings, ...(settings.success ? settings.data : {}) },
   } as DaemonConfig;
-  if (typeof merged.port !== "number") merged.port = defaultConfig.port;
-  if (typeof merged.bind !== "string") merged.bind = defaultConfig.bind;
+  if (typeof merged.port !== "number") merged.port = defaults.port;
+  if (typeof merged.bind !== "string") merged.bind = defaults.bind;
   if (!Array.isArray(merged.devices)) merged.devices = [];
-  if (typeof merged.ringBufferBytes !== "number")
-    merged.ringBufferBytes = defaultConfig.ringBufferBytes;
+  if (typeof merged.ringBufferBytes !== "number") merged.ringBufferBytes = defaults.ringBufferBytes;
   if (typeof merged.snapshotScrollback !== "number") {
-    merged.snapshotScrollback = defaultConfig.snapshotScrollback;
+    merged.snapshotScrollback = defaults.snapshotScrollback;
   }
+  if (typeof merged.localTokenHash !== "string") merged.localTokenHash = "";
   return merged;
 }
 
-async function readExisting(paths: AfkPaths): Promise<DaemonConfig | undefined> {
+export interface LoadConfigOptions {
+  /** Called with the backup path when an unparseable config file was moved aside. */
+  onCorrupt?: (backupPath: string) => void;
+}
+
+async function readExisting(
+  paths: AfkPaths,
+  opts: LoadConfigOptions,
+): Promise<DaemonConfig | undefined> {
   let text: string;
   try {
     text = await readFile(paths.configFile, "utf8");
@@ -71,29 +85,39 @@ async function readExisting(paths: AfkPaths): Promise<DaemonConfig | undefined> 
   try {
     const raw: unknown = JSON.parse(text);
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      const cfg = normalize(raw as Record<string, unknown>);
-      if (typeof cfg.localTokenHash === "string") return cfg;
+      return normalize(raw as Record<string, unknown>);
     }
   } catch {
     // fall through to backup
   }
-  await rename(paths.configFile, `${paths.configFile}.corrupt-${Date.now()}`);
+  const backupPath = `${paths.configFile}.corrupt-${Date.now()}`;
+  await rename(paths.configFile, backupPath);
+  opts.onCorrupt?.(backupPath);
   return undefined;
 }
 
-export async function loadConfig(paths: AfkPaths): Promise<DaemonConfig> {
+export async function loadConfig(
+  paths: AfkPaths,
+  opts: LoadConfigOptions = {},
+): Promise<DaemonConfig> {
   await mkdir(paths.configDir, { recursive: true });
-  const existing = await readExisting(paths);
+  const existing = await readExisting(paths, opts);
   if (!existing) {
-    const cfg: DaemonConfig = { ...defaultConfig, localTokenHash: await writeLocalToken(paths) };
+    const cfg: DaemonConfig = { ...freshDefaults(), localTokenHash: await writeLocalToken(paths) };
     await saveConfig(paths, cfg);
     return cfg;
   }
-  try {
-    await readFile(paths.localTokenFile, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    // The CLI needs a readable token: mint a new one and update the stored hash.
+  let needsToken = existing.localTokenHash === "";
+  if (!needsToken) {
+    try {
+      await readFile(paths.localTokenFile, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      needsToken = true;
+    }
+  }
+  if (needsToken) {
+    // The CLI needs a readable token matching the stored hash: mint a new one.
     existing.localTokenHash = await writeLocalToken(paths);
     await saveConfig(paths, existing);
   }
