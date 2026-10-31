@@ -39,6 +39,7 @@ beforeEach(async () => {
 afterEach(async () => {
   tailer?.stop();
   tailer = undefined;
+  vi.useRealTimers();
   vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
@@ -137,6 +138,49 @@ describe("JsonlTailer", () => {
     await vi.waitFor(() => expect(caughtUpAt).toEqual([2, 3]));
     expect(events).toEqual(["line", "line", "reset", "line"]);
     expect(lines[2]).toEqual([{ n: 9 }, 1]);
+  });
+
+  it("drain reads what was appended at once and keeps a single poll timer", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    writeFileSync(file, '{"n":1}\n');
+    const { lines, caughtUpAt } = startTailer();
+    expect(vi.getTimerCount()).toBe(1);
+    tailer!.drain(); // the first read happens now instead of on the scheduled poll
+    expect(lines).toEqual([[{ n: 1 }, 1]]);
+    expect(caughtUpAt).toEqual([1]);
+    appendFileSync(file, '{"n":2}\n');
+    tailer!.drain();
+    tailer!.drain();
+    expect(lines).toEqual([
+      [{ n: 1 }, 1],
+      [{ n: 2 }, 2],
+    ]);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(POLL_MS * 3);
+    expect(lines).toHaveLength(2);
+    expect(caughtUpAt).toEqual([1]);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it("drain from a listener while the tailer is reading does nothing", async () => {
+    writeFileSync(file, '{"n":1}\n{"n":2}\n');
+    const { lines, caughtUpAt } = startTailer();
+    // A nested read would find nothing left and report caughtUp before line 2 is delivered.
+    tailer!.prependListener("line", () => tailer!.drain());
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([2]));
+    expect(lines).toEqual([
+      [{ n: 1 }, 1],
+      [{ n: 2 }, 2],
+    ]);
+  });
+
+  it("drain does nothing once stopped", () => {
+    writeFileSync(file, '{"n":1}\n');
+    const { lines, caughtUpAt } = startTailer();
+    tailer!.stop();
+    tailer!.drain();
+    expect(lines).toEqual([]);
+    expect(caughtUpAt).toEqual([]);
   });
 
   it("emits nothing after stop()", async () => {

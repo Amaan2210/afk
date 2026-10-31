@@ -50,6 +50,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
   private carry = Buffer.alloc(0);
   private lineNo = 0;
   private caught = false;
+  private reading = false;
 
   constructor(
     readonly path: string,
@@ -73,6 +74,15 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     this.timer = undefined;
   }
 
+  /**
+   * Reads what has been appended now rather than at the next poll, emitting before it returns.
+   * The poll schedule is unchanged. Does nothing while stopped, or when called from a listener
+   * during a read (the read in progress delivers those lines).
+   */
+  drain(): void {
+    if (this.running) this.poll();
+  }
+
   private schedule(delayMs: number): void {
     this.timer = setTimeout(() => {
       this.poll();
@@ -80,8 +90,18 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     }, delayMs);
   }
 
-  /** Reads what was appended since the last poll. Synchronous, so polls never overlap. */
+  /** Reads what was appended since the last poll. Synchronous, and never nested in another. */
   private poll(): void {
+    if (this.reading) return;
+    this.reading = true;
+    try {
+      this.read();
+    } finally {
+      this.reading = false;
+    }
+  }
+
+  private read(): void {
     let fd: number;
     try {
       fd = openSync(this.path, "r");
