@@ -17,15 +17,18 @@ function startTailer(opts: { fromStart?: boolean } = {}) {
   const lines: [unknown, number][] = [];
   const events: string[] = [];
   const errors: unknown[] = [];
+  /** How many lines had been emitted each time `caughtUp` fired. */
+  const caughtUpAt: number[] = [];
   t.on("line", (obj: unknown, lineNo: number) => {
     lines.push([obj, lineNo]);
     events.push("line");
   });
   t.on("reset", () => events.push("reset"));
+  t.on("caughtUp", () => caughtUpAt.push(lines.length));
   t.on("error", (err: unknown) => errors.push(err));
   tailer = t;
   t.start();
-  return { lines, events, errors };
+  return { lines, events, errors, caughtUpAt };
 }
 
 beforeEach(async () => {
@@ -96,6 +99,44 @@ describe("JsonlTailer", () => {
     appendFileSync(file, '{"n":3}\n');
     await vi.waitFor(() => expect(lines).toHaveLength(1));
     expect(lines[0][0]).toEqual({ n: 3 });
+  });
+
+  it("emits caughtUp once, after the lines already in the file", async () => {
+    writeFileSync(file, '{"n":1}\n{"n":2}\n');
+    const { lines, caughtUpAt } = startTailer();
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([2]));
+    appendFileSync(file, '{"n":3}\n');
+    await vi.waitFor(() => expect(lines).toHaveLength(3));
+    await pause(POLL_MS * 3);
+    expect(caughtUpAt).toEqual([2]);
+  });
+
+  it("emits caughtUp on the first poll when the file does not exist yet", async () => {
+    const { lines, caughtUpAt } = startTailer();
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([0]));
+    writeFileSync(file, '{"n":1}\n');
+    await vi.waitFor(() => expect(lines).toHaveLength(1));
+    await pause(POLL_MS * 3);
+    expect(caughtUpAt).toEqual([0]);
+  });
+
+  it("with fromStart false emits caughtUp after its first poll", async () => {
+    writeFileSync(file, '{"n":1}\n{"n":2}\n');
+    const { lines, caughtUpAt } = startTailer({ fromStart: false });
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([0]));
+    appendFileSync(file, '{"n":3}\n');
+    await vi.waitFor(() => expect(lines).toHaveLength(1));
+    expect(caughtUpAt).toEqual([0]);
+  });
+
+  it("emits caughtUp again once the file has been re-read after a reset", async () => {
+    writeFileSync(file, '{"n":1}\n{"n":2}\n');
+    const { lines, events, caughtUpAt } = startTailer();
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([2]));
+    writeFileSync(file, '{"n":9}\n'); // shorter than what was already read
+    await vi.waitFor(() => expect(caughtUpAt).toEqual([2, 3]));
+    expect(events).toEqual(["line", "line", "reset", "line"]);
+    expect(lines[2]).toEqual([{ n: 9 }, 1]);
   });
 
   it("emits nothing after stop()", async () => {

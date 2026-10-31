@@ -18,6 +18,12 @@ export interface JsonlTailerEvents {
   line: [obj: unknown, lineNo: number];
   /** The file shrank (truncated or replaced); reading restarts from its first byte. */
   reset: [];
+  /**
+   * Reading has reached the end of the file: every line emitted so far was already there when
+   * reading began, and every later line is new. Emitted once after `start()`, at the end of the
+   * first poll that read the file to its end (or found no file), and once more after each reset.
+   */
+  caughtUp: [];
   /** An I/O failure other than the file not existing. Emitted only when someone listens. */
   error: [err: Error];
 }
@@ -30,6 +36,7 @@ type Line = [obj: unknown, lineNo: number];
  * bytes appended since the last poll. A partial trailing line, including a UTF-8 sequence split
  * across two writes, is carried as raw bytes until its newline arrives, so it is decoded whole.
  * Malformed lines are skipped. A missing file is retried on every poll until it appears.
+ * `caughtUp` separates the lines replayed from the file from those appended afterwards.
  *
  * A listener that throws does not stop the tailer: the exception is re-thrown on the next tick,
  * where it surfaces as an uncaught exception, and the remaining lines are still delivered.
@@ -42,6 +49,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
   private offset = 0;
   private carry = Buffer.alloc(0);
   private lineNo = 0;
+  private caught = false;
 
   constructor(
     readonly path: string,
@@ -78,7 +86,8 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     try {
       fd = openSync(this.path, "r");
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") this.fail(err);
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") this.catchUp();
+      else this.fail(err);
       return;
     }
     try {
@@ -95,6 +104,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
           this.deliver(() => this.emit("line", obj, lineNo));
         }
       }
+      if (this.running) this.catchUp();
     } finally {
       this.io(() => closeSync(fd));
     }
@@ -104,7 +114,15 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     this.offset = 0;
     this.carry = Buffer.alloc(0);
     this.lineNo = 0;
+    this.caught = false;
     this.deliver(() => this.emit("reset"));
+  }
+
+  /** Emits `caughtUp` the first time reading reaches the end since `start()` or a reset. */
+  private catchUp(): void {
+    if (this.caught) return;
+    this.caught = true;
+    this.deliver(() => this.emit("caughtUp"));
   }
 
   /**
