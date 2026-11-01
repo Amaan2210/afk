@@ -7,7 +7,10 @@ export type AgentSignal =
   | { kind: "pending_cleared"; pendingId?: string }
   | { kind: "subagent_start" }
   | { kind: "subagent_stop" }
+  /** Keystrokes from a client (the laptop window or the phone). */
   | { kind: "user_input" }
+  /** The user interrupted the turn (Esc or Ctrl+C); no Stop hook or turn end follows. */
+  | { kind: "turn_abort" }
   | { kind: "process_exit"; exitCode: number }
   /** The agent inside the session's shell exited; the shell lives on. */
   | { kind: "agent_exit" };
@@ -88,7 +91,15 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
       };
 
     case "user_input":
+      // A key at a permission prompt answers it; nothing else reports that it closed. A question
+      // stays pending until its tool result (PostToolUse) arrives.
+      if (slice.pending?.kind === "permission") {
+        return { slice: { ...withoutPending(slice), state: "working" } };
+      }
       return { slice: slice.state === "finished" ? { ...slice, state: "idle" } : { ...slice } };
+
+    case "turn_abort":
+      return { slice: { ...withoutPending(slice), state: "idle", subagentsRunning: 0 } };
 
     case "process_exit":
       return { slice: { ...withoutPending(slice), state: "ended", exitCode: signal.exitCode } };

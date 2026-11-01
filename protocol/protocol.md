@@ -116,7 +116,9 @@ interface DaemonSettings {
 | `device.list` *(local token only)* | `id` | `ack{devices: {id,name,createdAt,lastSeenAt?}[]}` |
 | `device.remove` *(local token only)* | `id`, `deviceId` | `ack` |
 
-`session.create` semantics: the daemon spawns the shell in `cwd`, then types the launch line. For `claude`: `claude <args…> [prompt]`; for `codex`: `codex <args…> [prompt]`; for `shell`: nothing (`args` and `prompt` must be empty). `prompt` is passed as the agent's positional first prompt, quoted.
+`session.create` semantics: the daemon spawns the shell in `cwd`, then types the launch line. For `claude`: `claude <args…> [prompt]`; for `codex`: `codex <args…> [prompt]`; for `shell`: nothing (`args` and `prompt` must be empty). `prompt` is passed as the agent's positional first prompt, quoted. `cwd` must be an absolute path to a folder on a local drive: a relative path, or a network or device path (one starting with `\`, or `//`), is a `bad_request`, and so is a folder that does not exist; any other failure to read it is `internal`. `fs.listDirs` refuses the same paths.
+
+Session names (`session.create` `name`, `session.rename` `name`) are trimmed and capped at 64 characters; a name with a control character is a `bad_request`. A blank name on `session.create` means the folder's name; on `session.rename` it is a `bad_request`.
 
 `pending.answer` semantics: the daemon translates the answer into the keystrokes the agent's prompt expects, then clears `pending` when the agent confirms (hook or transcript) or after the next output. `text` without `choiceIndices` means a free-text answer typed into the composer.
 

@@ -1,17 +1,17 @@
 import { EventEmitter } from "node:events";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Session, SessionKind } from "../../protocol/index.js";
+import type { Session } from "../../protocol/index.js";
 import { newSessionId } from "../../util/ids.js";
 import { currentBranch } from "./git.js";
 import { buildLaunchLine } from "./launch-line.js";
 import { renderSessionProfile } from "./profile.js";
-import type { PtyFactory } from "./pty.js";
 import {
   applySignal,
   badRequest,
   folderName,
   freeName,
+  isFocusReport,
   newEntry,
   notFound,
   setOptional,
@@ -19,11 +19,14 @@ import {
   type NewEntry,
   type SessionRecord,
 } from "./record.js";
+import { withoutResumeArgs } from "./resume-args.js";
+import type { CreateOptions, MetaPatch, RegistryDeps, RegistryEvents } from "./registry-types.js";
 import { SessionProcess } from "./session-process.js";
-import { shellArgs, type ShellInfo } from "./shell.js";
-import type { AgentSignal, NotifyKind } from "./state.js";
+import { shellArgs } from "./shell.js";
+import type { AgentSignal } from "./state.js";
 
 export type { SessionMeta, SessionRecord } from "./record.js";
+export type { CreateOptions, MetaPatch, RegistryDeps, RegistryEvents } from "./registry-types.js";
 
 /** How long a new session waits for the shell's first output before typing the launch line. */
 const LAUNCH_FALLBACK_MS = 3000;
@@ -31,44 +34,6 @@ const LAUNCH_FALLBACK_MS = 3000;
 const ACTIVITY_UPDATE_MS = 5000;
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
-
-export interface RegistryDeps {
-  ptyFactory: PtyFactory;
-  shell: ShellInfo;
-  sessionsDir: string;
-  port: number;
-  nodeExe: string;
-  cliEntry: string;
-  ringBufferBytes: number;
-  snapshotScrollback: number;
-  retentionHours: number;
-  now?: () => Date;
-  /** The environment session shells start with; defaults to the daemon's own. */
-  baseEnv?: Record<string, string>;
-}
-
-export interface CreateOptions {
-  cwd: string;
-  kind: SessionKind;
-  args: string[];
-  name?: string;
-  prompt?: string;
-  cols?: number;
-  rows?: number;
-}
-
-export type MetaPatch = Partial<SessionRecord["meta"]> &
-  Partial<Pick<Session, "kind" | "agentSessionId" | "lastMessage">>;
-
-export interface RegistryEvents {
-  updated: [session: Session];
-  removed: [sessionId: string];
-  notify: [event: { kind: NotifyKind; session: Session }];
-  data: [sessionId: string, chunk: Buffer];
-  exit: [sessionId: string, exitCode: number];
-  /** Every signal applied to a session, after the reducer and before "updated". */
-  signal: [sessionId: string, signal: AgentSignal];
-}
 
 type SpawnPlan = Omit<NewEntry, "id" | "at" | "gitBranch" | "process"> & {
   cols: number;
@@ -131,7 +96,8 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
 
   /**
    * A new session in the same folder resuming the ended one's conversation, reusing the original
-   * args if the agent is unchanged: `claude <args> --resume <id>`, `codex <args> resume <id>`.
+   * args if the agent is unchanged, less any resume args of their own: `claude <args> --resume
+   * <id>`, `codex <args> resume <id>`.
    */
   async resume(id: string): Promise<Session> {
     const { session: source, origin } = this.require(id);
@@ -140,7 +106,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     if (agentId === undefined || source.kind === "shell") {
       throw badRequest(`session ${id} has no agent conversation to resume`);
     }
-    const args = origin.kind === source.kind ? origin.args : [];
+    const args = origin.kind === source.kind ? withoutResumeArgs(source.kind, origin.args) : [];
     const resumeArgs = source.kind === "claude" ? ["--resume", agentId] : ["resume", agentId];
     return this.spawn({
       cwd: source.cwd,
@@ -169,11 +135,11 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     this.emitUpdated(rec);
   }
 
-  /** Keystrokes from a client. */
+  /** Keystrokes from a client. A terminal's focus report is passed on but is not user input. */
   input(id: string, bytes: Buffer): void {
     const rec = this.require(id);
     rec.process?.write(bytes);
-    this.apply(rec, { kind: "user_input" });
+    if (!isFocusReport(bytes)) this.apply(rec, { kind: "user_input" });
   }
 
   /** Forgets sessions that ended more than `retentionHours` ago and deletes their folders. */

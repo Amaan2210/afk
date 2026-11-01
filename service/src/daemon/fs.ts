@@ -9,6 +9,19 @@ export interface DirListing {
   recent: string[];
 }
 
+/** UNC and device paths (`\\server\share`, `//server/share`, `\\.\pipe`, `\\?\`) and rooted `\dir`. */
+const NOT_LOCAL = /^(?:\\|\/\/)/;
+
+/**
+ * Throws a `bad_request:` error unless `p` is an absolute path on a local drive (or under `/`). A
+ * network or device path is refused before anything reads it: a stat of one would open a
+ * connection to another machine or a device.
+ */
+export function requireLocalPath(p: string, what: string): void {
+  if (NOT_LOCAL.test(p)) throw new Error("bad_request: network and device paths are not supported");
+  if (!path.isAbsolute(p)) throw new Error(`bad_request: ${what} must be an absolute path`);
+}
+
 async function isDirectory(p: string): Promise<boolean> {
   try {
     return (await stat(p)).isDirectory();
@@ -91,8 +104,7 @@ export async function listDirs(
   recent: RecentFolders,
   platform: NodeJS.Platform = process.platform,
 ): Promise<DirListing> {
-  if (dir !== undefined && !path.isAbsolute(dir))
-    throw new Error("bad_request: path must be absolute");
+  if (dir !== undefined) requireLocalPath(dir, "path");
   const recentList = await recent.list();
   if (dir === undefined) {
     const dirs = platform === "win32" ? await driveRoots() : [{ name: "/", path: "/" }];

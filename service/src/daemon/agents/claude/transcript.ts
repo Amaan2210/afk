@@ -8,6 +8,8 @@ const MAX_TOOL_TEXT = 4000;
 const SUBAGENT_TOOL = "Agent";
 const QUESTION_TOOL = "AskUserQuestion";
 const DEFAULT_SUBAGENT = "general-purpose";
+/** Claude Code's text for an interrupted turn: `… by user]` or `… by user for tool use]`. */
+const INTERRUPTED = "[Request interrupted by user";
 
 type Block = Record<string, unknown>;
 type QuestionPending = Extract<Pending, { kind: "question" }>;
@@ -212,6 +214,18 @@ export class ClaudeTranscriptNormalizer {
   private fallbackTime(): string {
     return this.lastAt ?? new Date().toISOString();
   }
+}
+
+/**
+ * Whether a transcript line is the user line Claude Code writes when the user interrupts a turn
+ * (Esc): `[Request interrupted by user]`, or `[Request interrupted by user for tool use]`. No Stop
+ * hook runs for such a turn, so this line is the only sign that it ended.
+ */
+export function isInterruptLine(line: unknown): boolean {
+  if (!isRecord(line) || line.type !== "user" || !isRecord(line.message)) return false;
+  return contentBlocks(line.message.content).some(
+    (b) => b.type === "text" && typeof b.text === "string" && b.text.startsWith(INTERRUPTED),
+  );
 }
 
 /** A message's content as blocks: a plain string is one text block. */

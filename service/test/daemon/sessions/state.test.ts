@@ -160,9 +160,39 @@ describe("reduce", () => {
       expect(reduce(slice, { kind: "pending_cleared" }).slice).toEqual(slice);
     });
 
-    it("user_input leaves needs_input alone", () => {
+    it("user_input leaves a pending question alone", () => {
       const slice: StateSlice = { ...initialSlice, state: "needs_input", pending: q };
       expect(reduce(slice, { kind: "user_input" }).slice).toEqual(slice);
+    });
+
+    it("user_input answers a permission prompt: back to working, pending dropped, no notify", () => {
+      const permission: Pending = { kind: "permission", id: "perm-1", tool: "Bash", summary: "x" };
+      const slice: StateSlice = { ...initialSlice, state: "needs_input", pending: permission };
+      const r = reduce(slice, { kind: "user_input" });
+      expect(r.slice).toEqual({ state: "working", subagentsRunning: 0 });
+      expect(r.notify).toBeUndefined();
+    });
+
+    it("turn_abort returns any live state to idle, clearing pending and sub-agents, without notify", () => {
+      const slices: StateSlice[] = [
+        { state: "working", subagentsRunning: 1, lastMessage: "m" },
+        { state: "needs_input", pending: q, subagentsRunning: 0 },
+        { state: "finished", subagentsRunning: 0, lastMessage: "m" },
+        initialSlice,
+      ];
+      for (const slice of slices) {
+        const r = reduce(slice, { kind: "turn_abort" });
+        expect(r.slice.state).toBe("idle");
+        expect(r.slice.pending).toBeUndefined();
+        expect(r.slice.subagentsRunning).toBe(0);
+        expect(r.slice.lastMessage).toBe(slice.lastMessage);
+        expect(r.notify).toBeUndefined();
+      }
+    });
+
+    it("turn_abort leaves an ended session ended", () => {
+      const slice: StateSlice = { state: "ended", subagentsRunning: 0, exitCode: 1 };
+      expect(reduce(slice, { kind: "turn_abort" }).slice).toEqual(slice);
     });
 
     it("subagent_stop at zero stays at zero and does not notify", () => {

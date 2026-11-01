@@ -1,7 +1,7 @@
 import type { ChatEvent, Strip } from "../../protocol/index.js";
 import type { AgentSignal } from "../sessions/state.js";
 import { parentUuidOf, subagentDirFor, SubagentWatcher } from "./claude/subagents.js";
-import { ClaudeTranscriptNormalizer } from "./claude/transcript.js";
+import { ClaudeTranscriptNormalizer, isInterruptLine } from "./claude/transcript.js";
 import { CodexRolloutNormalizer, type RolloutMeta } from "./codex/rollout.js";
 import { MAIN_THREAD, type AttachedSource } from "./hub-session.js";
 import { JsonlTailer } from "./tail.js";
@@ -59,8 +59,8 @@ class ThreadTail {
 
 /**
  * A Claude Code transcript and its sub-agents' transcripts, each its own thread. Only the main
- * transcript yields signals: an AskUserQuestion opening or closing changes the session's pending.
- * Sub-agents start and stop through hooks, not here.
+ * transcript yields signals: an AskUserQuestion opening or closing changes the session's pending,
+ * and an interrupt line aborts the turn. Sub-agents start and stop through hooks, not here.
  */
 export class ClaudeSource implements AttachedSource {
   private main = new ClaudeTranscriptNormalizer(MAIN_THREAD);
@@ -108,10 +108,13 @@ export class ClaudeSource implements AttachedSource {
     const before = this.main.pendingQuestion;
     for (const event of this.main.push(obj)) this.sink.chat(MAIN_THREAD, event, live);
     const after = this.main.pendingQuestion;
-    if (!live || after?.id === before?.id) return;
-    if (after !== undefined) this.sink.signal({ kind: "pending", pending: after });
-    else if (before !== undefined)
-      this.sink.signal({ kind: "pending_cleared", pendingId: before.id });
+    if (!live) return;
+    if (after?.id !== before?.id) {
+      if (after !== undefined) this.sink.signal({ kind: "pending", pending: after });
+      else if (before !== undefined)
+        this.sink.signal({ kind: "pending_cleared", pendingId: before.id });
+    }
+    if (isInterruptLine(obj)) this.sink.signal({ kind: "turn_abort" });
   }
 
   private addSubagent(path: string, threadId: string): void {

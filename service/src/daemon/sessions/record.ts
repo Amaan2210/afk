@@ -103,6 +103,26 @@ export function freeName(wanted: string, records: Iterable<Entry>, self?: Entry)
   return name;
 }
 
+const ESC = 0x1b;
+const CSI_BRACKET = 0x5b;
+const FOCUS_IN = 0x49; // I
+const FOCUS_OUT = 0x4f; // O
+
+/**
+ * Whether `bytes` are only focus reports (`ESC [ I` and `ESC [ O`). An attached window sends one
+ * each time it gains or loses focus while the agent's TUI has focus reporting on; that is not
+ * the user answering anything.
+ */
+export function isFocusReport(bytes: Buffer): boolean {
+  if (bytes.length === 0 || bytes.length % 3 !== 0) return false;
+  for (let i = 0; i < bytes.length; i += 3) {
+    const final = bytes[i + 2];
+    if (bytes[i] !== ESC || bytes[i + 1] !== CSI_BRACKET) return false;
+    if (final !== FOCUS_IN && final !== FOCUS_OUT) return false;
+  }
+  return true;
+}
+
 type OptionalField = "pending" | "lastMessage" | "exitCode" | "gitBranch";
 
 /** Sets an optional session field, deleting the key when the value is undefined. */

@@ -41,7 +41,8 @@ system's, and loads the native addon lazily so other platforms can import it. `s
 defines `claude` and `codex` as functions routed through `afk exec` for that shell only.
 `launch-line.ts` builds the line typed to start the agent, quoting for PowerShell. `answer.ts`
 turns an answer from the phone into the keystrokes the agent's prompt expects, in chunks with
-pauses between them. `record.ts` is the registry's per-session bookkeeping.
+pauses between them. `record.ts` is the registry's per-session bookkeeping. `resume-args.ts`
+drops the resume options of a session's original command before a resume adds its own.
 
 ## Launch injection: `launch/`
 

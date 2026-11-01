@@ -1,13 +1,11 @@
 import type { ChatEvent, Strip } from "../../../protocol/index.js";
 import { isRecord } from "../../../util/is-record.js";
 import type { AgentSignal } from "../../sessions/state.js";
-import { firstLine, summarizeToolInput, truncate } from "../summarize.js";
+import { truncate } from "../summarize.js";
+import { describeArgs, failed, isNumber, joinText, outputText } from "./rollout-parts.js";
 
 /** Longest tool input or result carried in a chat event. */
 const MAX_TOOL_TEXT = 4000;
-const SHELL_TOOL = "shell";
-/** Longest tool card summary. */
-const SUMMARY_MAX = 120;
 const UNKNOWN_TOOL = "unknown";
 /** Codex injects these as user-role messages; they are not something the user typed. */
 const INJECTED_PREFIXES = ["<environment_context>", "<user_instructions>"];
@@ -105,6 +103,10 @@ export class CodexRolloutNormalizer {
       case "task_started":
         this.rememberContextSize(payload.model_context_window);
         out.signals.push({ kind: "turn_start" });
+        break;
+      // The user interrupted the turn (Ctrl+C or Esc): no task_complete follows.
+      case "turn_aborted":
+        out.signals.push({ kind: "turn_abort" });
         break;
       case "task_complete": {
         const last = payload.last_agent_message;
@@ -228,73 +230,4 @@ export class CodexRolloutNormalizer {
   private fallbackTime(): string {
     return this.lastAt ?? new Date().toISOString();
   }
-}
-
-function isNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-/** The non-blank text of a message's `input_text` / `output_text` blocks, joined by a blank line. */
-function joinText(content: unknown): string | undefined {
-  if (!Array.isArray(content)) return undefined;
-  const texts = content
-    .filter(isRecord)
-    .filter(
-      (b) => (b.type === "input_text" || b.type === "output_text") && typeof b.text === "string",
-    )
-    .map((b) => b.text as string)
-    .filter((text) => text.trim() !== "");
-  return texts.length > 0 ? texts.join("\n\n") : undefined;
-}
-
-/**
- * A tool call's arguments as a card summary and the raw input text. A string is parsed as JSON; one
- * that is not a JSON object (an `apply_patch` patch, say) is summarised by its own first line. An
- * object is taken as already-parsed arguments.
- */
-function describeArgs(name: string, args: unknown): { summary: string; raw?: string } {
-  if (typeof args === "string") {
-    const parsed = parseObject(args);
-    return {
-      summary: parsed ? summarizeArgs(name, parsed) : firstLine(args, SUMMARY_MAX),
-      raw: args,
-    };
-  }
-  if (isRecord(args)) return { summary: summarizeArgs(name, args), raw: JSON.stringify(args) };
-  return { summary: "" };
-}
-
-function parseObject(text: string): Record_ | undefined {
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The shell command joined by spaces (first line only), else the generic input summary. */
-function summarizeArgs(name: string, args: Record_): string {
-  const command = args.command;
-  if (
-    name === SHELL_TOOL &&
-    Array.isArray(command) &&
-    command.every((p) => typeof p === "string")
-  ) {
-    return firstLine(command.join(" "), SUMMARY_MAX);
-  }
-  return summarizeToolInput(name, args);
-}
-
-/** A tool output as text: a string as is, an object's string `content`, else its JSON. */
-function outputText(output: unknown): string | undefined {
-  if (typeof output === "string") return output;
-  if (isRecord(output) && typeof output.content === "string") return output.content;
-  return JSON.stringify(output);
-}
-
-/** Only an output object that says so is an error: `success: false` or a non-zero `exit_code`. */
-function failed(output: unknown): boolean {
-  if (!isRecord(output)) return false;
-  return output.success === false || (isNumber(output.exit_code) && output.exit_code !== 0);
 }

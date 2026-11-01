@@ -197,6 +197,9 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
         return this.pending(sessionId, signal.pending);
       case "pending_cleared":
         return this.pendingCleared(sessionId, signal.pendingId);
+      // An aborted turn gets no marker: it did not finish, and the next prompt's start shows the
+      // boundary.
+      case "turn_abort":
       default:
         return;
     }

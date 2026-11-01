@@ -82,6 +82,15 @@ describe("listDirs", () => {
     await expect(listDirs("relative/dir", recent)).rejects.toThrow(/^bad_request:/);
   });
 
+  it("throws bad_request for UNC and device paths without reading them", async () => {
+    const recent = new RecentFolders(path.join(tmp, "r.json"));
+    for (const p of ["\\\\server\\share", "\\\\.\\pipe\\x", "//server/share", "\\rooted"]) {
+      await expect(listDirs(p, recent)).rejects.toThrow(
+        "bad_request: network and device paths are not supported",
+      );
+    }
+  });
+
   it("undefined path on non-win32 lists the filesystem root", async () => {
     const res = await listDirs(undefined, new RecentFolders(path.join(tmp, "r.json")), "linux");
     expect(res.dirs).toEqual([{ name: "/", path: "/" }]);

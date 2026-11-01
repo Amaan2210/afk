@@ -169,3 +169,14 @@ Each of these needs a person, a real terminal or the phone. Paths assume the rep
       there should be a `[PROCESS]` entry for the daemon's `node.exe`.
    2. Once the agent has finished and the keep-awake grace period (10 min by default) has
       passed, run it again. The entry should be gone.
+5. **Interrupting a turn returns the session to idle.** The interrupt markers AFK reads were
+   reconstructed from the agents' formats, not captured (`service/test/fixtures/claude/interrupted.jsonl`,
+   `service/test/fixtures/codex/interrupted.jsonl`).
+   1. In `afk claude`, give Claude a task that runs a while, and press `Esc` mid-turn. `afk ls`
+      should show `idle` within a second, and the phone's card should leave Working. The
+      transcript should hold a user line starting `[Request interrupted by user`.
+   2. In `afk codex`, do the same and press `Ctrl+C` (or `Esc`). The rollout under
+      `~/.codex/sessions` should hold an `event_msg` of type `turn_aborted`, and the session
+      should show `idle`.
+   3. After either, wait out the keep-awake grace period (10 min by default) and check
+      `powercfg /requests` (elevated): the daemon's entry should be gone.
