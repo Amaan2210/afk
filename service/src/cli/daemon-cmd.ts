@@ -1,5 +1,5 @@
 import { InvalidArgumentError, type Command } from "commander";
-import { startDaemon, type Daemon } from "../daemon/index.js";
+import { startDaemon, type Daemon, type DaemonOptions } from "../daemon/index.js";
 import { VERSION } from "../version.js";
 
 interface DaemonCommandOptions {
@@ -7,10 +7,28 @@ interface DaemonCommandOptions {
   port?: number;
 }
 
-/** Ctrl+C, a service stop, and closing the console window (SIGHUP on Windows). */
-const STOP_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+/** The parts of `process` the command uses. */
+export interface DaemonProcess {
+  on(event: string, listener: (arg: unknown) => void): unknown;
+  exit(code: number): void;
+}
 
-function parsePort(value: string): number {
+export interface DaemonCommandDeps {
+  start: (opts: DaemonOptions) => Promise<Daemon>;
+  proc: DaemonProcess;
+  print: (line: string) => void;
+}
+
+const defaultDeps: DaemonCommandDeps = {
+  start: startDaemon,
+  proc: process,
+  print: (line) => void process.stdout.write(`${line}\n`),
+};
+
+/** Ctrl+C, Ctrl+Break, a service stop, and closing the console window (SIGHUP on Windows). */
+const STOP_SIGNALS = ["SIGINT", "SIGBREAK", "SIGTERM", "SIGHUP"];
+
+export function parsePort(value: string): number {
   const port = Number(value);
   if (!/^\d+$/.test(value) || port > 65_535) {
     throw new InvalidArgumentError("Expected a port number from 0 to 65535.");
@@ -23,33 +41,45 @@ function hostPort(address: string, port: number): string {
 }
 
 /**
- * Process-wide handling for the daemon's lifetime: a stray exception in some event handler is
- * logged and the daemon keeps serving, rather than every session ending with it; a stop signal
- * stops the daemon, then exits.
+ * Runs the daemon until a stop signal. Signals are handled from the start: one that arrives while
+ * the daemon starts stops it once it has started, so its lock is released; another one while it
+ * stops exits at once. Once running, a stray exception in some event handler is logged and the
+ * daemon keeps serving, rather than every session ending with it.
  */
-function handleProcessEvents(daemon: Daemon): void {
-  const { log } = daemon;
-  process.on("uncaughtException", (err) => log.error({ err }, "uncaught exception"));
-  process.on("unhandledRejection", (reason) => log.error({ err: reason }, "unhandled rejection"));
-  let stopping = false;
-  const stop = (signal: NodeJS.Signals): void => {
-    if (stopping) return;
-    stopping = true;
-    log.info({ signal }, "daemon stopping");
-    daemon.stop().then(
-      () => process.exit(0),
-      () => process.exit(1),
+export async function runDaemon(
+  opts: DaemonCommandOptions,
+  deps: DaemonCommandDeps = defaultDeps,
+): Promise<void> {
+  const { proc } = deps;
+  // Set once started; the signal handler reads it before then.
+  let daemon: Daemon | undefined = undefined;
+  let stopRequested = false;
+  const stop = (d: Daemon): void => {
+    d.stop().then(
+      () => proc.exit(0),
+      () => proc.exit(1),
     );
   };
-  for (const signal of STOP_SIGNALS) process.on(signal, stop);
-}
+  const onSignal = (signal: string): void => {
+    if (stopRequested) return proc.exit(1);
+    stopRequested = true;
+    if (daemon === undefined) return;
+    daemon.log.info({ signal }, "daemon stopping");
+    stop(daemon);
+  };
+  for (const signal of STOP_SIGNALS) proc.on(signal, () => onSignal(signal));
 
-async function runDaemon(opts: DaemonCommandOptions): Promise<void> {
-  const daemon = await startDaemon({ port: opts.port, verbose: opts.verbose ?? false });
-  handleProcessEvents(daemon);
+  daemon = await deps.start({ port: opts.port, verbose: opts.verbose ?? false });
+  const { log } = daemon;
+  if (stopRequested) {
+    log.info("daemon stopping: asked to while it started");
+    return stop(daemon);
+  }
+  proc.on("uncaughtException", (err) => log.error({ err }, "uncaught exception"));
+  proc.on("unhandledRejection", (reason) => log.error({ err: reason }, "unhandled rejection"));
   const where = daemon.addresses.map((a) => hostPort(a, daemon.port)).join(", ");
-  process.stdout.write(`afk daemon ${VERSION} listening on ${where}\n`);
-  if (daemon.warning !== undefined) process.stdout.write(`warning: ${daemon.warning}\n`);
+  deps.print(`afk daemon ${VERSION} listening on ${where}`);
+  if (daemon.warning !== undefined) deps.print(`warning: ${daemon.warning}`);
 }
 
 export function registerDaemonCommand(program: Command): void {

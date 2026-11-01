@@ -1,5 +1,4 @@
 import { createServer, type RequestListener, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +11,7 @@ import { createHttpHandler, type HttpHandler } from "./http.js";
 import { followSessions, KeepAwakeController } from "./keepawake.js";
 import { acquireLock } from "./lock.js";
 import { closeLogger, createLogger } from "./logger.js";
-import { deferredListener, pickBindAddresses } from "./net.js";
+import { closeServer, deferredListener, listenAll, pickBindAddresses } from "./net.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "./paths.js";
 import { createPowerRequest } from "./power-request.js";
 import { nodePtyFactory } from "./sessions/pty.js";
@@ -70,41 +69,11 @@ function codexSessionsDir(env: NodeJS.ProcessEnv = process.env): string {
   return path.join(env.CODEX_HOME || path.join(os.homedir(), ".codex"), "sessions");
 }
 
-function listen(server: Server, port: number, host: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, () => {
-      server.off("error", reject);
-      resolve((server.address() as AddressInfo).port);
-    });
-  });
-}
-
-/** One server per address, all on one port: the first address picks it when `port` is 0. */
-async function listenAll(
-  p: Parts,
-  addresses: string[],
-  port: number,
-  listener: RequestListener,
-): Promise<number> {
-  let bound = port;
-  for (const address of addresses) {
-    const server = createServer(listener);
-    server.requestTimeout = REQUEST_TIMEOUT_MS;
-    server.headersTimeout = HEADERS_TIMEOUT_MS;
-    p.servers.push(server);
-    bound = await listen(server, bound, address);
-    server.on("error", (err) => p.log.error({ err, address }, "http server error"));
-  }
-  return bound;
-}
-
-/** Resolves once the server has stopped listening (or never was) and every connection is gone. */
-function closeServer(server: Server): Promise<void> {
-  return new Promise((resolve) => {
-    server.close(() => resolve());
-    server.closeAllConnections();
-  });
+function httpServer(listener: RequestListener): Server {
+  const server = createServer(listener);
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
+  server.headersTimeout = HEADERS_TIMEOUT_MS;
+  return server;
 }
 
 /** Stops whatever `p` holds, in reverse order of need; a step that fails does not stop the rest. */
@@ -155,7 +124,12 @@ async function compose(
 
   // The sessions need the port, which is only known once the servers listen.
   const forwarder = deferredListener();
-  const port = await listenAll(p, bind.addresses, portOverride ?? config.port, forwarder.listener);
+  const requested = portOverride ?? config.port;
+  const create = () => httpServer(forwarder.listener);
+  const port = await listenAll(bind.addresses, requested, create, p.servers);
+  for (const server of p.servers) {
+    server.on("error", (err) => log.error({ err }, "http server error"));
+  }
 
   const registry = (p.registry = new SessionRegistry({
     ptyFactory: nodePtyFactory,
