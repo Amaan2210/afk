@@ -101,6 +101,13 @@ describe("acquireLock", () => {
     await again();
   });
 
+  it("lets each lock file be held at the same time", async () => {
+    const first = await acquireLock(lockFile);
+    const second = await acquireLock(join(dir, "other", "daemon.lock"));
+    await second();
+    await first();
+  });
+
   it("refuses without a pid when the holder's pid file is gone", async () => {
     const release = await acquireLock(lockFile);
     await rm(lockFile);
