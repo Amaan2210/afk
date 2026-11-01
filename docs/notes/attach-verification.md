@@ -155,9 +155,13 @@ Each of these needs a person, a real terminal or the phone. Paths assume the rep
       options and submit. Expect toggles, then `Submit`, then the review screen's
       `1 Submit answers` (Enter), and the answer shown in the transcript.
    5. Start `afk codex` with an approval policy that asks (for example
-      `-c approval_policy=on-request`). Trigger a command approval, and answer allow, allow
-      always and deny from the phone, one prompt each. Check each key against the Codex
-      prompt and record them in `prompt-keystrokes.md`.
+      `-c approval_policy=on-request`). Trigger a command approval. AFK does not detect Codex
+      approval prompts (README, Limitations), so expect no card on the phone: answer allow,
+      allow always and deny from the phone's terminal view, one prompt each, with `y`, `a` and
+      `n`. Check each key against the Codex prompt and record them in `prompt-keystrokes.md`.
+   6. Set your own `notify` in `~/.codex/config.toml` (for example a script that writes its last
+      argument to a file), then finish a turn in `afk codex`. The phone should get the turn's
+      end, and your script should still run once, with the same JSON.
 3. **Resuming must not replay a stale prompt.**
    1. In an AFK session, run `claude --resume` and pick a past conversation that ended on a
       question or a permission prompt.

@@ -102,9 +102,11 @@ describe("runHook", () => {
     const { post, calls } = fakePost();
     await runHook("codex-notify", {
       stdin: new PassThrough(),
-      env: ENV,
+      // No Codex config there: the user's own notify is tested in user-notify.test.ts.
+      env: { ...ENV, CODEX_HOME: path.join(tmpdir(), "afk-no-codex-home") },
       post,
       args: ['{"type":"agent-turn-complete"}'],
+      spawnNotify: () => undefined,
     });
     expect(calls[0]?.slice(0, 4)).toEqual([
       4321,

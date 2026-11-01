@@ -35,7 +35,9 @@ A session is a real PowerShell (`pwsh` if present, else Windows PowerShell 5.1) 
 `afk claude`, the daemon types the agent's launch line into that shell, so when the agent exits
 you land back in the shell with the session still alive. Each session's agent is started with its
 own hooks and status line (Claude Code) or notify program (Codex) pointing back at the daemon over
-loopback; your own `~/.claude/settings.json` and `~/.codex/config.toml` are never changed. The
+loopback; your own `~/.claude/settings.json` and `~/.codex/config.toml` are never changed. If
+your `config.toml` sets a `notify` program, AFK still runs it after each Codex turn, with the
+same argument Codex would have given it. The
 daemon listens only on your Tailscale address and `127.0.0.1`. More in
 [docs/architecture.md](docs/architecture.md).
 
@@ -136,6 +138,11 @@ nothing loops.
 - The Codex chat view is thinner than Claude's.
 - `afk service` reads `schtasks` output and assumes an English-language Windows.
 - A free-text answer to a multi-select question is refused; use the terminal view for that.
+- Codex approval prompts are not detected: a Codex session waiting for an approval still shows as
+  working, and the phone gets no card or notification for it. Answer it in the terminal view.
+- AFK runs your own Codex `notify` program without a shell, so it must name a program, for
+  example `notify = ['powershell', '-File', 'C:\scripts\notify.ps1']`, not a `.cmd` or `.bat`
+  script, which Windows cannot start that way.
 - Some prompt keystrokes are not yet verified from the phone: the Codex approval keys and a few
   Claude keys. See [docs/notes/prompt-keystrokes.md](docs/notes/prompt-keystrokes.md).
 - Reattaching at a different window size can redraw imperfectly until the session next paints.

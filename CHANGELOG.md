@@ -16,7 +16,8 @@ separate, later change.
   `ended`), unique live session names, a 24-hour retention window for ended sessions, and a
   headless terminal per session so a late client gets the current screen.
 - Per-session injection of hooks and a status line (Claude Code) and a notify program (Codex)
-  that report to the daemon over loopback, without touching the user's own settings.
+  that report to the daemon over loopback, without touching the user's own settings; the user's
+  own Codex `notify` program still runs after each turn.
 - Chat view data for both agents, read from Claude Code transcripts (sub-agents included) and
   Codex rollouts, with a status strip and answers to questions and permission prompts.
 - Authenticated WebSocket API and loopback HTTP relays, specified in `protocol/` with a JSON

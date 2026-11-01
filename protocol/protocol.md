@@ -152,7 +152,7 @@ All bodies are JSON; all responses are `200 {}` on success. Relays must exit 0 e
 | Route | Header | Body |
 |---|---|---|
 | `POST /hooks/claude/:event` | `X-AFK-Session: <session id>` | the hook's stdin JSON, verbatim. `:event` ∈ `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStart`, `SubagentStop`, `SessionEnd` |
-| `POST /hooks/codex` | `X-AFK-Session` | the Codex `notify` JSON argument, verbatim |
+| `POST /hooks/codex` | `X-AFK-Session` | the Codex `notify` JSON argument, verbatim. `afk hook codex-notify` then runs the user's own `notify` program from `$CODEX_HOME/config.toml` (default `~/.codex`), if any, with the same argument |
 | `POST /hooks/dropped` | `X-AFK-Session` | `{"event":"Stop","reason":"…"}` — sent by `afk hook` instead of a payload it could not relay (not valid JSON, or cut off); the daemon logs it at debug level, which `afk daemon --verbose` shows |
 | `POST /statusline` | `X-AFK-Session` | the status-line stdin JSON, verbatim |
 | `POST /sessions/:id/agent-start` | — | `{"kind":"claude"\|"codex","pid":n}` — sent by `afk exec` just before it spawns the real agent |

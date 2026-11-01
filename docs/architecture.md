@@ -48,7 +48,10 @@ drops the resume options of a session's original command before a resume adds it
 
 `launch-spec.ts` decides what each agent gets: Claude Code a settings file passed with `--settings`
 (`claude-settings.ts` renders the hooks and status line that call `afk hook` and `afk statusline`),
-Codex a `-c notify=[...]` override. The user's own settings are never read or rewritten.
+Codex a `-c notify=[...]` override. The user's own settings are never rewritten. That override
+takes the place of the user's own Codex `notify` program, so `afk hook codex-notify` reads
+`notify` from `$CODEX_HOME/config.toml` (read-only, `cli/user-notify.ts`) and runs it after
+relaying, with the same JSON.
 `resolve-binary.ts` finds the real `claude` or `codex` on `PATH`, skipping the afkdev package
 itself.
 
