@@ -1,6 +1,6 @@
 
 Folder: \
-HostName:                             AMAAN
+HostName:                             DESKTOP-EXAMPLE
 TaskName:                             \AFK Daemon
 Next Run Time:                        N/A
 Status:                               Running
@@ -8,13 +8,13 @@ Logon Mode:                           Interactive only
 Last Run Time:                        01-11-2026 17:33:51
 Last Result:                          267009
 Author:                               N/A
-Task To Run:                          powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command "& 'C:\Program Files\nodejs\node.exe' 'D:\Naya Repos\personal\remote-dev\service\dist\cli.js' daemon --exit-with-parent"
+Task To Run:                          powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command "& 'C:\Program Files\nodejs\node.exe' 'C:\afk\dist\cli.js' daemon --exit-with-parent"
 Start In:                             N/A
 Comment:                              Runs the AFK daemon (afk daemon) at logon, so a phone can reach this machine's Claude Code and Codex sessions.
 Scheduled Task State:                 Enabled
 Idle Time:                            Disabled
 Power Management:                     
-Run As User:                          amank
+Run As User:                          user
 Delete Task If Not Rescheduled:       Disabled
 Stop Task If Runs X Hours and X Mins: Disabled
 Schedule:                             Scheduling data is not available in this format.

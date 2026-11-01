@@ -24,7 +24,7 @@ const ACCESS_DENIED: ExecResult = { code: 1, stdout: "", stderr: "ERROR: Access 
 const TASK = {
   nodeExe: "C:\\Program Files\\nodejs\\node.exe",
   cliEntry: "D:\\a b\\cli.js",
-  userId: "AMAAN\\amank",
+  userId: "HOST\\user",
 };
 
 describe("schtasksArgs", () => {
@@ -64,10 +64,10 @@ describe("taskXml", () => {
 
   it("starts at the logon of this user only, as this user, without elevation", () => {
     expect(block("LogonTrigger")).toMatch(
-      /^<LogonTrigger>\s*<Enabled>true<\/Enabled>\s*<UserId>AMAAN\\amank<\/UserId>\s*<\/LogonTrigger>$/,
+      /^<LogonTrigger>\s*<Enabled>true<\/Enabled>\s*<UserId>HOST\\user<\/UserId>\s*<\/LogonTrigger>$/,
     );
     const principal = block("Principal");
-    expect(principal).toContain("<UserId>AMAAN\\amank</UserId>");
+    expect(principal).toContain("<UserId>HOST\\user</UserId>");
     expect(principal).toContain("<LogonType>InteractiveToken</LogonType>");
     expect(principal).toContain("<RunLevel>LeastPrivilege</RunLevel>");
   });
@@ -114,8 +114,10 @@ describe("taskXml", () => {
 describe("taskStatus", () => {
   it("reads the Status line of /Query /FO LIST /V output", async () => {
     const running = await fixture("query-running.txt");
+    // As schtasks writes it: CRLF throughout, a blank line first (kept by .gitattributes).
+    expect(running.startsWith("\r\nFolder: \\\r\n")).toBe(true);
     expect(taskStatus(running)).toBe("Running");
-    expect(taskStatus(running.replaceAll("\n", "\r\n"))).toBe("Running");
+    expect(taskStatus(running.replaceAll("\r\n", "\n"))).toBe("Running");
     expect(taskStatus(await fixture("query-ready.txt"))).toBe("Ready");
     expect(taskStatus("ERROR: The system cannot find the file specified.")).toBeUndefined();
   });
