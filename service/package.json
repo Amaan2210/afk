@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Daemon and CLI that owns Claude Code and Codex terminal sessions so they can be controlled remotely",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmaanKhan63/afk.git",
+    "directory": "service"
+  },
+  "homepage": "https://github.com/AmaanKhan63/afk#readme",
+  "bugs": {
+    "url": "https://github.com/AmaanKhan63/afk/issues"
+  },
   "type": "module",
   "bin": {
     "afk": "./dist/cli.js"
