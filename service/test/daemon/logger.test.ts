@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createLogger } from "../../src/daemon/logger.js";
+import { closeLogger, createLogger } from "../../src/daemon/logger.js";
 
 describe("createLogger", () => {
   it("writes JSON lines to a daily file in the log dir", async () => {
@@ -20,6 +20,29 @@ describe("createLogger", () => {
       };
       expect(line.msg).toBe("hello");
       expect(line.a).toBe(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("closeLogger writes out queued lines, then drops later ones without throwing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "afk-log-"));
+    const logDir = join(root, "logs");
+    const lines = () => {
+      const [file] = readdirSync(logDir);
+      return readFileSync(join(logDir, file ?? ""), "utf8")
+        .trim()
+        .split("\n");
+    };
+    try {
+      const logger = createLogger(logDir);
+      for (let i = 0; i < 1000; i++) logger.info({ i }, "queued");
+      await closeLogger(logger);
+      expect(lines()).toHaveLength(1000);
+
+      expect(() => logger.error("late")).not.toThrow();
+      await closeLogger(logger);
+      expect(lines()).toHaveLength(1000);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

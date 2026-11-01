@@ -1,6 +1,11 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { KeepAwakeController } from "../../src/daemon/keepawake.js";
+import { followSessions, KeepAwakeController } from "../../src/daemon/keepawake.js";
 import { createPowerRequest, type PowerRequest } from "../../src/daemon/power-request.js";
+import { SessionRegistry } from "../../src/daemon/sessions/registry.js";
+import { createFakePty } from "../helpers/fake-pty.js";
 
 class FakeRequest implements PowerRequest {
   held = false;
@@ -145,6 +150,44 @@ describe("KeepAwakeController", () => {
     c.dispose();
     expect(req.held).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("followSessions", () => {
+  it("holds while a registry session works, until it stops following", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "afk-follow-"));
+    const registry = new SessionRegistry({
+      ptyFactory: createFakePty().factory,
+      shell: { exe: "powershell.exe", kind: "powershell" },
+      sessionsDir: dir,
+      port: 2350,
+      nodeExe: "node.exe",
+      cliEntry: "cli.js",
+      ringBufferBytes: 4096,
+      snapshotScrollback: 100,
+      retentionHours: 24,
+      baseEnv: {},
+    });
+    const req = new FakeRequest();
+    const keepAwake = new KeepAwakeController(req, { graceMs: 0 });
+    const unfollow = followSessions(keepAwake, registry);
+    try {
+      const { id } = await registry.create({ cwd: dir, kind: "shell", args: [] });
+      expect(req.held).toBe(false);
+      registry.signal(id, { kind: "turn_start" });
+      expect(req.held).toBe(true);
+      registry.signal(id, { kind: "turn_end" });
+      await vi.waitFor(() => expect(req.held).toBe(false));
+
+      unfollow();
+      registry.signal(id, { kind: "turn_start" });
+      expect(req.held).toBe(false);
+    } finally {
+      unfollow();
+      keepAwake.dispose();
+      registry.stopAll();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

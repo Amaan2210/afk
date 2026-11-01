@@ -1,5 +1,6 @@
 import type { SessionState } from "../protocol/index.js";
 import type { PowerRequest } from "./power-request.js";
+import type { SessionRegistry } from "./sessions/registry.js";
 
 interface KeepAwakeOpts {
   graceMs: number;
@@ -92,4 +93,17 @@ export class KeepAwakeController {
     this.held = false;
     this.req.release();
   }
+}
+
+/**
+ * Gives `keepAwake` every session's state each time a session changes; returns a function that
+ * stops. Removals need no update: only ended sessions are removed, and those never hold.
+ */
+export function followSessions(
+  keepAwake: KeepAwakeController,
+  registry: SessionRegistry,
+): () => void {
+  const update = (): void => keepAwake.update(registry.list().map((s) => s.state));
+  registry.on("updated", update);
+  return () => void registry.off("updated", update);
 }

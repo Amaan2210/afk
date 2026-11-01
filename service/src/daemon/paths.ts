@@ -21,6 +21,7 @@ export interface AfkPaths {
   logDir: string;
   sessionsDir: string;
   lockFile: string;
+  recentFoldersFile: string;
 }
 
 export function afkPaths(configDir: string): AfkPaths {
@@ -31,5 +32,6 @@ export function afkPaths(configDir: string): AfkPaths {
     logDir: path.join(configDir, "logs"),
     sessionsDir: path.join(configDir, "sessions"),
     lockFile: path.join(configDir, "daemon.lock"),
+    recentFoldersFile: path.join(configDir, "recent-folders.json"),
   };
 }

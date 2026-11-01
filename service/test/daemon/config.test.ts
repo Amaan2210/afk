@@ -132,5 +132,6 @@ describe("paths", () => {
     expect(p.logDir).toBe(join("a", "afk", "logs"));
     expect(p.sessionsDir).toBe(join("a", "afk", "sessions"));
     expect(p.lockFile).toBe(join("a", "afk", "daemon.lock"));
+    expect(p.recentFoldersFile).toBe(join("a", "afk", "recent-folders.json"));
   });
 });

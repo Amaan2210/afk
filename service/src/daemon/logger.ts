@@ -9,6 +9,9 @@ export interface LoggerOptions {
   sync?: boolean;
 }
 
+/** How to close each logger's file, for `closeLogger`. */
+const closers = new WeakMap<pino.Logger, () => Promise<void>>();
+
 /**
  * JSON-lines logger writing to `<logDir>/afk-YYYY-MM-DD.log`.
  *
@@ -20,9 +23,29 @@ export function createLogger(logDir: string, opts: LoggerOptions = {}): pino.Log
   const day = new Date().toISOString().slice(0, 10);
   const dest = path.join(logDir, `afk-${day}.log`);
   const level = opts.verbose ? "debug" : "info";
-  const streams: pino.StreamEntry[] = [
-    { level, stream: pino.destination({ dest, mkdir: true, sync: opts.sync ?? false }) },
-  ];
+  const file = pino.destination({ dest, mkdir: true, sync: opts.sync ?? false });
+  let closing: Promise<void> | undefined;
+  // Once closing, the file drops lines instead of throwing: events still log while stopping.
+  const toFile = { write: (line: string) => void (closing === undefined && file.write(line)) };
+  const streams: pino.StreamEntry[] = [{ level, stream: toFile }];
   if (opts.stdout) streams.push({ level, stream: process.stdout });
-  return pino({ level }, pino.multistream(streams));
+  const logger = pino({ level }, pino.multistream(streams));
+  closers.set(logger, () => {
+    closing ??= new Promise((resolve) => {
+      file.once("close", () => resolve());
+      file.once("error", () => resolve());
+      file.end();
+    });
+    return closing;
+  });
+  return logger;
+}
+
+/**
+ * Writes out every line already queued for the log file and closes it; later lines go to stdout
+ * only, if the logger has it. (`logger.flush` does not wait: a multistream has no flush of its own,
+ * and the file does not buffer, so its flush returns while writes are still in flight.)
+ */
+export function closeLogger(logger: pino.Logger): Promise<void> {
+  return closers.get(logger)?.() ?? Promise.resolve();
 }
