@@ -11,6 +11,17 @@ export interface JsonlTailerOptions {
   pollMs?: number;
   /** Emit the lines already in the file (default), or only those appended after `start()`. */
   fromStart?: boolean;
+  /**
+   * Called with an exception a listener threw, after the tailer has carried on (default: throw it
+   * again on the next tick, as an uncaught exception).
+   */
+  rethrow?: (err: unknown) => void;
+}
+
+function throwOnNextTick(err: unknown): void {
+  process.nextTick(() => {
+    throw err;
+  });
 }
 
 export interface JsonlTailerEvents {
@@ -44,6 +55,7 @@ type Line = [obj: unknown, lineNo: number];
 export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
   private readonly pollMs: number;
   private readonly fromStart: boolean;
+  private readonly rethrow: (err: unknown) => void;
   private running = false;
   private timer: NodeJS.Timeout | undefined;
   private offset = 0;
@@ -59,6 +71,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     super();
     this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
     this.fromStart = opts.fromStart ?? true;
+    this.rethrow = opts.rethrow ?? throwOnNextTick;
   }
 
   start(): void {
@@ -179,9 +192,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     try {
       emit();
     } catch (err) {
-      process.nextTick(() => {
-        throw err;
-      });
+      this.rethrow(err);
     }
   }
 

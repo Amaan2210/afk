@@ -568,6 +568,13 @@ describe("SessionRegistry.resume", () => {
 });
 
 describe("SessionRegistry retention", () => {
+  /**
+   * A pruned session's folder is removed in the background. Waiting for it keeps that removal from
+   * racing afterEach's removal of the whole root, which fails with EPERM on Windows.
+   */
+  const folderGone = (id: string) =>
+    vi.waitFor(() => expect(existsSync(join(deps.sessionsDir, id))).toBe(false));
+
   it("pruneEnded removes ended sessions older than retentionHours", async () => {
     const ended = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
     const endedPty = fake;
@@ -584,6 +591,7 @@ describe("SessionRegistry retention", () => {
     expect(removed).toEqual([ended.id]);
     expect(reg.get(ended.id)).toBeUndefined();
     expect(reg.list().map((s) => s.id)).toEqual([live.id]);
+    await folderGone(ended.id);
   });
 
   it("pruneEnded deletes the pruned session's folder and keeps the others", async () => {
@@ -608,6 +616,7 @@ describe("SessionRegistry retention", () => {
     advance(HOUR + 1);
     short.pruneEnded();
     expect(removed).toEqual([s.id]);
+    await folderGone(s.id);
   });
 
   it("pruneEnded applies a retention given at call time over the configured one", async () => {
@@ -619,8 +628,7 @@ describe("SessionRegistry retention", () => {
     expect(removed).toEqual([]);
     reg.pruneEnded(1);
     expect(removed).toEqual([s.id]);
-    // The folder goes in the background; let it finish before afterEach removes the root.
-    await vi.waitFor(() => expect(existsSync(join(deps.sessionsDir, s.id))).toBe(false));
+    await folderGone(s.id);
   });
 
   it("stopAll kills every live session", async () => {

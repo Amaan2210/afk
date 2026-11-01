@@ -131,7 +131,8 @@ describe("RecentFolders", () => {
     const r = new RecentFolders(path.join(tmp, "recent.json"));
     await Promise.all(made.map((d) => r.add(d)));
     expect((await r.list()).sort()).toEqual([...made].sort());
-    expect(await readdir(tmp)).not.toContain(expect.stringMatching(/.tmp$/));
+    // No temp file left behind by the atomic writes.
+    expect((await readdir(tmp)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
   });
 
   it("filters folders that no longer exist without rewriting the file", async () => {

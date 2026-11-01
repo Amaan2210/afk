@@ -351,7 +351,10 @@ describe("lifecycle", () => {
     big.ws.send("x".repeat(1024 * 1024 + 1));
     expect(await big.closed).toMatchObject({ code: 1009 });
     await other.sync();
-    expect(h.ws.clientCount()).toBe(1);
+    expect(other.isOpen).toBe(true);
+    // The server drops the socket on its own close event, which can land after the client's:
+    // a round trip on another socket says nothing about this one.
+    await vi.waitFor(() => expect(h.ws.clientCount()).toBe(1));
   });
 
   it("close() closes every client with 1001 and resolves", async () => {

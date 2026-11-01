@@ -68,11 +68,12 @@ describe("SessionProcess", () => {
   it("snapshot keeps scrollback up to snapshotScrollback lines", async () => {
     const { p, fake } = start({ rows: 5, snapshotScrollback: 10 });
     for (let i = 0; i < 30; i++) fake.emitData(`line-${String(i).padStart(2, "0")}\r\n`);
-    await settle();
-    const screen = p.snapshot().data.toString();
-    expect(screen).toContain("line-20");
-    expect(screen).toContain("line-29");
-    expect(screen).not.toContain("line-00");
+    const screen = () => p.snapshot().data.toString();
+    // The headless terminal parses on a timer, and until it has, the snapshot carries the raw
+    // output (line-00 included): wait for the parse rather than for a fixed time.
+    await vi.waitFor(() => expect(screen()).not.toContain("line-00"));
+    expect(screen()).toContain("line-20");
+    expect(screen()).toContain("line-29");
   });
 
   it("snapshot reflects the latest resize", () => {

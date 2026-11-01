@@ -4,7 +4,6 @@ import type { SessionRegistry } from "./sessions/registry.js";
 
 interface KeepAwakeOpts {
   graceMs: number;
-  now?: () => number;
   setTimeout?: typeof setTimeout;
   clearTimeout?: typeof clearTimeout;
 }

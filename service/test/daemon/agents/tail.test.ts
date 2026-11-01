@@ -12,7 +12,7 @@ let file: string;
 let tailer: JsonlTailer | undefined;
 
 /** Starts a tailer on `file` and records what it emits. */
-function startTailer(opts: { fromStart?: boolean } = {}) {
+function startTailer(opts: { fromStart?: boolean; rethrow?: (err: unknown) => void } = {}) {
   const t = new JsonlTailer(file, { pollMs: POLL_MS, ...opts });
   const lines: [unknown, number][] = [];
   const events: string[] = [];
@@ -193,22 +193,12 @@ describe("JsonlTailer", () => {
     expect(lines).toHaveLength(1);
   });
 
-  it("keeps delivering lines when a listener throws, and re-throws it as uncaught", async () => {
-    // The tailer re-throws a listener's exception on the next tick. Run nextTick callbacks
-    // through a catch so the test can see that exception instead of it failing the run.
+  it("keeps delivering lines when a listener throws, and re-throws it", async () => {
+    // Caught through the tailer's own hook: spying on the process-wide nextTick also caught
+    // whatever else the test worker scheduled on it.
     const rethrown: unknown[] = [];
-    const realNextTick = process.nextTick.bind(process);
-    vi.spyOn(process, "nextTick").mockImplementation((callback, ...args) =>
-      realNextTick(() => {
-        try {
-          callback(...args);
-        } catch (err) {
-          rethrown.push(err);
-        }
-      }),
-    );
     writeFileSync(file, "");
-    const { lines, errors } = startTailer();
+    const { lines, errors } = startTailer({ rethrow: (err) => rethrown.push(err) });
     const bug = new Error("listener bug");
     const before: unknown[] = [];
     tailer!.prependListener("line", (obj: unknown) => {
@@ -226,7 +216,30 @@ describe("JsonlTailer", () => {
       [{ n: 2 }, 2],
       [{ n: 3 }, 3],
     ]);
-    await vi.waitFor(() => expect(rethrown).toEqual([bug]));
+    expect(rethrown).toEqual([bug]);
     expect(errors).toEqual([]); // not reported as an I/O error
+  });
+
+  it("by default re-throws a listener's exception on the next tick, as uncaught", async () => {
+    const bug = new Error("listener bug");
+    const uncaught: unknown[] = [];
+    const onUncaught = (err: unknown) => uncaught.push(err);
+    // Vitest's own handler would fail the run; this one sees the exception first.
+    const theirs = process.listeners("uncaughtException");
+    process.removeAllListeners("uncaughtException");
+    process.on("uncaughtException", onUncaught);
+    try {
+      writeFileSync(file, '{"n":1}\n');
+      const t = new JsonlTailer(file, { pollMs: POLL_MS });
+      tailer = t;
+      t.on("line", () => {
+        throw bug;
+      });
+      t.start();
+      await vi.waitFor(() => expect(uncaught).toEqual([bug]));
+    } finally {
+      process.off("uncaughtException", onUncaught);
+      for (const listener of theirs) process.on("uncaughtException", listener);
+    }
   });
 });
