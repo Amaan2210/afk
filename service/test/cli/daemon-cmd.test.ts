@@ -53,7 +53,7 @@ describe("runDaemon", () => {
   it("starts with the options given and prints where it listens and why not more", async () => {
     daemon.warning = "No Tailscale address found";
     await runDaemon({ port: 4000, verbose: true }, deps);
-    expect(start).toHaveBeenCalledWith({ port: 4000, verbose: true });
+    expect(start).toHaveBeenCalledWith({ port: 4000, verbose: true, print: deps.print });
     expect(lines).toEqual([
       `afk daemon ${VERSION} listening on 100.84.12.9:2350, 127.0.0.1:2350`,
       "warning: No Tailscale address found",

@@ -145,3 +145,131 @@ describe("startDaemon", () => {
     expect(d.port).toBe(port);
   });
 });
+
+/**
+ * A network whose "Tailscale" address (127.0.0.2, which binds on any CI machine) shows up once
+ * `up` is set or after `upAfter` probes.
+ */
+function fakeTailscale(upAfter = Infinity) {
+  const net = {
+    up: false,
+    probes: 0,
+    onProbe: (): void => undefined,
+    options: {
+      interfaces: () => {
+        net.probes++;
+        net.onProbe();
+        if (!net.up && net.probes <= upAfter) return {};
+        return { Tailscale: [{ address: "127.0.0.2", family: "IPv4", internal: false }] };
+      },
+      isTailscale: (address: string) => address === "127.0.0.2",
+    },
+  };
+  return net;
+}
+
+describe("startDaemon with bind tailscale", () => {
+  const tailscaleConfig = { bind: "tailscale" };
+
+  it("waits for the Tailscale address at start and listens on it once it appears", async () => {
+    const dir = await configDir(tailscaleConfig);
+    const net = fakeTailscale(2);
+    const lines: string[] = [];
+    const d = await startDaemon({
+      configDir: dir,
+      port: 0,
+      print: (line) => lines.push(line),
+      tailscale: { ...net.options, startWaitMs: 5000, startPollMs: 10 },
+    });
+    daemons.push(d);
+
+    expect(d.addresses).toEqual(["127.0.0.2", "127.0.0.1"]);
+    expect(d.warning).toBeUndefined();
+    expect(lines).toEqual(["waiting for Tailscale…"]);
+    expect(net.probes).toBe(3);
+    await d.stop();
+    expect((await readLog(dir)).map((l) => l.msg)).toContain("waiting for Tailscale");
+  });
+
+  it("falls back to 127.0.0.1 with a warning when none appears in time", async () => {
+    const dir = await configDir(tailscaleConfig);
+    const net = fakeTailscale();
+    const d = await startDaemon({
+      configDir: dir,
+      port: 0,
+      tailscale: { ...net.options, startWaitMs: 60, startPollMs: 10 },
+    });
+    daemons.push(d);
+
+    expect(d.addresses).toEqual(["127.0.0.1"]);
+    expect(d.warning).toMatch(/No Tailscale address/);
+    expect(net.probes).toBeGreaterThan(2);
+  });
+
+  it("listens on a Tailscale address that appears later and reports it in hello", async () => {
+    const dir = await configDir(tailscaleConfig);
+    const net = fakeTailscale();
+    const lines: string[] = [];
+    const d = await startDaemon({
+      configDir: dir,
+      port: 0,
+      print: (line) => lines.push(line),
+      tailscale: { ...net.options, startWaitMs: 0, reprobeMs: 20 },
+    });
+    daemons.push(d);
+    expect(d.addresses).toEqual(["127.0.0.1"]);
+    const before = await client(`ws://127.0.0.1:${d.port}/ws`, dir);
+    expect(before.of("hello")[0]?.daemon.tailscaleIp).toBeUndefined();
+
+    net.up = true;
+    const health = `http://127.0.0.2:${d.port}/health`;
+    await vi.waitFor(async () => expect((await fetch(health)).status).toBe(200), {
+      timeout: 3000,
+      interval: 20,
+    });
+    expect(d.addresses).toEqual(["127.0.0.2", "127.0.0.1"]);
+    expect(d.warning).toBeUndefined();
+    expect(lines).toContain(`listening on 127.0.0.2:${d.port} too (Tailscale)`);
+    const probes = net.probes;
+
+    const via = await client(`ws://127.0.0.2:${d.port}/ws`, dir);
+    expect(via.of("hello")[0]?.daemon.tailscaleIp).toBe("127.0.0.2");
+    const loopback = await client(`ws://127.0.0.1:${d.port}/ws`, dir);
+    expect(loopback.of("hello")[0]?.daemon.tailscaleIp).toBe("127.0.0.2");
+    // Bound once: the daemon stops looking.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(net.probes).toBe(probes);
+
+    await d.stop();
+    expect(await via.closed).toMatchObject({ code: 1001 });
+    await expect(fetch(health)).rejects.toThrow();
+    const messages = (await readLog(dir)).map((l) => l.msg);
+    expect(messages).toContain("listening on the Tailscale address that appeared");
+  });
+
+  it("a stop while the new address is being bound leaves nothing listening", async () => {
+    const dir = await configDir(tailscaleConfig);
+    const net = fakeTailscale();
+    const d = await startDaemon({
+      configDir: dir,
+      port: 0,
+      tailscale: { ...net.options, startWaitMs: 0, reprobeMs: 20 },
+    });
+    daemons.push(d);
+    let stopping: Promise<void> | undefined;
+    net.onProbe = () => {
+      if (!net.up) return;
+      // Stops after the probe has found the address, while its server starts to listen.
+      queueMicrotask(() => (stopping ??= d.stop()));
+    };
+    net.up = true;
+
+    await vi.waitFor(() => expect(stopping).toBeDefined(), { timeout: 3000, interval: 10 });
+    await stopping;
+    await expect(fetch(`http://127.0.0.2:${d.port}/health`)).rejects.toThrow();
+    await expect(fetch(`http://127.0.0.1:${d.port}/health`)).rejects.toThrow();
+    const probes = net.probes;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(net.probes).toBe(probes);
+  });
+});

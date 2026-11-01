@@ -11,14 +11,20 @@ import { createHttpHandler, type HttpHandler } from "./http.js";
 import { followSessions, KeepAwakeController } from "./keepawake.js";
 import { acquireLock } from "./lock.js";
 import { closeLogger, createLogger } from "./logger.js";
-import { closeServer, deferredListener, listenAll, pickBindAddresses } from "./net.js";
+import { closeServer, deferredListener, listenAll } from "./net.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "./paths.js";
 import { createPowerRequest } from "./power-request.js";
+import {
+  listenWhenTailscaleAppears,
+  planBind,
+  type Rebinder,
+  type TailscaleOptions,
+} from "./rebind.js";
 import { nodePtyFactory } from "./sessions/pty.js";
 import { SessionRegistry } from "./sessions/registry.js";
 import { detectShell } from "./sessions/shell.js";
 import { StatsSampler } from "./stats.js";
-import { attachWsServer, type WsServer } from "./ws/server.js";
+import { attachWsServer, type WsDeps, type WsServer } from "./ws/server.js";
 
 const PRUNE_INTERVAL_MS = 10 * 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -37,6 +43,10 @@ export interface DaemonOptions {
   port?: number;
   /** Logs at debug level, to stdout as well as to the log file. */
   verbose?: boolean;
+  /** Tells the person who started the daemon what it is doing (waiting, a new address). */
+  print?: (line: string) => void;
+  /** How the daemon looks for the Tailscale address; tests inject a network and short waits. */
+  tailscale?: TailscaleOptions;
 }
 
 export interface Daemon {
@@ -62,7 +72,10 @@ interface Parts {
   handler?: HttpHandler;
   ws?: WsServer;
   pruneTimer?: NodeJS.Timeout;
+  rebind?: Rebinder;
 }
+
+type Started = Pick<Daemon, "port" | "addresses" | "warning">;
 
 /** Where Codex keeps its rollouts: `$CODEX_HOME/sessions`, `~/.codex/sessions` by default. */
 function codexSessionsDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -79,6 +92,8 @@ function httpServer(listener: RequestListener): Server {
 /** Stops whatever `p` holds, in reverse order of need; a step that fails does not stop the rest. */
 async function teardown(p: Parts): Promise<void> {
   const steps: [string, () => unknown][] = [
+    // First: once it resolves, no server is being added any more.
+    ["rebind", () => p.rebind?.stop()],
     ["timers", () => clearInterval(p.pruneTimer)],
     ["ws", () => p.ws?.close()],
     ["http", () => p.handler?.dispose()],
@@ -105,13 +120,19 @@ async function teardown(p: Parts): Promise<void> {
   }
 }
 
+/**
+ * Starts every part into `p`. The object it resolves to is the daemon's own: a Tailscale address
+ * that appears later is added to its `addresses` (and clears its `warning`).
+ */
 async function compose(
   p: Parts,
   paths: AfkPaths,
-  portOverride: number | undefined,
+  opts: DaemonOptions,
   startedAt: number,
-): Promise<Pick<Daemon, "port" | "addresses" | "warning">> {
+): Promise<Started> {
   const { log } = p;
+  const print = opts.print ?? (() => undefined);
+  const tailscale = opts.tailscale ?? {};
   // Before the config is read: a second daemon must not rewrite the running one's files.
   p.release = await acquireLock(paths.lockFile);
   const config = await loadConfig(paths, {
@@ -119,12 +140,15 @@ async function compose(
       log.warn({ backup }, "config was unreadable; moved aside, defaults used"),
   });
   const shell = await detectShell(config.shell);
-  const bind = pickBindAddresses(config.bind);
+  const bind = await planBind(config.bind, tailscale, () => {
+    log.info("waiting for Tailscale");
+    print("waiting for Tailscale…");
+  });
   if (bind.warning !== undefined) log.warn(bind.warning);
 
   // The sessions need the port, which is only known once the servers listen.
   const forwarder = deferredListener();
-  const requested = portOverride ?? config.port;
+  const requested = opts.port ?? config.port;
   const create = () => httpServer(forwarder.listener);
   const port = await listenAll(bind.addresses, requested, create, p.servers);
   for (const server of p.servers) {
@@ -161,7 +185,8 @@ async function compose(
     log,
     startedAt,
   }));
-  p.ws = attachWsServer(p.servers, {
+  // `hello` reads `tailscaleIp` from here when it is sent, so a later address shows up in it.
+  const wsDeps: WsDeps = {
     config,
     paths,
     registry,
@@ -173,7 +198,8 @@ async function compose(
     log,
     saveConfig: (c) => saveConfig(paths, c),
     tailscaleIp: bind.tailscaleIp,
-  });
+  };
+  const ws = (p.ws = attachWsServer(p.servers, wsDeps));
   forwarder.use(handler);
 
   // Read at each run: a settings change replaces `config.settings`.
@@ -182,7 +208,25 @@ async function compose(
     PRUNE_INTERVAL_MS,
   ).unref();
   log.info({ addresses: bind.addresses, port, version: VERSION }, "daemon listening");
-  return { port, addresses: bind.addresses, warning: bind.warning };
+  const started: Started = { port, addresses: bind.addresses, warning: bind.warning };
+  if (config.bind === "tailscale" && bind.tailscaleIp === undefined) {
+    p.rebind = listenWhenTailscaleAppears({
+      tailscale,
+      port,
+      create,
+      log,
+      onListening: (server, address) => {
+        p.servers.push(server);
+        server.on("error", (err) => log.error({ err }, "http server error"));
+        ws.addServer(server);
+        wsDeps.tailscaleIp = address;
+        started.addresses = [address, ...started.addresses];
+        started.warning = undefined;
+        print(`listening on ${address}:${port} too (Tailscale)`);
+      },
+    });
+  }
+  return started;
 }
 
 /**
@@ -197,9 +241,9 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<Daemon> {
   // First, so that loading the config can log.
   const log = createLogger(paths.logDir, { verbose, stdout: verbose });
   const p: Parts = { log, servers: [] };
-  let started: Awaited<ReturnType<typeof compose>>;
+  let started: Started;
   try {
-    started = await compose(p, paths, opts.port, startedAt);
+    started = await compose(p, paths, opts, startedAt);
   } catch (err) {
     log.error({ err }, "daemon failed to start");
     await teardown(p);
@@ -213,5 +257,6 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<Daemon> {
     log.info("daemon stopped");
     await closeLogger(log);
   };
-  return { ...started, log, stop: () => (stopping ??= stop()) };
+  // The same object compose returned, which a later Tailscale address updates.
+  return Object.assign(started, { log, stop: () => (stopping ??= stop()) });
 }

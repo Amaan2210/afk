@@ -1,9 +1,11 @@
-import { connect, type Socket } from "node:net";
+import { createServer } from "node:http";
+import { connect, type AddressInfo, type Socket } from "node:net";
 import os from "node:os";
 import WebSocket from "ws";
 import type { Pending, Stats } from "../../../src/protocol/index.js";
 import type { WsDeps } from "../../../src/daemon/ws/server.js";
 import { VERSION } from "../../../src/version.js";
+import { TestClient } from "../../helpers/ws-client.js";
 import {
   LOCAL_TOKEN,
   PIXEL,
@@ -48,6 +50,27 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await h.stop();
+});
+
+describe("addServer", () => {
+  it("serves the API on a server added later, until close", async () => {
+    const late = createServer();
+    await new Promise<void>((resolve) => late.listen(0, "127.0.0.1", resolve));
+    try {
+      h.ws.addServer(late);
+      const c = await TestClient.open(`ws://127.0.0.1:${(late.address() as AddressInfo).port}/ws`);
+      await c.auth(LOCAL_TOKEN);
+      expect(c.of("hello")[0]).toMatchObject({ daemon: { tailscaleIp: TAILSCALE_IP } });
+      expect(h.ws.clientCount()).toBe(1);
+
+      await h.ws.close();
+      expect(await c.closed).toMatchObject({ code: 1001 });
+      expect(late.listenerCount("upgrade")).toBe(0);
+    } finally {
+      late.closeAllConnections();
+      await new Promise<void>((resolve) => late.close(() => resolve()));
+    }
+  });
 });
 
 describe("handshake", () => {

@@ -69,7 +69,7 @@ export async function runDaemon(
   };
   for (const signal of STOP_SIGNALS) proc.on(signal, () => onSignal(signal));
 
-  daemon = await deps.start({ port: opts.port, verbose: opts.verbose ?? false });
+  daemon = await deps.start({ port: opts.port, verbose: opts.verbose ?? false, print: deps.print });
   const { log } = daemon;
   if (stopRequested) {
     log.info("daemon stopping: asked to while it started");

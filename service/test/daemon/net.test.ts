@@ -77,6 +77,16 @@ describe("pickBindAddresses", () => {
     expect(plan.addresses).toEqual(["127.0.0.1"]);
     expect(plan.warning).toMatch(/bind/);
   });
+
+  it("takes the Tailscale test from the caller when given one", () => {
+    const interfaces = { fake: [{ address: "127.0.0.2", family: "IPv4", internal: false }] };
+    const isTailscale = (address: string): boolean => address === "127.0.0.2";
+    expect(pickBindAddresses("tailscale", interfaces, isTailscale)).toEqual({
+      addresses: ["127.0.0.2", "127.0.0.1"],
+      tailscaleIp: "127.0.0.2",
+    });
+    expect(pickBindAddresses("tailscale", interfaces).tailscaleIp).toBeUndefined();
+  });
 });
 
 describe("deferredListener", () => {

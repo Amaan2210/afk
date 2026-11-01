@@ -32,12 +32,15 @@ function isTailscaleIpv4(address: string): boolean {
  * Tailscale's own adapter ("Tailscale" on Windows, "tailscale0" on Linux) first: another link,
  * such as a phone tethered over USB on a carrier's CGNAT, can have an address in the same range.
  */
-function findTailscaleIp(interfaces: NodeJS.Dict<InterfaceAddress[]>): string | undefined {
+function findTailscaleIp(
+  interfaces: NodeJS.Dict<InterfaceAddress[]>,
+  isTailscale: (address: string) => boolean,
+): string | undefined {
   const candidates: { name: string; address: string }[] = [];
   for (const [name, entries] of Object.entries(interfaces)) {
     for (const { address, family, internal } of entries ?? []) {
       const ipv4 = family === "IPv4" || family === 4;
-      if (ipv4 && !internal && isTailscaleIpv4(address)) candidates.push({ name, address });
+      if (ipv4 && !internal && isTailscale(address)) candidates.push({ name, address });
     }
   }
   return (candidates.find((c) => /tailscale/i.test(c.name)) ?? candidates[0])?.address;
@@ -55,20 +58,23 @@ function isWildcard(address: string): boolean {
  * - `"loopback"`: 127.0.0.1;
  * - an IP address: that address and 127.0.0.1, or a wildcard (`0.0.0.0`, `::`) alone.
  * The daemon never listens on every interface unless the config names a wildcard itself.
+ * `isTailscale` tells a Tailscale address (default: inside 100.64.0.0/10); tests replace it.
  */
 export function pickBindAddresses(
   bind: DaemonConfig["bind"],
   interfaces: NodeJS.Dict<InterfaceAddress[]> = os.networkInterfaces(),
+  isTailscale: (address: string) => boolean = isTailscaleIpv4,
 ): BindPlan {
   if (bind === "loopback") return { addresses: [LOOPBACK] };
   if (bind === "tailscale") {
-    const ip = findTailscaleIp(interfaces);
+    const ip = findTailscaleIp(interfaces, isTailscale);
     if (ip !== undefined) return { addresses: [ip, LOOPBACK], tailscaleIp: ip };
     return {
       addresses: [LOOPBACK],
       warning:
         "No Tailscale address found (100.64.0.0/10), so the daemon listens on 127.0.0.1 only and " +
-        "the phone cannot reach it. Start Tailscale, then restart the daemon.",
+        "the phone cannot reach it until Tailscale is up: the daemon keeps looking and listens on " +
+        "the address when it appears.",
     };
   }
   // An empty host would make listen() take every interface.
@@ -80,7 +86,7 @@ export function pickBindAddresses(
   }
   if (isWildcard(bind)) return { addresses: [bind] };
   const addresses = [...new Set([bind, LOOPBACK])];
-  return isTailscaleIpv4(bind) ? { addresses, tailscaleIp: bind } : { addresses };
+  return isTailscale(bind) ? { addresses, tailscaleIp: bind } : { addresses };
 }
 
 export interface DeferredListener {

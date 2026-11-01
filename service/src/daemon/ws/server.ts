@@ -18,6 +18,8 @@ const DEFAULT_ANSWER_CHUNK_DELAY_MS = 50;
 const DEFAULT_CLOSE_GRACE_MS = 1000;
 
 export interface WsServer {
+  /** Serves the API on one more http server, such as one on an address that appeared later. */
+  addServer(server: Server): void;
   /** Closes every client (1001), stops listening for upgrades and resolves when all are gone. */
   close(): Promise<void>;
   /** Authenticated clients. */
@@ -56,7 +58,8 @@ function refuse(socket: Duplex): void {
  * clients, devices and config saves, so a change made over one address reaches the others.
  */
 export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServer {
-  const httpServers = Array.isArray(servers) ? servers : [servers];
+  // A copy: `addServer` adds to it, and `close` unsubscribes from every one.
+  const httpServers = Array.isArray(servers) ? [...servers] : [servers];
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
   const conns = new Set<ClientConn>();
   const save = serialized(deps.saveConfig);
@@ -90,6 +93,10 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
   heartbeat.unref();
 
   return {
+    addServer(server) {
+      httpServers.push(server);
+      server.on("upgrade", onUpgrade);
+    },
     clientCount: () => ctx.clients().length,
     async close() {
       clearInterval(heartbeat);
