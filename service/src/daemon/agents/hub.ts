@@ -218,12 +218,17 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     this.resolve(sessionId, session, id);
   }
 
-  /** Marks a turn boundary in the main thread; a bare turn_end takes the transcript's text. */
+  /**
+   * Marks a turn boundary in the main thread; a bare turn_end takes the transcript's text. An end
+   * is marked only when the reducer finished the session: one it ignored (sub-agents still
+   * running) is no boundary.
+   */
   private turn(sessionId: string, signal: Extract<AgentSignal, { kind: TurnKind }>): void {
     const session = this.session(sessionId);
     if (session === undefined) return;
     const phase = signal.kind === "turn_start" ? "start" : "end";
-    const id = session.turnMarkerId(phase);
+    const finished = this.registry.get(sessionId)?.session.state === "finished";
+    const id = phase === "end" && !finished ? undefined : session.turnMarkerId(phase);
     if (id !== undefined) {
       const at = this.now().toISOString();
       this.show(sessionId, session, MAIN_THREAD, {

@@ -82,7 +82,8 @@ describe("runHook", () => {
   it("returns 0 on malformed stdin and when post fails", async () => {
     const bad = fakePost();
     expect(await runHook("Stop", { stdin: input("{nope"), env: ENV, post: bad.post })).toBe(0);
-    expect(bad.calls).toHaveLength(0);
+    // Only the notice that it was dropped (see read-stdin.test.ts) reaches the daemon.
+    expect(bad.calls.map((c) => c[1])).toEqual(["/hooks/dropped"]);
     const down = fakePost(false);
     expect(await runHook("Stop", { stdin: input("{}"), env: ENV, post: down.post })).toBe(0);
     const throwing = (async () => {

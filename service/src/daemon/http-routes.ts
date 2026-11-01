@@ -86,6 +86,18 @@ export const codexNotify: RouteHandler = async (ctx) => {
   applySignals(ctx, signals);
 };
 
+/** A hook whose payload `afk hook` could not relay: logged at debug level, so `--verbose` shows it. */
+export const hookDropped: RouteHandler = (ctx) => {
+  const { event, reason } = ctx.body;
+  if (typeof event !== "string" || typeof reason !== "string") {
+    throw new HttpError(400, "bad_request", "event and reason must be strings");
+  }
+  ctx.deps.log.debug(
+    { sessionId: ctx.sessionId, event: truncate(event, 100), reason: truncate(reason, 200) },
+    "relay: a hook dropped its payload",
+  );
+};
+
 export const statusline: RouteHandler = (ctx) => {
   ctx.deps.hub.updateStrip(ctx.sessionId, mapStatusline(ctx.body));
 };

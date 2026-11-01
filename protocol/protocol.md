@@ -153,12 +153,17 @@ All bodies are JSON; all responses are `200 {}` on success. Relays must exit 0 e
 |---|---|---|
 | `POST /hooks/claude/:event` | `X-AFK-Session: <session id>` | the hook's stdin JSON, verbatim. `:event` ∈ `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStart`, `SubagentStop`, `SessionEnd` |
 | `POST /hooks/codex` | `X-AFK-Session` | the Codex `notify` JSON argument, verbatim |
+| `POST /hooks/dropped` | `X-AFK-Session` | `{"event":"Stop","reason":"…"}` — sent by `afk hook` instead of a payload it could not relay (not valid JSON, or cut off); the daemon logs it at debug level, which `afk daemon --verbose` shows |
 | `POST /statusline` | `X-AFK-Session` | the status-line stdin JSON, verbatim |
 | `POST /sessions/:id/agent-start` | — | `{"kind":"claude"\|"codex","pid":n}` — sent by `afk exec` just before it spawns the real agent |
 | `POST /sessions/:id/agent-exit` | — | `{"code":n}` — sent by `afk exec` when the agent exits; the session returns to `idle` and keeps `kind` |
 | `GET /health` | — | → `{"ok":true,"version":"…","uptimeSec":n}` |
 
 `ChatEvent` delivery is an **upsert by `id`**: a tool event is sent once as `running` and again, with the same `id`, when its result arrives. Clients replace the earlier event in place.
+
+`afk hook` reads its stdin until the stream ends, giving up 300 ms after the last byte or 1 s after it started, and posts with a 0.7 s timeout, so a hook never holds the agent for more than about 2 s.
+
+A `turn` event marks a turn boundary in the main thread. Every turn start gets one. A turn end gets one only when it finished the session, so not one reported while sub-agents still run, and not a second one in a row. An interrupted turn has no end marker: the next start follows the last one.
 
 ## Versioning
 

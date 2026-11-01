@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import { portFromEnv, type PostFn } from "./post.js";
-import { parseJson, readStdin } from "./read-stdin.js";
+import { parseJson, readStdin, STDIN_CAP_MS, STDIN_IDLE_MS, type StdinCut } from "./read-stdin.js";
 
 export interface HookIo {
   stdin: Readable;
@@ -10,21 +10,44 @@ export interface HookIo {
   args?: string[];
 }
 
-/** Total wall time stays under 2 s: stdin read (0.5 s) plus the post (1.2 s). */
-const POST_TIMEOUT_MS = 1200;
+/**
+ * The relay's whole run must stay under 2 s, the most an agent should wait on a hook. Reading
+ * stdin takes at most STDIN_CAP_MS (1 s) and the post at most POST_TIMEOUT_MS (0.7 s), which
+ * leaves 0.3 s for node and the CLI to start. A post that times out has usually been delivered:
+ * the daemon answers after it has applied the hook.
+ */
+const POST_TIMEOUT_MS = 700;
+const NOT_JSON = "not valid JSON";
+
+function cutReason(why: StdinCut, bytes: number): string {
+  return why === "idle"
+    ? `no input for ${STDIN_IDLE_MS} ms after ${bytes} bytes`
+    : `still open after ${STDIN_CAP_MS} ms with ${bytes} bytes`;
+}
 
 /**
- * Relays one agent hook to the daemon. Prints nothing (Claude Code may interpret stdout) and
- * always returns 0: a missing session, malformed JSON or a down daemon is silently dropped.
+ * Relays one agent hook to the daemon. Prints nothing on stdout (Claude Code may interpret it) and
+ * always returns 0: a missing session or a down daemon is silently dropped. A payload that is not
+ * valid JSON (or was cut off) is not relayed; the daemon is told why instead, and logs it at debug
+ * level (`afk daemon --verbose`).
  */
 export async function runHook(event: string, io: HookIo): Promise<0> {
   try {
     const sessionId = io.env.AFK_SESSION_ID;
     if (!sessionId) return 0;
-    const raw = event === "codex-notify" ? (io.args?.at(-1) ?? "") : await readStdin(io.stdin);
-    const body = parseJson(raw);
-    if (body === undefined) return 0;
-    const route = event === "codex-notify" ? "/hooks/codex" : `/hooks/claude/${event}`;
+    let cut: string | undefined;
+    const raw =
+      event === "codex-notify"
+        ? (io.args?.at(-1) ?? "")
+        : await readStdin(io.stdin, { onCut: (why, bytes) => (cut = cutReason(why, bytes)) });
+    const parsed = parseJson(raw);
+    const [route, body] =
+      parsed === undefined
+        ? [
+            "/hooks/dropped",
+            { event, reason: cut === undefined ? NOT_JSON : `${cut}, ${NOT_JSON}` },
+          ]
+        : [event === "codex-notify" ? "/hooks/codex" : `/hooks/claude/${event}`, parsed];
     await io.post(
       portFromEnv(io.env),
       route,

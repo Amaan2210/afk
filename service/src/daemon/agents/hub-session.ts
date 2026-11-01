@@ -60,11 +60,12 @@ export class HubSession {
   }
 
   /**
-   * The id of the next turn marker (`turn-1`, `turn-2`, …), or undefined when the previous marker
-   * had the same phase: a turn reported ended twice gets one marker.
+   * The id of the next turn marker (`turn-1`, `turn-2`, …). Every start gets one (an interrupted
+   * turn has no end, so two starts can follow each other); an end right after another end gets
+   * none, as Codex reports a turn's end twice.
    */
   turnMarkerId(phase: TurnPhase): string | undefined {
-    if (phase === this.lastPhase) return undefined;
+    if (phase === "end" && this.lastPhase === "end") return undefined;
     this.lastPhase = phase;
     this.turns += 1;
     return `turn-${this.turns}`;

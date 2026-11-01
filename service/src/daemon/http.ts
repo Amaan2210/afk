@@ -8,6 +8,7 @@ import {
   agentStart,
   claudeHook,
   codexNotify,
+  hookDropped,
   HttpError,
   statusline,
   type RouteHandler,
@@ -58,6 +59,7 @@ const ROUTES: Route[] = [
     handler: claudeHook,
   },
   { method: "POST", pattern: /^\/hooks\/codex$/, session: "header", handler: codexNotify },
+  { method: "POST", pattern: /^\/hooks\/dropped$/, session: "header", handler: hookDropped },
   { method: "POST", pattern: /^\/statusline$/, session: "header", handler: statusline },
   {
     method: "POST",
