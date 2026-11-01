@@ -184,3 +184,12 @@ Each of these needs a person, a real terminal or the phone. Paths assume the rep
       should show `idle`.
    3. After either, wait out the keep-awake grace period (10 min by default) and check
       `powercfg /requests` (elevated): the daemon's entry should be gone.
+   4. Interrupt a turn and send a new prompt right away. The card must stay Working: the
+      interrupt line, read a moment later, must not knock the new turn back to idle.
+6. **PowerShell 7.3+ pass-through.** The session functions forward arguments unchanged on
+   PowerShell 7.3 and newer (`profile.ts`), which this laptop cannot run (5.1 only). On a machine
+   with pwsh 7.3+, start `afk shell` and run `claude -p "say \"hi there\""`: the quotes and
+   the space must arrive intact.
+7. **Codex resume with a positional prompt.** Start `afk codex "say hi"`, end it, and resume it
+   from the phone or with `afk codex` resume. The launch line is `codex "say hi" resume <id>`;
+   record what Codex does with the prompt (re-sends it, or refuses) in the README limitation.

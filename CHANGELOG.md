@@ -38,4 +38,12 @@ separate, later change.
 - Restarting the daemon ends every session and clears the list; ended sessions are kept in memory for 24 hours only while it runs.
 - `afk service` assumes English-language Windows output from `schtasks`.
 - Free-text answers to multi-select questions are refused.
-- Some prompt keystrokes (Codex approvals, a few Claude keys) are unverified from the phone.
+- Codex approval prompts are not detected; the session shows as working and the phone gets no
+  card for them. Answer them in the terminal view.
+- The user's own Codex `notify` must name a program, not a `.cmd` or `.bat` script.
+- A few Claude prompt keystrokes are unverified from the phone.
+- Resuming a session whose command carried a prompt passes that prompt to the agent again.
+- The detach chord is fixed to `Ctrl+]` then `d`.
+- Reattaching at a different window size can redraw imperfectly until the session next paints.
+- Node.js 24.15.0 crashes intermittently in the test suite (a libuv bug); develop on 22.23.x or
+  24.22 and newer.

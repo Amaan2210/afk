@@ -147,8 +147,10 @@ nothing loops.
 - AFK runs your own Codex `notify` program without a shell, so it must name a program, for
   example `notify = ['powershell', '-File', 'C:\scripts\notify.ps1']`, not a `.cmd` or `.bat`
   script, which Windows cannot start that way.
-- Some prompt keystrokes are not yet verified from the phone: the Codex approval keys and a few
-  Claude keys. See [docs/notes/prompt-keystrokes.md](docs/notes/prompt-keystrokes.md).
+- A few Claude prompt keystrokes are not yet verified from the phone. See
+  [docs/notes/prompt-keystrokes.md](docs/notes/prompt-keystrokes.md).
+- Resuming a session whose command carried a prompt (`afk claude "fix the tests"`) passes that
+  prompt to the resumed agent again, so it starts by re-sending it.
 - The detach chord is fixed to `Ctrl+]` then `d` (making it configurable is planned). The session
   shows it in a banner when its shell starts, which scrolls away; detaching prints the
   `afk attach` command to come back.
