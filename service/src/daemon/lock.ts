@@ -66,7 +66,8 @@ export async function acquireLock(lockFile: string): Promise<() => Promise<void>
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE") throw err;
     const pid = await readPid(file);
-    throw new Error(pid === undefined ? "already running" : `already running (pid ${pid})`);
+    const message = pid === undefined ? "already running" : `already running (pid ${pid})`;
+    throw new Error(message, { cause: err });
   }
   // Held for as long as the daemon runs, yet never what keeps the process alive.
   server.unref();

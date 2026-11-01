@@ -33,11 +33,11 @@
     "protocol:emit": "tsx src/protocol/emit-schema.ts"
   },
   "devDependencies": {
-    "@eslint/js": "^9",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/ws": "^8.18.2",
-    "eslint": "^9",
+    "eslint": "^10.14.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^5",
