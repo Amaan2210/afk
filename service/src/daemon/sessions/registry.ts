@@ -175,8 +175,8 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
   }
 
   /** Forgets sessions that ended more than `retentionHours` ago and deletes their folders. */
-  pruneEnded(): void {
-    const cutoff = this.now().getTime() - this.deps.retentionHours * 3_600_000;
+  pruneEnded(retentionHours = this.deps.retentionHours): void {
+    const cutoff = this.now().getTime() - retentionHours * 3_600_000;
     for (const [id, rec] of this.records) {
       const endedAt = rec.session.endedAt;
       if (endedAt === undefined || Date.parse(endedAt) >= cutoff) continue;

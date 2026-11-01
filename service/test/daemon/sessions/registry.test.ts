@@ -546,6 +546,19 @@ describe("SessionRegistry retention", () => {
     expect(removed).toEqual([s.id]);
   });
 
+  it("pruneEnded applies a retention given at call time over the configured one", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    fake.emitExit(0);
+    const { removed } = collect();
+    advance(2 * HOUR);
+    reg.pruneEnded();
+    expect(removed).toEqual([]);
+    reg.pruneEnded(1);
+    expect(removed).toEqual([s.id]);
+    // The folder goes in the background; let it finish before afterEach removes the root.
+    await vi.waitFor(() => expect(existsSync(join(deps.sessionsDir, s.id))).toBe(false));
+  });
+
   it("stopAll kills every live session", async () => {
     const a = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
     const aPty = fake;
