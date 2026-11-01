@@ -1,2 +1,4 @@
+# LF in the repository and on every checkout, so Prettier's check passes on a Windows runner.
+* text=auto eol=lf
 # schtasks output as captured, CRLF line endings included: the parser tests read it as is.
 service/test/fixtures/schtasks/*.txt -text
