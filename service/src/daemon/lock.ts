@@ -1,109 +1,83 @@
-import { randomBytes } from "node:crypto";
-import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:net";
 import path from "node:path";
 
-/** Tries to take a lock found stale this many times before giving up. */
-const ATTEMPTS = 3;
-
-/** The lock files this process holds, so a lock naming our pid can be told from a stale one. */
-const held = new Set<string>();
-
-export interface LockOptions {
-  /** When the machine booted, in ms since the epoch; defaults to now minus `os.uptime()`. */
-  bootTime?: number;
-}
-
-interface LockInfo {
-  /** Undefined when the file holds no valid pid. */
-  pid?: number;
-  mtimeMs: number;
-}
-
-function errorCode(err: unknown): string | undefined {
-  return (err as NodeJS.ErrnoException).code;
-}
-
-/** The lock file's pid and age; undefined when the file is gone. */
-async function readLock(lockFile: string): Promise<LockInfo | undefined> {
-  try {
-    const [raw, info] = await Promise.all([readFile(lockFile, "utf8"), stat(lockFile)]);
-    const text = raw.trim();
-    const pid = Number(text);
-    const valid = /^\d+$/.test(text) && Number.isSafeInteger(pid) && pid > 0;
-    return valid ? { pid, mtimeMs: info.mtimeMs } : { mtimeMs: info.mtimeMs };
-  } catch (err) {
-    if (errorCode(err) === "ENOENT") return undefined;
-    throw err;
-  }
-}
-
-/** Signal 0 checks that the process exists; EPERM means it exists but belongs to someone else. */
-function isRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return errorCode(err) === "EPERM";
-  }
-}
-
 /**
- * Windows reuses pids, so a pid alone can name an unrelated process: a lock written before the
- * last boot is stale whatever its pid, and one naming this process is stale unless we hold it.
+ * The name the lock is held under, derived from the lock file: a Windows named pipe, or on Linux
+ * a socket in the abstract namespace. Either exists only while a process listens on it, and only
+ * one process can.
  */
-function isStale(lock: LockInfo, lockFile: string, bootTime: number): boolean {
-  if (lock.pid === undefined || lock.mtimeMs < bootTime) return true;
-  if (lock.pid === process.pid) return !held.has(lockFile);
-  return !isRunning(lock.pid);
-}
-
-/**
- * Creates `lockFile` holding our pid, all at once: the pid is written to a file of our own, which
- * is then linked as the lock, so no reader ever sees a lock without its pid. False if it exists.
- */
-async function tryCreate(lockFile: string): Promise<boolean> {
-  const tmp = `${lockFile}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  await writeFile(tmp, String(process.pid));
-  try {
-    await link(tmp, lockFile);
-    return true;
-  } catch (err) {
-    if (errorCode(err) === "EEXIST") return false;
-    throw err;
-  } finally {
-    await rm(tmp, { force: true });
-  }
-}
-
-async function release(lockFile: string): Promise<void> {
-  if (!held.delete(lockFile)) return;
-  if ((await readLock(lockFile))?.pid === process.pid) await rm(lockFile, { force: true });
-}
-
-/**
- * Makes this process the only daemon for a config dir by creating `lockFile` with its pid. A stale
- * lock (see `isStale`, or one that holds no pid) is replaced; a live one makes this throw
- * `already running (pid n)`. Resolves to a release function that removes the file only while it
- * still holds this process's pid.
- */
-export async function acquireLock(
+export function lockEndpoint(
   lockFile: string,
-  opts: LockOptions = {},
-): Promise<() => Promise<void>> {
-  const file = path.resolve(lockFile);
-  const bootTime = opts.bootTime ?? Date.now() - os.uptime() * 1000;
-  await mkdir(path.dirname(file), { recursive: true });
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    if (await tryCreate(file)) {
-      held.add(file);
-      return () => release(file);
-    }
-    const lock = await readLock(file);
-    if (lock !== undefined && !isStale(lock, file, bootTime)) {
-      throw new Error(`already running (pid ${lock.pid})`);
-    }
-    await rm(file, { force: true });
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const resolved = path.resolve(lockFile);
+  const key = platform === "win32" ? resolved.toLowerCase() : resolved;
+  const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);
+  return platform === "win32" ? `\\\\.\\pipe\\afk-${hash}` : `\0afk-${hash}`;
+}
+
+function listen(server: Server, endpoint: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(endpoint, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+function close(server: Server): Promise<void> {
+  return new Promise((resolve) => server.close(() => resolve()));
+}
+
+/** The pid in the lock file; undefined when the file is missing, unreadable or holds no pid. */
+async function readPid(lockFile: string): Promise<number | undefined> {
+  let text: string;
+  try {
+    text = (await readFile(lockFile, "utf8")).trim();
+  } catch {
+    return undefined;
   }
-  throw new Error(`could not acquire the daemon lock at ${file}`);
+  const pid = Number(text);
+  return /^\d+$/.test(text) && Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+}
+
+/** While we still listen, no other process can have taken the lock and written the file. */
+async function release(lockFile: string, server: Server): Promise<void> {
+  if ((await readPid(lockFile)) === process.pid) await rm(lockFile, { force: true });
+  await close(server);
+}
+
+/**
+ * Makes this process the only daemon for a config dir. The lock is the endpoint `lockEndpoint`
+ * names, which this process listens on until released: the OS refuses a second listener and frees
+ * the name when its holder exits, however it exits, so nothing is ever left stale. `lockFile` only
+ * records the holder's pid, for the `already running (pid n)` a refused caller throws. Resolves
+ * to a release function.
+ */
+export async function acquireLock(lockFile: string): Promise<() => Promise<void>> {
+  const file = path.resolve(lockFile);
+  await mkdir(path.dirname(file), { recursive: true });
+  const server = createServer((socket) => socket.destroy());
+  try {
+    await listen(server, lockEndpoint(file));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE") throw err;
+    const pid = await readPid(file);
+    throw new Error(pid === undefined ? "already running" : `already running (pid ${pid})`);
+  }
+  // Held for as long as the daemon runs, yet never what keeps the process alive.
+  server.unref();
+  // A failed accept must not crash the daemon; the endpoint stays held.
+  server.on("error", () => undefined);
+  try {
+    await writeFile(file, String(process.pid));
+  } catch (err) {
+    await close(server);
+    throw err;
+  }
+  let released: Promise<void> | undefined;
+  return () => (released ??= release(file, server));
 }
