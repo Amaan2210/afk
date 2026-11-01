@@ -67,6 +67,8 @@ describe("runPair", () => {
     expect((err as CliError).code).toBe(1);
     // The daemon picks up a Tailscale address that appears; a restart would end every session.
     expect((err as CliError).message).toMatch(/Start Tailscale.*run `afk pair` again/s);
+    // Only a daemon with bind "tailscale" looks for the address while it runs.
+    expect((err as CliError).message).toMatch(/`bind` is `tailscale` \(the default\)/);
     expect((err as CliError).message).not.toMatch(/restart/);
     expect(f.request).not.toHaveBeenCalled();
     expect(f.out()).toBe("");

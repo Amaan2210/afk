@@ -41,6 +41,11 @@ export interface DaemonOptions {
   print?: (line: string) => void;
   /** How the daemon looks for the Tailscale address; tests inject a network and short waits. */
   tailscale?: TailscaleOptions;
+  /**
+   * Ends a start that is still waiting for Tailscale: it then rejects with an AbortError, having
+   * undone what it started. (A start past the wait completes; stop that daemon as usual.)
+   */
+  signal?: AbortSignal;
 }
 
 export interface Daemon {
@@ -134,10 +139,11 @@ async function compose(
       log.warn({ backup }, "config was unreadable; moved aside, defaults used"),
   });
   const shell = await detectShell(config.shell);
-  const bind = await planBind(config.bind, tailscale, () => {
+  const onWait = (): void => {
     log.info("waiting for Tailscale");
     print("waiting for Tailscale…");
-  });
+  };
+  const bind = await planBind(config.bind, tailscale, onWait, opts.signal);
   if (bind.warning !== undefined) log.warn(bind.warning);
 
   // The sessions need the port, which is only known once the servers listen.
@@ -239,7 +245,10 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<Daemon> {
   try {
     started = await compose(p, paths, opts, startedAt);
   } catch (err) {
-    log.error({ err }, "daemon failed to start");
+    // Asked to stop while it waited for Tailscale: not a failure.
+    const aborted = opts.signal?.aborted === true && (err as Error).name === "AbortError";
+    if (aborted) log.info("daemon stopped while it started");
+    else log.error({ err }, "daemon failed to start");
     await teardown(p);
     await closeLogger(log);
     throw err;

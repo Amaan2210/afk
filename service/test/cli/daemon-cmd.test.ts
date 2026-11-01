@@ -1,8 +1,11 @@
 import { EventEmitter } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { InvalidArgumentError } from "commander";
 import type { Mock } from "vitest";
 import { parsePort, runDaemon, type DaemonCommandDeps } from "../../src/cli/daemon-cmd.js";
-import type { Daemon, DaemonOptions } from "../../src/daemon/index.js";
+import { startDaemon, type Daemon, type DaemonOptions } from "../../src/daemon/index.js";
 import { VERSION } from "../../src/version.js";
 
 describe("parsePort", () => {
@@ -53,7 +56,12 @@ describe("runDaemon", () => {
   it("starts with the options given and prints where it listens and why not more", async () => {
     daemon.warning = "No Tailscale address found";
     await runDaemon({ port: 4000, verbose: true }, deps);
-    expect(start).toHaveBeenCalledWith({ port: 4000, verbose: true, print: deps.print });
+    expect(start).toHaveBeenCalledWith({
+      port: 4000,
+      verbose: true,
+      print: deps.print,
+      signal: expect.any(AbortSignal),
+    });
     expect(lines).toEqual([
       `afk daemon ${VERSION} listening on 100.84.12.9:2350, 127.0.0.1:2350`,
       "warning: No Tailscale address found",
@@ -110,6 +118,28 @@ describe("runDaemon", () => {
     proc.emit("SIGINT");
     proc.emit("SIGBREAK");
     expect(proc.exit).toHaveBeenCalledWith(1);
+  });
+
+  it("a signal while the daemon starts cancels the start, which then exits 0", async () => {
+    start.mockImplementation(
+      (opts) =>
+        new Promise<Daemon>((_resolve, reject) =>
+          opts.signal?.addEventListener("abort", () =>
+            reject(new Error("The operation was aborted")),
+          ),
+        ),
+    );
+    const run = runDaemon({}, deps);
+    proc.emit("SIGINT");
+    await expect(run).resolves.toBeUndefined();
+    expect(proc.exit).toHaveBeenCalledTimes(1);
+    expect(proc.exit).toHaveBeenCalledWith(0);
+  });
+
+  it("a failed start that nobody asked to stop still fails", async () => {
+    start.mockRejectedValue(new Error("already running (pid 7)"));
+    await expect(runDaemon({}, deps)).rejects.toThrow("already running");
+    expect(proc.exit).not.toHaveBeenCalled();
   });
 });
 
@@ -177,5 +207,43 @@ describe("runDaemon --exit-with-parent", () => {
     const checks = parentAlive.mock.calls.length;
     await settle();
     expect(parentAlive).toHaveBeenCalledTimes(checks);
+  });
+
+  it("a parent gone after a stop was asked for does not exit 1 mid-start", async () => {
+    let started!: (d: Daemon) => void;
+    start.mockReturnValue(new Promise<Daemon>((resolve) => (started = resolve)));
+    const run = runDaemon({ exitWithParent: true }, deps);
+    proc.emit("SIGINT");
+    alive = false;
+    await settle();
+    expect(proc.exit).not.toHaveBeenCalled();
+
+    started(daemon);
+    await run;
+    await vi.waitFor(() => expect(proc.exit).toHaveBeenCalledWith(0));
+    expect(proc.exit).toHaveBeenCalledTimes(1);
+    expect(daemon.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("a parent gone during the Tailscale wait ends a real start at once, exit 0", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "afk-daemon-cmd-"));
+    try {
+      const config = { bind: "tailscale", shell: "powershell.exe" };
+      await writeFile(join(dir, "config.json"), JSON.stringify(config));
+      const tailscale = { interfaces: () => ({}), startWaitMs: 60_000, startPollMs: 60_000 };
+      deps = { ...deps, start: (o) => startDaemon({ ...o, configDir: dir, port: 0, tailscale }) };
+      const run = runDaemon({ exitWithParent: true }, deps);
+      await vi.waitFor(() => expect(lines).toEqual(["waiting for Tailscale…"]), { timeout: 5000 });
+
+      const goneAt = Date.now();
+      alive = false;
+      await expect(run).resolves.toBeUndefined();
+      // Well inside the 60 s wait: the start gave up instead of waiting it out.
+      expect(Date.now() - goneAt).toBeLessThan(2000);
+      expect(proc.exit).toHaveBeenCalledTimes(1);
+      expect(proc.exit).toHaveBeenCalledWith(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true, maxRetries: 5 });
+    }
   });
 });

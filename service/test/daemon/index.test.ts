@@ -191,6 +191,27 @@ describe("startDaemon with bind tailscale", () => {
     expect((await readLog(dir)).map((l) => l.msg)).toContain("waiting for Tailscale");
   });
 
+  it("a start waiting for Tailscale gives up at once when its signal fires", async () => {
+    const dir = await configDir(tailscaleConfig);
+    const net = fakeTailscale();
+    const controller = new AbortController();
+    const since = Date.now();
+    setTimeout(() => controller.abort(), 50);
+    await expect(
+      startDaemon({
+        configDir: dir,
+        port: 0,
+        signal: controller.signal,
+        tailscale: { ...net.options, startWaitMs: 60_000, startPollMs: 60_000 },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(Date.now() - since).toBeLessThan(2000);
+    expect(existsSync(afkPaths(dir).lockFile)).toBe(false);
+    const messages = (await readLog(dir)).map((l) => l.msg);
+    expect(messages).toContain("daemon stopped while it started");
+    expect(messages).not.toContain("daemon failed to start");
+  });
+
   it("falls back to 127.0.0.1 with a warning when none appears in time", async () => {
     const dir = await configDir(tailscaleConfig);
     const net = fakeTailscale();

@@ -41,7 +41,8 @@ export async function runPair(opts: PairOptions, io: PairIo): Promise<void> {
   if (client.hello.daemon.tailscaleIp === undefined) {
     throw new CliError(
       "The daemon has no Tailscale address, so a phone cannot reach it (127.0.0.1 is this machine only). " +
-        "Start Tailscale: the daemon listens on its address within about 30 s. Then run `afk pair` again.",
+        "Start Tailscale: when `bind` is `tailscale` (the default), the daemon listens on its address " +
+        "within about 30 s. Then run `afk pair` again.",
     );
   }
   const asked = opts.name ?? (await io.promptName());

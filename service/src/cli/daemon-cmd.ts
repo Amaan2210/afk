@@ -63,10 +63,10 @@ function hostPort(address: string, port: number): string {
 /**
  * Runs the daemon until a stop signal or, with `exitWithParent`, until the parent process exits
  * (ending the scheduled task ends its PowerShell, not the daemon it started). Either is handled
- * from the start: one that arrives while the daemon starts stops it once it has started, so its
- * lock is released; another signal while it stops exits at once. Once running, a stray exception
- * in some event handler is logged and the daemon keeps serving, rather than every session ending
- * with it.
+ * from the start: one that arrives while the daemon starts ends a wait for Tailscale at once, or
+ * else stops the daemon once it has started, so its lock is released, then exits 0; another
+ * signal while it stops exits 1 at once. Once running, a stray exception in some event handler is
+ * logged and the daemon keeps serving, rather than every session ending with it.
  */
 export async function runDaemon(
   opts: DaemonCommandOptions,
@@ -77,6 +77,7 @@ export async function runDaemon(
   let daemon: Daemon | undefined = undefined;
   let stopRequested = false;
   let parentWatch: NodeJS.Timeout | undefined;
+  const starting = new AbortController();
   const stop = (d: Daemon): void => {
     clearInterval(parentWatch);
     d.stop().then(
@@ -87,7 +88,7 @@ export async function runDaemon(
   const requestStop = (why: { signal: string } | { reason: string }): void => {
     if (stopRequested) return proc.exit(1);
     stopRequested = true;
-    if (daemon === undefined) return;
+    if (daemon === undefined) return starting.abort();
     daemon.log.info(why, "daemon stopping");
     stop(daemon);
   };
@@ -95,6 +96,8 @@ export async function runDaemon(
   if (opts.exitWithParent === true) {
     const alive = deps.parentAlive ?? parentAlive;
     parentWatch = setInterval(() => {
+      // A stop already asked for runs its course; a second request would exit 1 mid-way.
+      if (stopRequested) return clearInterval(parentWatch);
       if (alive()) return;
       clearInterval(parentWatch);
       requestStop({ reason: "parent exited" });
@@ -108,9 +111,12 @@ export async function runDaemon(
       port: opts.port,
       verbose: opts.verbose ?? false,
       print: deps.print,
+      signal: starting.signal,
     });
   } catch (err) {
     clearInterval(parentWatch);
+    // Asked to stop while it started: whatever the start did not finish, the stop is done.
+    if (stopRequested) return proc.exit(0);
     throw err;
   }
   const { log } = daemon;

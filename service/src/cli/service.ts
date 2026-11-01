@@ -123,7 +123,8 @@ class Service {
       await writeFile(xmlFile, Buffer.concat([bom, Buffer.from(xml, "utf16le")]));
       return await this.schtasks(schtasksArgs("create", { xmlFile }));
     } finally {
-      await rm(dir, { recursive: true, force: true });
+      // A temp file left behind (antivirus holding it, say) must not fail a created task.
+      await rm(dir, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
     }
   }
 

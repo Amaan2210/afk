@@ -7,6 +7,7 @@ import {
   closeServer,
   listenAll,
   pickBindAddresses,
+  tailscaleAdapterIp,
   type BindPlan,
   type InterfaceAddress,
 } from "./net.js";
@@ -29,31 +30,34 @@ export interface TailscaleOptions {
   reprobeMs?: number;
 }
 
-function planner(o: TailscaleOptions): (bind: DaemonConfig["bind"]) => BindPlan {
-  const interfaces = o.interfaces ?? (() => os.networkInterfaces());
-  return (bind) => pickBindAddresses(bind, interfaces(), o.isTailscale);
+function interfacesOf(o: TailscaleOptions): () => NodeJS.Dict<InterfaceAddress[]> {
+  return o.interfaces ?? (() => os.networkInterfaces());
 }
 
 /**
  * Where to listen for `bind`. With "tailscale" and no Tailscale address yet (at logon Tailscale
  * can come up after the daemon), it first waits up to `startWaitMs` for one, looking every
- * `startPollMs`; `onWait` runs once, when the wait begins. Then the plan as it stands.
+ * `startPollMs`; `onWait` runs once, when the wait begins. Then the plan as it stands. `signal`
+ * ends the wait at once: it rejects with an AbortError.
  */
 export async function planBind(
   bind: DaemonConfig["bind"],
   o: TailscaleOptions,
   onWait: () => void,
+  signal?: AbortSignal,
 ): Promise<BindPlan> {
-  const plan = planner(o);
-  let current = plan(bind);
+  const interfaces = interfacesOf(o);
+  const plan = (): BindPlan => pickBindAddresses(bind, interfaces(), o.isTailscale);
+  let current = plan();
   if (bind !== "tailscale" || current.tailscaleIp !== undefined) return current;
   const waitMs = o.startWaitMs ?? DEFAULT_START_WAIT_MS;
   if (waitMs <= 0) return current;
   onWait();
   const deadline = Date.now() + waitMs;
   while (current.tailscaleIp === undefined && Date.now() < deadline) {
-    await sleep(Math.min(o.startPollMs ?? DEFAULT_START_POLL_MS, deadline - Date.now()));
-    current = plan(bind);
+    const ms = Math.min(o.startPollMs ?? DEFAULT_START_POLL_MS, deadline - Date.now());
+    await sleep(ms, undefined, { signal });
+    current = plan();
   }
   return current;
 }
@@ -76,16 +80,17 @@ export interface Rebinder {
 
 /**
  * For a daemon that started without a Tailscale address: looks for one every `reprobeMs` and,
- * when one appears, listens on it with a server from `create`, hands that to `onListening` and
- * stops looking. A failed listen is logged and tried again at the next look.
+ * when one appears on Tailscale's own adapter (only there: the daemon keeps it for its lifetime
+ * and pairs phones to it), listens on it with a server from `create`, hands that to
+ * `onListening` and stops looking. A failed listen is logged and tried again at the next look.
  */
 export function listenWhenTailscaleAppears(o: RebindOptions): Rebinder {
-  const plan = planner(o.tailscale);
+  const interfaces = interfacesOf(o.tailscale);
   let stopped = false;
   let attempt: Promise<void> | undefined;
 
   const tryListen = async (): Promise<void> => {
-    const address = plan("tailscale").tailscaleIp;
+    const address = tailscaleAdapterIp(interfaces(), o.tailscale.isTailscale);
     if (address === undefined || stopped) return;
     const servers: Server[] = [];
     try {

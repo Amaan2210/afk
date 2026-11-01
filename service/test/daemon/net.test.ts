@@ -5,6 +5,7 @@ import {
   deferredListener,
   listenAll,
   pickBindAddresses,
+  tailscaleAdapterIp,
 } from "../../src/daemon/net.js";
 
 describe("pickBindAddresses", () => {
@@ -76,6 +77,20 @@ describe("pickBindAddresses", () => {
     const plan = pickBindAddresses("  ", {});
     expect(plan.addresses).toEqual(["127.0.0.1"]);
     expect(plan.warning).toMatch(/bind/);
+  });
+
+  it("tailscaleAdapterIp takes the address of Tailscale's own adapter only", () => {
+    const cellular = { Cellular: [{ address: "100.70.1.2", family: "IPv4", internal: false }] };
+    expect(tailscaleAdapterIp(cellular)).toBeUndefined();
+    // pickBindAddresses, for a start, still falls back to any address in the range.
+    expect(pickBindAddresses("tailscale", cellular).tailscaleIp).toBe("100.70.1.2");
+    const both = {
+      ...cellular,
+      tailscale0: [{ address: "100.84.12.9", family: "IPv4", internal: false }],
+    };
+    expect(tailscaleAdapterIp(both)).toBe("100.84.12.9");
+    const fake = { Tailscale: [{ address: "127.0.0.2", family: "IPv4", internal: false }] };
+    expect(tailscaleAdapterIp(fake, (a) => a === "127.0.0.2")).toBe("127.0.0.2");
   });
 
   it("takes the Tailscale test from the caller when given one", () => {

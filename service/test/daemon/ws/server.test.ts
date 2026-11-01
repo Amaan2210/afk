@@ -71,6 +71,13 @@ describe("addServer", () => {
       await new Promise<void>((resolve) => late.close(() => resolve()));
     }
   });
+
+  it("refuses a server once closed", async () => {
+    await h.ws.close();
+    const late = createServer();
+    expect(() => h.ws.addServer(late)).toThrow(/closed/);
+    expect(late.listenerCount("upgrade")).toBe(0);
+  });
 });
 
 describe("handshake", () => {

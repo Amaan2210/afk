@@ -18,7 +18,10 @@ const DEFAULT_ANSWER_CHUNK_DELAY_MS = 50;
 const DEFAULT_CLOSE_GRACE_MS = 1000;
 
 export interface WsServer {
-  /** Serves the API on one more http server, such as one on an address that appeared later. */
+  /**
+   * Serves the API on one more http server, such as one on an address that appeared later.
+   * Throws once `close()` has been called.
+   */
   addServer(server: Server): void;
   /** Closes every client (1001), stops listening for upgrades and resolves when all are gone. */
   close(): Promise<void>;
@@ -92,13 +95,16 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
   }, deps.heartbeatMs ?? DEFAULT_HEARTBEAT_MS);
   heartbeat.unref();
 
+  let closed = false;
   return {
     addServer(server) {
+      if (closed) throw new Error("The WebSocket API is closed; it takes no more servers.");
       httpServers.push(server);
       server.on("upgrade", onUpgrade);
     },
     clientCount: () => ctx.clients().length,
     async close() {
+      closed = true;
       clearInterval(heartbeat);
       for (const server of httpServers) server.off("upgrade", onUpgrade);
       unwire();

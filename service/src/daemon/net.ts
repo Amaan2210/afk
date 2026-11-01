@@ -28,14 +28,14 @@ function isTailscaleIpv4(address: string): boolean {
   return isIP(address) === 4 && first === 100 && second >= 64 && second <= 127;
 }
 
-/**
- * Tailscale's own adapter ("Tailscale" on Windows, "tailscale0" on Linux) first: another link,
- * such as a phone tethered over USB on a carrier's CGNAT, can have an address in the same range.
- */
-function findTailscaleIp(
+/** Tailscale's own adapter: "Tailscale" on Windows, "tailscale0" on Linux. */
+const TAILSCALE_ADAPTER = /tailscale/i;
+
+/** The external IPv4 addresses that pass `isTailscale`, with their adapter's name. */
+function tailscaleCandidates(
   interfaces: NodeJS.Dict<InterfaceAddress[]>,
   isTailscale: (address: string) => boolean,
-): string | undefined {
+): { name: string; address: string }[] {
   const candidates: { name: string; address: string }[] = [];
   for (const [name, entries] of Object.entries(interfaces)) {
     for (const { address, family, internal } of entries ?? []) {
@@ -43,7 +43,32 @@ function findTailscaleIp(
       if (ipv4 && !internal && isTailscale(address)) candidates.push({ name, address });
     }
   }
-  return (candidates.find((c) => /tailscale/i.test(c.name)) ?? candidates[0])?.address;
+  return candidates;
+}
+
+/**
+ * Tailscale's own adapter first: another link, such as a phone tethered over USB on a carrier's
+ * CGNAT, can have an address in the same range.
+ */
+function findTailscaleIp(
+  interfaces: NodeJS.Dict<InterfaceAddress[]>,
+  isTailscale: (address: string) => boolean,
+): string | undefined {
+  const candidates = tailscaleCandidates(interfaces, isTailscale);
+  return (candidates.find((c) => TAILSCALE_ADAPTER.test(c.name)) ?? candidates[0])?.address;
+}
+
+/**
+ * The address on Tailscale's own adapter, and no other: what a running daemon starts listening on
+ * when it appears, and then keeps for its lifetime, so an address that is only in Tailscale's
+ * range (a tethered phone's CGNAT, say) must not stand in for it.
+ */
+export function tailscaleAdapterIp(
+  interfaces: NodeJS.Dict<InterfaceAddress[]> = os.networkInterfaces(),
+  isTailscale: (address: string) => boolean = isTailscaleIpv4,
+): string | undefined {
+  const candidates = tailscaleCandidates(interfaces, isTailscale);
+  return candidates.find((c) => TAILSCALE_ADAPTER.test(c.name))?.address;
 }
 
 /** 0.0.0.0 or ::, which take every interface, 127.0.0.1 included. */

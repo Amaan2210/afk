@@ -90,6 +90,28 @@ describe("listenWhenTailscaleAppears", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it("does not take a 100.64/10 address that appears on another adapter", async () => {
+    const { log } = logger();
+    const create = vi.fn(() => createServer());
+    const onListening = vi.fn();
+    rebinders.push(
+      listenWhenTailscaleAppears({
+        // A phone tethered on a carrier's CGNAT, say: in Tailscale's range, but not Tailscale.
+        tailscale: {
+          interfaces: () => ({ eth: [{ address: "100.70.1.2", family: "IPv4", internal: false }] }),
+          reprobeMs: 5,
+        },
+        port: 0,
+        create,
+        onListening,
+        log,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(create).not.toHaveBeenCalled();
+    expect(onListening).not.toHaveBeenCalled();
+  });
+
   it("a failed listen is logged and tried again at the next look", async () => {
     const { log, lines } = logger();
     const good = createServer();
