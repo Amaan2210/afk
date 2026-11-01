@@ -7,7 +7,8 @@ import { PROTOCOL_VERSION, type ServerMessage, type Session } from "../protocol/
 const HELLO_TIMEOUT_MS = 5000;
 const CLOSED = "The daemon closed the connection.";
 
-type Frame = { type: string; id?: string } & Record<string, unknown>;
+/** One JSON frame from the daemon. */
+export type Frame = { type: string; id?: string } & Record<string, unknown>;
 export type Hello = Extract<ServerMessage, { type: "hello" }>;
 
 /** No daemon is listening (or it never ran, so there is no local token). */
@@ -46,6 +47,7 @@ export class DaemonClient implements CommandClient {
   private helloFrame: Hello | undefined;
   private readonly waiting = new Map<string, Waiting>();
   private readonly listeners = new Map<string, Set<(m: Frame) => void>>();
+  private readonly closeListeners = new Set<() => void>();
   private gotSnapshot: (sessions: Session[]) => void = () => undefined;
   private noSnapshot: (err: Error) => void = () => undefined;
   private readonly firstSnapshot = new Promise<Session[]>((resolve, reject) => {
@@ -103,7 +105,7 @@ export class DaemonClient implements CommandClient {
         fail(code === "ECONNREFUSED" ? new DaemonNotRunningError(code) : err);
       });
       ws.on("close", () => {
-        this.onClose();
+        this.markClosed();
         fail(new Error(CLOSED));
       });
       ws.on("message", (data) => {
@@ -141,11 +143,14 @@ export class DaemonClient implements CommandClient {
     for (const cb of this.listeners.get(frame.type) ?? []) cb(frame);
   }
 
-  private onClose(): void {
+  /** Runs once, whether the daemon closed the socket or `close()` did. */
+  private markClosed(): void {
+    if (this.closed) return;
     this.closed = true;
     for (const waiting of this.waiting.values()) waiting.reject(new Error(CLOSED));
     this.waiting.clear();
     this.noSnapshot(new Error(CLOSED));
+    for (const cb of [...this.closeListeners]) cb();
   }
 
   get hello(): Hello {
@@ -185,8 +190,14 @@ export class DaemonClient implements CommandClient {
     return () => void set.delete(cb);
   }
 
+  /** Calls `cb` once when the connection closes; the returned function stops it. */
+  onClose(cb: () => void): () => void {
+    this.closeListeners.add(cb);
+    return () => void this.closeListeners.delete(cb);
+  }
+
   close(): void {
     this.ws.terminate();
-    this.onClose();
+    this.markClosed();
   }
 }

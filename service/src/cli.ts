@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { registerAttachCommand } from "./cli/attach-cmd.js";
 import { registerDaemonCommand } from "./cli/daemon-cmd.js";
 import { registerDevicesCommands } from "./cli/devices.js";
 import { registerKillCommand } from "./cli/kill.js";
+import { registerLaunchCommands } from "./cli/launch.js";
 import { registerLsCommand } from "./cli/ls.js";
 import { registerPairCommand } from "./cli/pair.js";
 import { registerRelayCommands } from "./cli/relay-cmd.js";
@@ -14,6 +16,8 @@ const program = new Command("afk")
   .enablePositionalOptions();
 
 registerDaemonCommand(program);
+registerLaunchCommands(program);
+registerAttachCommand(program);
 registerLsCommand(program);
 registerKillCommand(program);
 registerPairCommand(program);

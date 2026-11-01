@@ -200,3 +200,33 @@ describe("DaemonClient.on", () => {
     expect(seen).toEqual([1]);
   });
 });
+
+describe("DaemonClient.onClose", () => {
+  it("calls back once when the daemon closes the socket", async () => {
+    const dir = await configDir();
+    await startOn(dir);
+    let serverSide: WebSocket | undefined;
+    const port = await fakeServer((ws) => {
+      serverSide = ws;
+      ws.send(JSON.stringify({ type: "hello" }));
+    });
+    const client = await connect(afkPaths(dir), port);
+    const closed = vi.fn();
+    client.onClose(closed);
+    serverSide?.close();
+    await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
+    client.close();
+    expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it("does not call back after unsubscribing", async () => {
+    const dir = await configDir();
+    const daemon = await startOn(dir);
+    const client = await connect(afkPaths(dir), daemon.port);
+    const closed = vi.fn();
+    const off = client.onClose(closed);
+    off();
+    client.close();
+    expect(closed).not.toHaveBeenCalled();
+  });
+});

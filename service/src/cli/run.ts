@@ -19,9 +19,9 @@ export interface Output {
 }
 
 /** What a command gets: where to print, a client for the daemon, and the port it is on. */
-export interface CommandIo {
+export interface CommandIo<C = CommandClient> {
   stdout: Output;
-  client: CommandClient;
+  client: C;
   port: number;
 }
 
@@ -67,7 +67,7 @@ function defaultDeps(): RunDeps {
  */
 export async function withDaemon(
   opts: ClientOptions,
-  command: (io: CommandIo) => Promise<void>,
+  command: (io: CommandIo<DaemonClient>) => Promise<void>,
   deps: RunDeps = defaultDeps(),
 ): Promise<void> {
   let client: DaemonClient | undefined = undefined;
