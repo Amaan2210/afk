@@ -34,7 +34,7 @@ separate, later change.
 ### Known limitations
 
 - Windows-only daemon; the CLI and tests also run on Linux in CI.
-- Restarting the daemon ends every session.
+- Restarting the daemon ends every session and clears the list; ended sessions are kept in memory for 24 hours only while it runs.
 - `afk service` assumes English-language Windows output from `schtasks`.
 - Free-text answers to multi-select questions are refused.
 - Some prompt keystrokes (Codex approvals, a few Claude keys) are unverified from the phone.

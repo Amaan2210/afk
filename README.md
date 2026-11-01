@@ -74,19 +74,19 @@ afk shell
 window to it. `afk claude` and `afk codex` pass every argument after their own options to the
 agent untouched; `--name` and `--port` count only before the first agent argument.
 
-| Command                                               | What it does                                                                                                                                                                                  |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `afk claude [--name n] [--port n] [claude args…]`     | Start Claude Code in a new session in this folder and attach to it. The session is named after the folder unless `--name` is given.                                                           |
-| `afk codex [--name n] [--port n] [codex args…]`       | The same for Codex.                                                                                                                                                                           |
-| `afk shell [--name n] [--port n]`                     | A plain shell session; takes no arguments. Agents typed into it (`claude`, `codex`) are tracked too.                                                                                          |
-| `afk attach <id\|name> [--port n]`                    | Attach this window to a running session. Detach with `Ctrl+]` then `d`; the session keeps running. Closing the window also detaches. A name matches running sessions only; an id matches any. |
-| `afk ls [--port n]`                                   | List the sessions the daemon owns.                                                                                                                                                            |
-| `afk kill <sessionId> [--port n]`                     | End a session.                                                                                                                                                                                |
-| `afk pair [--name n] [--port n]`                      | Add a phone and print a QR code (and the same payload as one JSON line) for the app to scan. The token is shown once. Needs a Tailscale address on the daemon.                                |
-| `afk devices [--port n]`                              | List the paired phones.                                                                                                                                                                       |
-| `afk unpair <deviceId> [--port n]`                    | Revoke a phone's token.                                                                                                                                                                       |
-| `afk service install\|uninstall\|start\|stop\|status` | Manage the scheduled task that runs the daemon from logon. `install` also starts it. `stop` and `uninstall` end every session.                                                                |
-| `afk daemon [--verbose] [--port n]`                   | Run the daemon in the foreground (what the scheduled task runs). Stopping it ends every session. `--port` is a development override and is not saved.                                         |
+| Command                                               | What it does                                                                                                                                                                                         |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `afk claude [--name n] [--port n] [claude args…]`     | Start Claude Code in a new session in this folder and attach to it. The session is named after the folder unless `--name` is given.                                                                  |
+| `afk codex [--name n] [--port n] [codex args…]`       | The same for Codex.                                                                                                                                                                                  |
+| `afk shell [--name n] [--port n]`                     | A plain shell session; takes no arguments. Agents typed into it (`claude`, `codex`) are tracked too.                                                                                                 |
+| `afk attach <id\|name> [--port n]`                    | Attach this window to a running session. Detach with `Ctrl+]` then `d`; the session keeps running. Closing the window also detaches. A name matches running sessions only; an id matches any.        |
+| `afk ls [--port n]`                                   | List the sessions the daemon owns.                                                                                                                                                                   |
+| `afk kill <sessionId> [--port n]`                     | End a session.                                                                                                                                                                                       |
+| `afk pair [--name n] [--port n]`                      | Add a phone and print a QR code (and the same payload as one JSON line) for the app to scan. The token is shown once. Needs a Tailscale address on the daemon.                                       |
+| `afk devices [--port n]`                              | List the paired phones.                                                                                                                                                                              |
+| `afk unpair <deviceId> [--port n]`                    | Revoke a phone's token.                                                                                                                                                                              |
+| `afk service install\|uninstall\|start\|stop\|status` | Manage the scheduled task that runs the daemon from logon. `install` also starts it. `--port` (all but `status`) is the port checked for a running daemon. `stop` and `uninstall` end every session. |
+| `afk daemon [--verbose] [--port n]`                   | Run the daemon in the foreground (what the scheduled task runs). Stopping it ends every session. `--port` is a development override and is not saved.                                                |
 
 The service commands, one by one:
 
@@ -130,8 +130,9 @@ nothing loops.
 
 - The daemon is Windows-only for now: it depends on ConPTY, a Windows keep-awake request and a
   scheduled task. The CLI and the tests also run on Linux in CI, but the product targets Windows 11.
-- Restarting or stopping the daemon ends every session. Ended sessions whose agent session id is
-  known stay listed for 24 hours so they can be resumed.
+- Stopping or restarting the daemon ends every session and clears the list. While the daemon keeps
+  running, ended sessions stay listed for 24 hours (the retention setting) so they can be resumed
+  from the phone or the CLI.
 - The Codex chat view is thinner than Claude's.
 - `afk service` reads `schtasks` output and assumes an English-language Windows.
 - A free-text answer to a multi-select question is refused; use the terminal view for that.
