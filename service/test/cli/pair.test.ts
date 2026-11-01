@@ -65,7 +65,9 @@ describe("runPair", () => {
     const err = await runPair({ name: "Pixel" }, f.io).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CliError);
     expect((err as CliError).code).toBe(1);
-    expect((err as CliError).message).toMatch(/Tailscale.*restart the daemon/s);
+    // The daemon picks up a Tailscale address that appears; a restart would end every session.
+    expect((err as CliError).message).toMatch(/Start Tailscale.*run `afk pair` again/s);
+    expect((err as CliError).message).not.toMatch(/restart/);
     expect(f.request).not.toHaveBeenCalled();
     expect(f.out()).toBe("");
   });
