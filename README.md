@@ -45,7 +45,8 @@ daemon listens only on your Tailscale address and `127.0.0.1`. More in
 
 1. Install [Tailscale](https://tailscale.com/download) on the laptop and on the phone, and sign in
    to the same tailnet.
-2. Install Node.js 22 or newer, then the CLI:
+2. Install Node.js 22 or newer (22.23 or later, or 24.22 or later; avoid 24.15.0, which has a
+   known crash), then the CLI:
 
    ```
    npm i -g afkdev
