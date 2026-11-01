@@ -120,13 +120,13 @@ describe("attach", () => {
   });
 
   it("quotes a name with whitespace in the attach hint", async () => {
-    const { client, term } = setup("", session({ name: "Naya Repos" }));
+    const { client, term } = setup("", session({ name: "My Repos" }));
     const done = attach(client, "s_1", term.io);
     await subscribed(client);
     term.type(CHORD);
     await done;
     expect(term.text()).toContain(
-      '[afk] detached, session Naya Repos keeps running · afk attach "Naya Repos"\r\n',
+      '[afk] detached, session My Repos keeps running · afk attach "My Repos"\r\n',
     );
   });
 

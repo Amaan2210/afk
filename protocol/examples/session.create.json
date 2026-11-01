@@ -1,7 +1,7 @@
 {
   "type": "session.create",
   "id": "r1",
-  "cwd": "D:\\Naya Repos\\personal\\remote-dev",
+  "cwd": "D:\\My Repos\\personal\\remote-dev",
   "kind": "claude",
   "args": [
     "--dangerously-skip-permissions"

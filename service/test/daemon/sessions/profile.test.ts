@@ -12,12 +12,12 @@ describe("renderSessionProfile", () => {
     sessionId: "s_x",
     port: 2350,
     nodeExe: "C:\\Program Files\\nodejs\\node.exe",
-    cliEntry: "D:\\Naya Repos\\afk\\service\\dist\\cli.js",
+    cliEntry: "D:\\My Repos\\afk\\service\\dist\\cli.js",
   });
 
   it("defines claude and codex functions that call afk exec with the forwarded args", () => {
     expect(p).toMatch(
-      /function claude \{[^\n]*& "C:\\Program Files\\nodejs\\node\.exe" "D:\\Naya Repos\\afk\\service\\dist\\cli\.js" exec claude @afkArgs \}/,
+      /function claude \{[^\n]*& "C:\\Program Files\\nodejs\\node\.exe" "D:\\My Repos\\afk\\service\\dist\\cli\.js" exec claude @afkArgs \}/,
     );
     expect(p).toMatch(/function codex \{[^\n]*exec codex @afkArgs \}/);
     expect(p).toContain("function claude { $afkArgs = @(afk-forward-args $args); & ");
@@ -128,8 +128,8 @@ describe.skipIf(process.platform !== "win32")("session profile under Windows Pow
     const cases: Array<[string, string[]]> = [
       ['claude "Fix `"it`""', ["claude", 'Fix "it"']],
       ['claude "" x', ["claude", "", "x"]],
-      ['claude --add-dir "D:\\Naya Repos\\" y', ["claude", "--add-dir", "D:\\Naya Repos\\", "y"]],
-      ['claude "D:\\Naya Repos\\café"', ["claude", "D:\\Naya Repos\\café"]],
+      ['claude --add-dir "D:\\My Repos\\" y', ["claude", "--add-dir", "D:\\My Repos\\", "y"]],
+      ['claude "D:\\My Repos\\café"', ["claude", "D:\\My Repos\\café"]],
       // PowerShell's parser drops a bare -- before any function runs; launch lines quote it.
       ['claude "--" x', ["claude", "--", "x"]],
       ["claude --model opus", ["claude", "--model", "opus"]],

@@ -109,7 +109,7 @@ in one.
   nothing.
 - `afk attach <name>` matches running sessions only. An id still finds an ended session, which
   gets the "has ended" message, exit 1. Row 18's error is now reached only in a race.
-- The detach hint quotes a name with whitespace: `afk attach "Naya Repos"`.
+- The detach hint quotes a name with whitespace: `afk attach "My Repos"`.
 - A session that ends with no exit code known prints `(exit 0)`, the code the command exits with.
 - Leaving resets the cursor shape with `ESC[0 q`, the terminal's default.
 - The terminal check runs before the daemon is contacted. Without a TTY and without a daemon, the
@@ -119,10 +119,10 @@ in one.
 ## Pending user verification
 
 Each of these needs a person, a real terminal or the phone. Paths assume the repo at
-`D:\Naya Repos\personal\remote-dev`. Build first: `cd service; npm run build`.
+`D:\My Repos\personal\remote-dev`. Build first: `cd service; npm run build`.
 
 1. **A Windows Terminal pass of the checks above.**
-   1. In one tab, run `node "D:\Naya Repos\personal\remote-dev\service\dist\cli.js" daemon --port 23998`.
+   1. In one tab, run `node "D:\My Repos\personal\remote-dev\service\dist\cli.js" daemon --port 23998`.
    2. In a second tab, in a project folder, run `afk shell --port 23998`. Here and below, `afk`
       means `node "…\service\dist\cli.js"`. The banner and prompt should appear.
    3. Run `dir`, then press `Ctrl+]` then `d`. The detach line should print and the tab's own

@@ -17,7 +17,7 @@ vi.mock("../../src/daemon/agents/codex/locate.js", async (importOriginal) => {
   return { ...original, findRolloutFile: vi.fn(original.findRolloutFile) };
 });
 
-const CWD = "D:\\Naya Repos\\proj";
+const CWD = "D:\\My Repos\\proj";
 
 /** Everything the handler does to the hub and the registry, in order. */
 let calls: string[];

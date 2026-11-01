@@ -27,13 +27,13 @@ describe("buildLaunchLine", () => {
       buildLaunchLine("claude", [
         "--model=opus",
         "--add-dir",
-        "D:\\Naya Repos\\café",
+        "D:\\My Repos\\café",
         "@splat",
         "a,b",
         "--%",
         "",
       ]),
-    ).toBe('claude --model=opus --add-dir "D:\\Naya Repos\\café" "@splat" "a,b" "--%" ""\r');
+    ).toBe('claude --model=opus --add-dir "D:\\My Repos\\café" "@splat" "a,b" "--%" ""\r');
   });
 
   it("quotes a bare -- so PowerShell does not consume it as the end of parameters", () => {

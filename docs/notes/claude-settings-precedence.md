@@ -7,8 +7,8 @@ service plan (`renderClaudeSettings`, `buildClaudeLaunch`, `buildCodexLaunch`).
 |---|---|
 | Windows | 11 (10.0.26200), Windows PowerShell 5.1 only (no `pwsh`) |
 | Node | 24.15.0 at `C:\Program Files\nodejs\node.exe` |
-| Claude Code | 2.1.316 (native, `C:\Users\amank\.local\bin\claude.exe`) |
-| Codex CLI | 0.166.0 (npm shim, `C:\Users\amank\AppData\Roaming\npm\codex.cmd`) |
+| Claude Code | 2.1.316 (native, `C:\Users\user\.local\bin\claude.exe`) |
+| Codex CLI | 0.166.0 (npm shim, `C:\Users\user\AppData\Roaming\npm\codex.cmd`) |
 
 ## Method
 
@@ -58,9 +58,9 @@ The same settings file was used in an interactive session, started in a hidden c
 
 ```powershell
 # with the CLAUDE* variables above removed from $env:
-Start-Process -FilePath "C:\Users\amank\.local\bin\claude.exe" `
+Start-Process -FilePath "C:\Users\user\.local\bin\claude.exe" `
   -ArgumentList @("--settings", "`"<scratch>\afk probe\session\claude-settings.json`"") `
-  -WorkingDirectory "D:\Naya Repos\personal\remote-dev" -WindowStyle Hidden -PassThru
+  -WorkingDirectory "D:\My Repos\personal\remote-dev" -WindowStyle Hidden -PassThru
 ```
 
 Result: `SessionStart` fired, and 1.5 s later the probe was called as `statusline`. Its stdin

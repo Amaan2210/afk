@@ -9,7 +9,7 @@ function start(over: Partial<SessionProcessOptions> = {}) {
   const p = new SessionProcess({
     exe: "powershell.exe",
     args: ["-NoLogo"],
-    cwd: "D:\\Naya Repos\\p",
+    cwd: "D:\\My Repos\\p",
     env: { AFK_SESSION_ID: "s_test" },
     cols: 80,
     rows: 24,
@@ -30,7 +30,7 @@ describe("SessionProcess", () => {
     expect(fake.lastSpawn).toEqual({
       exe: "powershell.exe",
       args: ["-NoLogo"],
-      cwd: "D:\\Naya Repos\\p",
+      cwd: "D:\\My Repos\\p",
       env: { AFK_SESSION_ID: "s_test" },
       cols: 80,
       rows: 24,

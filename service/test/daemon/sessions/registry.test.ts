@@ -45,7 +45,7 @@ beforeEach(async () => {
     sessionsDir: await mkdtemp(join(tmpdir(), "afk-registry-")),
     port: 2350,
     nodeExe: "C:\\Program Files\\nodejs\\node.exe",
-    cliEntry: "D:\\Naya Repos\\afk\\service\\dist\\cli.js",
+    cliEntry: "D:\\My Repos\\afk\\service\\dist\\cli.js",
     ringBufferBytes: 4096,
     snapshotScrollback: 100,
     retentionHours: 24,
@@ -63,7 +63,7 @@ afterEach(async () => {
 describe("SessionRegistry.create", () => {
   it("create spawns the shell with the session profile in cwd and names after the folder", async () => {
     const s = await reg.create({
-      cwd: "D:\\Naya Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-platform",
       kind: "shell",
       args: [],
     });
@@ -84,13 +84,13 @@ describe("SessionRegistry.create", () => {
   it("spawns the configured shell in cwd with AFK_* merged over the base environment", async () => {
     const { updates } = collect();
     const s = await reg.create({
-      cwd: "D:\\Naya Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-platform",
       kind: "shell",
       args: [],
     });
     expect(fake.lastSpawn).toMatchObject({
       exe: deps.shell.exe,
-      cwd: "D:\\Naya Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-platform",
       env: { Path: "C:\\Windows", AFK_SESSION_ID: s.id, AFK_PORT: "2350" },
     });
     expect(s).toMatchObject({
@@ -132,10 +132,10 @@ describe("SessionRegistry.create", () => {
   });
 
   it("types the launch line once, as one write, however much output follows", async () => {
-    await reg.create({ cwd: "D:\\p", kind: "claude", args: ["--add-dir", "D:\\Naya Repos\\café"] });
+    await reg.create({ cwd: "D:\\p", kind: "claude", args: ["--add-dir", "D:\\My Repos\\café"] });
     fake.emitData("PS D:\\p> ");
     fake.emitData("more");
-    expect(fake.written.map(String)).toEqual(['claude --add-dir "D:\\Naya Repos\\café"\r']);
+    expect(fake.written.map(String)).toEqual(['claude --add-dir "D:\\My Repos\\café"\r']);
   });
 
   it("types the launch line after 3 s when the shell prints nothing", async () => {
@@ -191,11 +191,11 @@ describe("SessionRegistry.create", () => {
     });
     expect(named.name).toBe("mine");
     expect(fake.lastSpawn).toMatchObject({ cols: 80, rows: 24 });
-    expect((await reg.create({ cwd: "D:\\Naya Repos\\q\\", kind: "shell", args: [] })).name).toBe(
+    expect((await reg.create({ cwd: "D:\\My Repos\\q\\", kind: "shell", args: [] })).name).toBe(
       "q",
     );
-    expect((await reg.create({ cwd: "C:/Users/amank/", kind: "shell", args: [] })).name).toBe(
-      "amank",
+    expect((await reg.create({ cwd: "C:/Users/user/", kind: "shell", args: [] })).name).toBe(
+      "user",
     );
     expect((await reg.create({ cwd: "D:\\", kind: "shell", args: [] })).name).toBe("D:");
   });
@@ -422,8 +422,8 @@ describe("SessionRegistry names", () => {
   const names = () => reg.list().map((s) => s.name);
 
   it("gives sessions created in the same folder distinct names, first free suffix", async () => {
-    const first = await reg.create({ cwd: "D:\\Naya Repos\\proj", kind: "shell", args: [] });
-    const second = await reg.create({ cwd: "D:\\Naya Repos\\proj", kind: "claude", args: [] });
+    const first = await reg.create({ cwd: "D:\\My Repos\\proj", kind: "shell", args: [] });
+    const second = await reg.create({ cwd: "D:\\My Repos\\proj", kind: "claude", args: [] });
     const third = await reg.create({ cwd: "C:\\other\\proj\\", kind: "shell", args: [] });
     expect([first.name, second.name, third.name]).toEqual(["proj", "proj-2", "proj-3"]);
     expect(names()).toEqual(["proj", "proj-2", "proj-3"]);
@@ -485,7 +485,7 @@ describe("SessionRegistry names", () => {
 describe("SessionRegistry.resume", () => {
   it("resume creates a new session running claude <original args> --resume <id>", async () => {
     const src = await reg.create({
-      cwd: "D:\\Naya Repos\\p",
+      cwd: "D:\\My Repos\\p",
       kind: "claude",
       args: ["--dangerously-skip-permissions", "--model", "opus"],
       prompt: "Add login",
@@ -496,12 +496,12 @@ describe("SessionRegistry.resume", () => {
     const s = await reg.resume(src.id);
     expect(s.id).not.toBe(src.id);
     expect(s).toMatchObject({
-      cwd: "D:\\Naya Repos\\p",
+      cwd: "D:\\My Repos\\p",
       kind: "claude",
       name: "auth work",
       state: "idle",
     });
-    fake.emitData("PS D:\\Naya Repos\\p> ");
+    fake.emitData("PS D:\\My Repos\\p> ");
     expect(fake.written.map(String)).toEqual([
       "claude --dangerously-skip-permissions --model opus --resume abc\r",
     ]);

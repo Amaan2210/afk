@@ -4,7 +4,7 @@
     {
       "id": "s_abcdefghijkl",
       "name": "remote-dev",
-      "cwd": "D:\\Naya Repos\\personal\\remote-dev",
+      "cwd": "D:\\My Repos\\personal\\remote-dev",
       "kind": "claude",
       "state": "needs_input",
       "createdAt": "2026-10-30T13:00:00.000Z",

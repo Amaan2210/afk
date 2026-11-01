@@ -3,7 +3,7 @@
   "protocol": 1,
   "daemon": {
     "version": "0.1.0",
-    "hostname": "AMAN-LAPTOP",
+    "hostname": "MY-LAPTOP",
     "platform": "win32",
     "tailscaleIp": "100.84.12.9"
   },

@@ -6,8 +6,8 @@ Checked on 2026-10-31 against the real agents through the real ConPTY (`nodePtyF
 |             | Version                                                  |
 | ----------- | -------------------------------------------------------- |
 | Windows     | 11 (10.0.26200)                                          |
-| Claude Code | 2.1.316 (`C:\Users\amank\.local\bin\claude.exe`)         |
-| Codex CLI   | 0.166.0 (`C:\Users\amank\AppData\Roaming\npm\codex.cmd`) |
+| Claude Code | 2.1.316 (`C:\Users\user\.local\bin\claude.exe`)         |
+| Codex CLI   | 0.166.0 (`C:\Users\user\AppData\Roaming\npm\codex.cmd`) |
 
 ## Method
 

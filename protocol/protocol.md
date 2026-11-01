@@ -18,7 +18,7 @@ The contract between the laptop daemon (`afk daemon`) and its clients: the Andro
    `client.kind` is `android` or `cli`.
 2. Daemon replies `hello`, then `sessions.snapshot`, then `stats`, then `daemon.settings`.
    ```json
-   {"type":"hello","protocol":1,"daemon":{"version":"0.1.0","hostname":"AMAN-LAPTOP","platform":"win32","tailscaleIp":"100.84.12.9"},"device":{"id":"dev_8f3a","name":"Pixel 8"}}
+   {"type":"hello","protocol":1,"daemon":{"version":"0.1.0","hostname":"MY-LAPTOP","platform":"win32","tailscaleIp":"100.84.12.9"},"device":{"id":"dev_8f3a","name":"Pixel 8"}}
    ```
 3. Any frame before a successful `auth`, a bad token, or a protocol mismatch closes the socket with an `error` (`unauthorized` / `protocol_mismatch`).
 
