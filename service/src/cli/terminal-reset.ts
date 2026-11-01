@@ -2,14 +2,14 @@
  * Turns off modes an agent's TUI may have left on. Each one is harmless to turn off when it is
  * already off:
  * - default colours;
- * - cursor shown;
+ * - cursor shown, in the terminal's default shape;
  * - normal cursor keys and keypad;
  * - line wrap on;
  * - insert mode off;
  * - mouse, focus and bracketed-paste reporting off.
  */
 const MODES_OFF =
-  "\x1b[0m\x1b[?25h\x1b[?1l\x1b>\x1b[?7h\x1b[4l" +
+  "\x1b[0m\x1b[?25h\x1b[0 q\x1b[?1l\x1b>\x1b[?7h\x1b[4l" +
   "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l";
 
 // Alternate-screen switches: 1049 saves and restores the cursor, 1047 and 47 do not.

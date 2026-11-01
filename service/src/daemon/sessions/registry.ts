@@ -11,6 +11,7 @@ import {
   applySignal,
   badRequest,
   folderName,
+  freeName,
   newEntry,
   notFound,
   setOptional,
@@ -121,9 +122,10 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     if (rec.session.state !== "ended") this.terminate(rec);
   }
 
+  /** A name another live session holds gets the first free `-2`, `-3`, … suffix, as on create. */
   rename(id: string, name: string): void {
     const rec = this.require(id);
-    rec.session.name = name;
+    rec.session.name = freeName(name, this.records.values(), rec);
     this.emitUpdated(rec);
   }
 
@@ -222,7 +224,9 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
       snapshotScrollback: this.deps.snapshotScrollback,
     });
     const at = this.now().toISOString();
-    const rec = newEntry({ ...plan, id, at, gitBranch, process: proc });
+    // Picked with no await before the set, so creates in flight cannot pick the same name.
+    const name = freeName(plan.name, this.records.values());
+    const rec = newEntry({ ...plan, name, id, at, gitBranch, process: proc });
     this.records.set(id, rec);
     rec.unsubscribe.push(
       proc.onData((chunk) => this.handleData(rec, chunk)),

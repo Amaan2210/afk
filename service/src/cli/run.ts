@@ -64,15 +64,18 @@ function defaultDeps(): RunDeps {
 /**
  * Connects to the local daemon, runs `command`, and closes the connection. Sets the exit code:
  * the one `command` returns, if any (else 0 on success), 2 when no daemon is running, 1 for
- * anything else.
+ * anything else. `precheck` runs first, before the config is read: a command that cannot run
+ * here fails the same way whether or not a daemon is running.
  */
 export async function withDaemon(
   opts: ClientOptions,
   command: (io: CommandIo<DaemonClient>) => Promise<number | void>,
   deps: RunDeps = defaultDeps(),
+  precheck: () => void = () => undefined,
 ): Promise<void> {
   let client: DaemonClient | undefined = undefined;
   try {
+    precheck();
     const port = opts.port ?? (await deps.loadPort(deps.paths));
     client = await deps.connect(deps.paths, port);
     const code = await command({ stdout: deps.stdout, client, port });

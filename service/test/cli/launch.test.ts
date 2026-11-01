@@ -1,8 +1,13 @@
 import { Command, CommanderError } from "commander";
-import { launch, registerLaunchCommands, type LaunchOptions } from "../../src/cli/launch.js";
-import { CliError } from "../../src/cli/run.js";
+import {
+  launch,
+  registerLaunchCommands,
+  runLaunch,
+  type LaunchOptions,
+} from "../../src/cli/launch.js";
+import { CliError, NOT_RUNNING_HINT } from "../../src/cli/run.js";
 import type { SessionKind } from "../../src/protocol/index.js";
-import { FakeClient, fakeTerminal, session } from "../helpers/fake-attach.js";
+import { FakeClient, fakeTerminal, noDaemon, session } from "../helpers/fake-attach.js";
 
 const CHORD = [0x1d, 0x64];
 
@@ -96,6 +101,17 @@ describe("launch", () => {
       CliError,
     );
     expect(client.sent).toEqual([]);
+  });
+
+  it("checks for a terminal before connecting, so no daemon still exits 1 with that reason", async () => {
+    const { deps, err } = noDaemon();
+    const term = fakeTerminal({ isTTY: false });
+    await runLaunch("claude", [], {}, { cwd: "C:\\proj", ...term.io }, deps);
+    expect(deps.setExitCode).toHaveBeenCalledExactlyOnceWith(1);
+    expect(err()).toMatch(/^afk: .*interactive terminal/);
+    expect(err()).not.toContain(NOT_RUNNING_HINT);
+    expect(deps.loadPort).not.toHaveBeenCalled();
+    expect(deps.connect).not.toHaveBeenCalled();
   });
 
   it("stops listening when session.create fails", async () => {

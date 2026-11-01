@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
 import { vi } from "vitest";
 import type { AttachClient, AttachIo } from "../../src/cli/attach.js";
-import type { Frame } from "../../src/cli/client.js";
+import { DaemonNotRunningError, type Frame } from "../../src/cli/client.js";
+import type { RunDeps } from "../../src/cli/run.js";
+import { afkPaths } from "../../src/daemon/paths.js";
 import type { Session } from "../../src/protocol/index.js";
 
 type Msg = Record<string, unknown>;
@@ -161,4 +163,20 @@ export function fakeTerminal(o: { isTTY?: boolean; columns?: number; rows?: numb
     },
   };
   return term;
+}
+
+/** RunDeps for a machine where no daemon is running; records what the command reports. */
+export function noDaemon() {
+  let err = "";
+  const deps: RunDeps = {
+    paths: afkPaths("/cfg"),
+    loadPort: vi.fn(async () => 2350),
+    connect: vi.fn(async () => {
+      throw new DaemonNotRunningError("ECONNREFUSED");
+    }),
+    stdout: { write: () => undefined },
+    stderr: { write: (s) => (err += s) },
+    setExitCode: vi.fn(),
+  };
+  return { deps, err: () => err };
 }

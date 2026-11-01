@@ -89,6 +89,20 @@ export function folderName(cwd: string): string {
   return path.win32.basename(trimmed) || trimmed || cwd;
 }
 
+/**
+ * `wanted`, or the first of `wanted-2`, `wanted-3`, … that no live record other than `self` holds.
+ * Ended sessions keep their names without blocking them.
+ */
+export function freeName(wanted: string, records: Iterable<Entry>, self?: Entry): string {
+  const taken = new Set<string>();
+  for (const r of records) {
+    if (r !== self && r.session.state !== "ended") taken.add(r.session.name);
+  }
+  let name = wanted;
+  for (let n = 2; taken.has(name); n++) name = `${wanted}-${n}`;
+  return name;
+}
+
 type OptionalField = "pending" | "lastMessage" | "exitCode" | "gitBranch";
 
 /** Sets an optional session field, deleting the key when the value is undefined. */

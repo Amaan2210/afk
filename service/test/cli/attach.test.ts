@@ -119,6 +119,31 @@ describe("attach", () => {
     expect(term.text()).toContain("[afk] detached, session s_1 keeps running · afk attach s_1");
   });
 
+  it("quotes a name with whitespace in the attach hint", async () => {
+    const { client, term } = setup("", session({ name: "Naya Repos" }));
+    const done = attach(client, "s_1", term.io);
+    await subscribed(client);
+    term.type(CHORD);
+    await done;
+    expect(term.text()).toContain(
+      '[afk] detached, session Naya Repos keeps running · afk attach "Naya Repos"\r\n',
+    );
+  });
+
+  it("writes no output that arrives before the snapshot, which already holds it", async () => {
+    const { client, term } = setup();
+    client.onRequest = () => ({});
+    const done = attach(client, "s_1", term.io);
+    await subscribed(client);
+    client.push(data("early"));
+    expect(term.text()).toBe("");
+    client.push({ type: "pty.snapshot", sessionId: "s_1", cols: 100, rows: 40, data: b64("snap") });
+    client.push(data("late"));
+    expect(term.text()).toBe(`${CLEAR}snaplate`);
+    term.type(CHORD);
+    await done;
+  });
+
   it("uses the latest name the daemon announced", async () => {
     const { client, term } = setup();
     const done = attach(client, "s_1", term.io);
@@ -156,7 +181,8 @@ describe("attach", () => {
     await subscribed(client);
     client.push({ type: "session.removed", sessionId: "s_1" });
     expect(await done).toBe("ended");
-    expect(term.text()).toContain("[afk] session ended");
+    // No exit code is known: the message shows the 0 the commands exit with.
+    expect(term.text().endsWith(`${NEW_LINE}[afk] session ended (exit 0)\r\n`)).toBe(true);
   });
 
   it("says the connection was lost when the socket closes, and restores the terminal", async () => {
@@ -241,17 +267,23 @@ describe("attach", () => {
   });
 
   describe("terminal modes on the way out", () => {
-    it("shows the cursor and turns off mouse, focus and bracketed-paste reporting", async () => {
+    it("shows the cursor in its default shape and turns off mouse, focus and paste reporting", async () => {
       const { client, term } = setup();
       const done = attach(client, "s_1", term.io);
       await subscribed(client);
-      client.push(data("\x1b[?25l\x1b[?2004h\x1b[?1004h\x1b[?1003h"));
+      client.push(data("\x1b[?25l\x1b[5 q\x1b[?2004h\x1b[?1004h\x1b[?1003h"));
       term.type(CHORD);
       await done;
-      const tail = term.text().slice(term.text().lastIndexOf("\x1b[?2004h") + 8);
-      for (const mode of ["\x1b[?25h", "\x1b[?2004l", "\x1b[?1004l", "\x1b[?1003l", "\x1b[0m"]) {
-        expect(tail).toContain(mode);
-      }
+      const tail = term.text().slice(term.text().lastIndexOf("\x1b[?1003h") + 8);
+      const modes = [
+        "\x1b[?25h",
+        "\x1b[0 q",
+        "\x1b[?2004l",
+        "\x1b[?1004l",
+        "\x1b[?1003l",
+        "\x1b[0m",
+      ];
+      for (const mode of modes) expect(tail).toContain(mode);
     });
 
     it("leaves the alternate screen only when the session's output entered it", async () => {

@@ -201,12 +201,11 @@ class Attachment {
   private message(outcome: AttachOutcome): string {
     const session = this.watch.get(this.sessionId);
     if (outcome === "lost") return "[afk] lost connection to the daemon";
-    if (outcome === "ended") {
-      const code = session?.exitCode;
-      return code === undefined ? "[afk] session ended" : `[afk] session ended (exit ${code})`;
-    }
+    // With no exit code known the command exits 0, and the message says so.
+    if (outcome === "ended") return `[afk] session ended (exit ${session?.exitCode ?? 0})`;
     const name = session?.name || this.sessionId;
-    return `[afk] detached, session ${name} keeps running · afk attach ${name}`;
+    const arg = /\s/.test(name) ? `"${name}"` : name;
+    return `[afk] detached, session ${name} keeps running · afk attach ${arg}`;
   }
 
   /** Hands the terminal back: listeners off, cooked mode, stdin paused, modes reset. */

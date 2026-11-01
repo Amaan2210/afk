@@ -191,8 +191,8 @@ describe("SessionRegistry.create", () => {
     });
     expect(named.name).toBe("mine");
     expect(fake.lastSpawn).toMatchObject({ cols: 80, rows: 24 });
-    expect((await reg.create({ cwd: "D:\\Naya Repos\\p\\", kind: "shell", args: [] })).name).toBe(
-      "p",
+    expect((await reg.create({ cwd: "D:\\Naya Repos\\q\\", kind: "shell", args: [] })).name).toBe(
+      "q",
     );
     expect((await reg.create({ cwd: "C:/Users/amank/", kind: "shell", args: [] })).name).toBe(
       "amank",
@@ -415,6 +415,70 @@ describe("SessionRegistry lifecycle", () => {
     for (const call of calls) expect(call).toThrow(/^not_found:/);
     await expect(reg.resume("s_nope")).rejects.toThrow(/^not_found:/);
     expect(reg.get("s_nope")).toBeUndefined();
+  });
+});
+
+describe("SessionRegistry names", () => {
+  const names = () => reg.list().map((s) => s.name);
+
+  it("gives sessions created in the same folder distinct names, first free suffix", async () => {
+    const first = await reg.create({ cwd: "D:\\Naya Repos\\proj", kind: "shell", args: [] });
+    const second = await reg.create({ cwd: "D:\\Naya Repos\\proj", kind: "claude", args: [] });
+    const third = await reg.create({ cwd: "C:\\other\\proj\\", kind: "shell", args: [] });
+    expect([first.name, second.name, third.name]).toEqual(["proj", "proj-2", "proj-3"]);
+    expect(names()).toEqual(["proj", "proj-2", "proj-3"]);
+  });
+
+  it("applies to explicit names too", async () => {
+    await reg.create({ cwd: "D:\\a", kind: "shell", args: [], name: "auth work" });
+    const again = await reg.create({ cwd: "D:\\b", kind: "shell", args: [], name: "auth work" });
+    expect(again.name).toBe("auth work-2");
+  });
+
+  it("gives two creates in flight at once distinct names", async () => {
+    const [a, b] = await Promise.all([
+      reg.create({ cwd: "D:\\proj", kind: "shell", args: [] }),
+      reg.create({ cwd: "D:\\proj", kind: "shell", args: [] }),
+    ]);
+    expect([a.name, b.name].sort()).toEqual(["proj", "proj-2"]);
+  });
+
+  it("renames onto a taken name with the first free suffix, and to its own name unchanged", async () => {
+    const api = await reg.create({ cwd: "D:\\api", kind: "shell", args: [] });
+    await reg.create({ cwd: "D:\\x", kind: "shell", args: [], name: "api-2" });
+    const web = await reg.create({ cwd: "D:\\web", kind: "shell", args: [] });
+    const { updates } = collect();
+    reg.rename(web.id, "api");
+    expect(reg.get(web.id)!.session.name).toBe("api-3");
+    expect(updates.map((u) => u.name)).toEqual(["api-3"]);
+    reg.rename(api.id, "api");
+    expect(reg.get(api.id)!.session.name).toBe("api");
+  });
+
+  it("lets a name be reused once the session holding it has ended", async () => {
+    const first = await reg.create({ cwd: "D:\\proj", kind: "claude", args: [] });
+    const firstPty = fake;
+    const second = await reg.create({ cwd: "D:\\proj", kind: "shell", args: [] });
+    expect(second.name).toBe("proj-2");
+    firstPty.emitExit(0);
+    expect(reg.get(first.id)!.session).toMatchObject({ name: "proj", state: "ended" });
+    expect((await reg.create({ cwd: "D:\\proj", kind: "shell", args: [] })).name).toBe("proj");
+    // "proj" and "proj-2" are live again; the ended session's "proj" blocks nothing.
+    const other = await reg.create({ cwd: "D:\\other", kind: "shell", args: [] });
+    reg.rename(other.id, "proj");
+    expect(reg.get(other.id)!.session.name).toBe("proj-3");
+  });
+
+  it("a resumed session keeps its name unless a live session took it meanwhile", async () => {
+    const src = await reg.create({ cwd: "D:\\proj", kind: "claude", args: [] });
+    reg.setMeta(src.id, { agentSessionId: "abc" });
+    fake.emitExit(0);
+    expect((await reg.resume(src.id)).name).toBe("proj");
+    const again = await reg.create({ cwd: "D:\\elsewhere", kind: "claude", args: [], name: "x" });
+    reg.setMeta(again.id, { agentSessionId: "def" });
+    fake.emitExit(0);
+    await reg.create({ cwd: "D:\\y", kind: "shell", args: [], name: "x" });
+    expect((await reg.resume(again.id)).name).toBe("x-2");
   });
 });
 

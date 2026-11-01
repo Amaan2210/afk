@@ -97,12 +97,24 @@ in one.
   client too. Reattaching at the same size is exact.
 
 - **B. Ended sessions keep their names for the retention period (24 h).** Following ruling 1
-  literally, an ended session and a live one with the same name make `afk attach <name>`
-  ambiguous. The error lists both, and the id works. The detach hint `afk attach <name>` can
-  also fail in two cases:
-  - the name is shared;
-  - the name has a space, since it is printed unquoted, exactly as the brief gives it.
+  literally, an ended session and a live one with the same name made `afk attach <name>`
+  ambiguous, and the detach hint failed for a shared name or one with a space. Resolved after
+  review; see below.
 - **C. A killed Claude session reports exit 1.** This is the code the daemon recorded.
+
+## Changed after review
+
+- The daemon keeps names unique among live sessions. A create or rename onto a name a live
+  session holds gets the first free `-2`, `-3`, …. Ended sessions keep their names but block
+  nothing.
+- `afk attach <name>` matches running sessions only. An id still finds an ended session, which
+  gets the "has ended" message, exit 1. Row 18's error is now reached only in a race.
+- The detach hint quotes a name with whitespace: `afk attach "Naya Repos"`.
+- A session that ends with no exit code known prints `(exit 0)`, the code the command exits with.
+- Leaving resets the cursor shape with `ESC[0 q`, the terminal's default.
+- The terminal check runs before the daemon is contacted. Without a TTY and without a daemon, the
+  commands print the TTY message and exit 1, not the not-running hint and 2. Checked with the
+  built CLI and stdin redirected from a file.
 
 ## Pending user verification
 
@@ -127,7 +139,10 @@ Each of these needs a person, a real terminal or the phone. Paths assume the rep
       session that tab's size, and the tabs must not resize each other back and forth.
    10. Repeat with `afk claude --port 23998` in a folder Claude trusts, and send one prompt.
        After `Ctrl+]` `d`, the tab must be back to normal: cursor visible, mouse wheel
-       scrolling, no stray escape codes on focus change or paste.
+       scrolling, no stray escape codes on focus change or paste. The cursor should also have
+       the tab's usual shape. Attach writes `ESC[0 q` on the way out, and Windows Terminal maps
+       that to the profile's cursor shape. Check it after a TUI that sets a bar cursor, as
+       Claude's input box may.
    11. Repeat with `afk codex --port 23998`.
 2. **Prompt keys from the phone.** The rows marked UNVERIFIED in `docs/notes/prompt-keystrokes.md`.
    Pair the phone with `afk pair`.

@@ -96,6 +96,26 @@ describe("withDaemon", () => {
     expect(s.close).toHaveBeenCalledOnce();
   });
 
+  it("runs the precheck before reading the port; a failing one never connects", async () => {
+    const s = setup(async () => {
+      throw new DaemonNotRunningError("ECONNREFUSED");
+    });
+    const command = vi.fn(async () => undefined);
+    const precheck = () => {
+      throw new CliError("needs a terminal", 3);
+    };
+    await withDaemon({}, command, s.deps, precheck);
+    expect(s.exit).toHaveBeenCalledExactlyOnceWith(3);
+    expect(s.err()).toBe("afk: needs a terminal\n");
+    expect(s.loadPort).not.toHaveBeenCalled();
+    expect(s.connect).not.toHaveBeenCalled();
+    expect(command).not.toHaveBeenCalled();
+
+    const ok = setup();
+    await withDaemon({}, command, ok.deps, () => undefined);
+    expect(command).toHaveBeenCalledOnce();
+  });
+
   it("exits 1 for any other error from the command", async () => {
     const s = setup();
     await withDaemon({}, async () => Promise.reject(new Error("boom")), s.deps);

@@ -1,6 +1,6 @@
-import { resolveSession, runAttach } from "../../src/cli/attach-cmd.js";
-import { CliError } from "../../src/cli/run.js";
-import { FakeClient, fakeTerminal, session } from "../helpers/fake-attach.js";
+import { resolveSession, runAttach, runAttachCommand } from "../../src/cli/attach-cmd.js";
+import { CliError, NOT_RUNNING_HINT } from "../../src/cli/run.js";
+import { FakeClient, fakeTerminal, noDaemon, session } from "../helpers/fake-attach.js";
 
 const CHORD = [0x1d, 0x64];
 
@@ -29,11 +29,9 @@ describe("resolveSession", () => {
 
   it("names no match and points at afk ls", () => {
     expect(() => resolveSession("nope", [live])).toThrow(/no session "nope".*afk ls/s);
-    try {
-      resolveSession("nope", []);
-    } catch (err) {
-      expect(err).toMatchObject({ code: 1 });
-    }
+    expect(() => resolveSession("nope", [])).toThrow(
+      expect.objectContaining({ name: "CliError", code: 1 }),
+    );
   });
 
   it("lists every session a shared name matches, with id, name and state", () => {
@@ -53,10 +51,27 @@ describe("resolveSession", () => {
     expect(message).toContain("afk attach <id>");
   });
 
-  it("refuses an ended session with a clear message", () => {
+  it("refuses an ended session given by id with a clear message", () => {
     const ended = session({ id: "s_4", name: "old", state: "ended", exitCode: 2 });
-    expect(() => resolveSession("old", [ended])).toThrow(/session old has ended \(exit 2\)/);
-    expect(() => resolveSession("s_4", [ended])).toThrow(CliError);
+    expect(() => resolveSession("s_4", [ended])).toThrow(/session old has ended \(exit 2\)/);
+    expect(() => resolveSession("s_4", [ended])).toThrow(
+      expect.objectContaining({ name: "CliError", code: 1 }),
+    );
+  });
+
+  it("matches names among live sessions only", () => {
+    const ended = session({ id: "s_4", name: "api", state: "ended", exitCode: 0 });
+    expect(resolveSession("api", [ended, live])).toBe(live);
+  });
+
+  it("says when the only sessions with that name have ended", () => {
+    const ended = session({ id: "s_4", name: "old", state: "ended", exitCode: 2 });
+    expect(() => resolveSession("old", [ended])).toThrow(
+      /no running session "old".*ended.*afk ls/s,
+    );
+    expect(() => resolveSession("old", [ended])).toThrow(
+      expect.objectContaining({ name: "CliError", code: 1 }),
+    );
   });
 });
 
@@ -109,6 +124,17 @@ describe("runAttach", () => {
     await vi.waitFor(() => expect(client.ofType("pty.subscribe")).toHaveLength(1));
     term.type(CHORD);
     expect(await code).toBe(0);
+  });
+
+  it("checks for a terminal before connecting, so no daemon still exits 1 with that reason", async () => {
+    const { deps, err } = noDaemon();
+    const term = fakeTerminal({ isTTY: false });
+    await runAttachCommand("api", {}, term.io, deps);
+    expect(deps.setExitCode).toHaveBeenCalledExactlyOnceWith(1);
+    expect(err()).toMatch(/^afk: .*interactive terminal/);
+    expect(err()).not.toContain(NOT_RUNNING_HINT);
+    expect(deps.loadPort).not.toHaveBeenCalled();
+    expect(deps.connect).not.toHaveBeenCalled();
   });
 
   it("refuses an unknown session without subscribing", async () => {

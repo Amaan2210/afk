@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { SessionKind } from "../protocol/index.js";
 import { attach, exitCodeFor, requireTty, type AttachClient, type AttachIo } from "./attach.js";
-import { parsePortOption, withDaemon, type ClientOptions } from "./run.js";
+import { parsePortOption, withDaemon, type ClientOptions, type RunDeps } from "./run.js";
 import { SessionWatch } from "./session-watch.js";
 
 export interface LaunchIo extends AttachIo {
@@ -41,16 +41,21 @@ export async function launch(kind: SessionKind, args: string[], io: LaunchIo): P
   }
 }
 
-function runLaunch(kind: SessionKind, args: string[], opts: LaunchOptions): Promise<void> {
-  return withDaemon(opts, ({ client }) =>
-    launch(kind, args, {
-      cwd: process.cwd(),
-      client,
-      name: opts.name,
-      stdin: process.stdin,
-      stdout: process.stdout,
-    }),
-  );
+/** `afk claude|codex|shell`; refuses without a terminal before connecting. */
+export function runLaunch(
+  kind: SessionKind,
+  args: string[],
+  opts: LaunchOptions,
+  io: Omit<LaunchIo, "client" | "name"> = {
+    cwd: process.cwd(),
+    stdin: process.stdin,
+    stdout: process.stdout,
+  },
+  deps?: RunDeps,
+): Promise<void> {
+  const command = ({ client }: { client: AttachClient }) =>
+    launch(kind, args, { ...io, client, name: opts.name });
+  return withDaemon(opts, command, deps, () => requireTty(io.stdin));
 }
 
 function launcher(program: Command, name: string, description: string): Command {
