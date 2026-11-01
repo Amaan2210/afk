@@ -4,12 +4,11 @@ import { get } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { Command } from "commander";
 import { loadConfig } from "../daemon/config.js";
 import { readPid } from "../daemon/lock.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "../daemon/paths.js";
 import { CLI_ENTRY } from "../util/cli-entry.js";
-import { parsePortOption, type Output } from "./run.js";
+import type { Output } from "./run.js";
 import {
   currentUserId,
   isAccessDenied,
@@ -262,33 +261,5 @@ export async function runService(action: ServiceAction, io: ServiceIo): Promise<
       return stop(s);
     case "status":
       return status(s);
-  }
-}
-
-const ACTIONS: [ServiceAction, string][] = [
-  ["install", "create the scheduled task that runs the daemon from logon, and start it"],
-  ["uninstall", "stop the daemon and remove the scheduled task; this ends every session"],
-  ["start", "start the daemon from the scheduled task"],
-  ["stop", "stop the daemon the scheduled task runs; this ends every session"],
-  ["status", "print whether the scheduled task's daemon is running"],
-];
-
-export function registerServiceCommand(program: Command): void {
-  const service = program
-    .command("service")
-    .description("run the daemon in the background from logon (a Windows scheduled task)");
-  for (const [action, description] of ACTIONS) {
-    const command = service.command(action).description(description);
-    if (action !== "status") {
-      command.option(
-        "--port <n>",
-        "the port to check for a running daemon (default: the configured one)",
-        parsePortOption,
-      );
-    }
-    command.action(async (opts: { port?: number }) => {
-      const io = { exec: execProgram, stdout: process.stdout, port: opts.port };
-      process.exitCode = await runService(action, io);
-    });
   }
 }

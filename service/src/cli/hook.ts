@@ -13,7 +13,8 @@ export interface HookIo {
 /**
  * The relay's whole run must stay under 2 s, the most an agent should wait on a hook. Reading
  * stdin takes at most STDIN_CAP_MS (1 s) and the post at most POST_TIMEOUT_MS (0.7 s), which
- * leaves 0.3 s for node and the CLI to start. A post that times out has usually been delivered:
+ * leaves 0.3 s for node and the CLI to start: `afk --version` measured about 0.21 s, with the
+ * commands loaded lazily (src/cli/program.ts). A post that times out has usually been delivered:
  * the daemon answers after it has applied the hook.
  */
 const POST_TIMEOUT_MS = 700;

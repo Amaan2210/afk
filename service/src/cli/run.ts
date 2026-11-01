@@ -1,7 +1,8 @@
-import { InvalidArgumentError } from "commander";
 import { loadConfig } from "../daemon/config.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "../daemon/paths.js";
 import { DaemonClient, DaemonNotRunningError, type CommandClient } from "./client.js";
+
+export { parsePortOption } from "./options.js";
 
 /** A failure to report on stderr and exit with `code`. */
 export class CliError extends Error {
@@ -32,14 +33,6 @@ export interface ClientOptions {
 export const EXIT_NOT_RUNNING = 2;
 export const NOT_RUNNING_HINT =
   "Run `afk service install` to keep it running in the background, or `afk daemon` to run it in this window.";
-
-export function parsePortOption(value: string): number {
-  const port = Number(value);
-  if (!/^\d+$/.test(value) || port < 1 || port > 65_535) {
-    throw new InvalidArgumentError("Expected a port number from 1 to 65535.");
-  }
-  return port;
-}
 
 export interface RunDeps {
   paths: AfkPaths;

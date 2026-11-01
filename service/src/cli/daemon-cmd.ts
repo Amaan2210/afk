@@ -1,8 +1,9 @@
-import { InvalidArgumentError, Option, type Command } from "commander";
 import { startDaemon, type Daemon, type DaemonOptions } from "../daemon/index.js";
 import { VERSION } from "../version.js";
 
-interface DaemonCommandOptions {
+export { parsePort } from "./options.js";
+
+export interface DaemonCommandOptions {
   verbose?: boolean;
   port?: number;
   /** Stop once the parent process has exited (the scheduled task's PowerShell). */
@@ -47,14 +48,6 @@ const defaultDeps: DaemonCommandDeps = {
 
 /** Ctrl+C, Ctrl+Break, a service stop, and closing the console window (SIGHUP on Windows). */
 const STOP_SIGNALS = ["SIGINT", "SIGBREAK", "SIGTERM", "SIGHUP"];
-
-export function parsePort(value: string): number {
-  const port = Number(value);
-  if (!/^\d+$/.test(value) || port > 65_535) {
-    throw new InvalidArgumentError("Expected a port number from 0 to 65535.");
-  }
-  return port;
-}
 
 function hostPort(address: string, port: number): string {
   return address.includes(":") ? `[${address}]:${port}` : `${address}:${port}`;
@@ -129,15 +122,4 @@ export async function runDaemon(
   const where = daemon.addresses.map((a) => hostPort(a, daemon.port)).join(", ");
   deps.print(`afk daemon ${VERSION} listening on ${where}`);
   if (daemon.warning !== undefined) deps.print(`warning: ${daemon.warning}`);
-}
-
-export function registerDaemonCommand(program: Command): void {
-  program
-    .command("daemon")
-    .description("run the AFK daemon in the foreground; stopping it ends every session")
-    .option("--verbose", "log at debug level, to stdout as well as to the log file")
-    .option("--port <n>", "listen on this port instead of the configured one", parsePort)
-    // For the scheduled task (afk service), whose PowerShell is the parent.
-    .addOption(new Option("--exit-with-parent", "stop when the parent process exits").hideHelp())
-    .action((opts: DaemonCommandOptions) => runDaemon(opts));
 }

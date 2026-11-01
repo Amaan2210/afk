@@ -1,7 +1,6 @@
-import type { Command } from "commander";
 import type { Session } from "../protocol/index.js";
 import { attach, exitCodeFor, requireTty, type AttachClient, type AttachIo } from "./attach.js";
-import { CliError, parsePortOption, withDaemon, type ClientOptions, type RunDeps } from "./run.js";
+import { CliError, withDaemon, type ClientOptions, type RunDeps } from "./run.js";
 import { SessionWatch } from "./session-watch.js";
 
 /**
@@ -66,13 +65,4 @@ export function runAttachCommand(
 ): Promise<void> {
   const command = ({ client }: { client: AttachClient }) => runAttach(target, client, io);
   return withDaemon(opts, command, deps, () => requireTty(io.stdin));
-}
-
-export function registerAttachCommand(program: Command): void {
-  program
-    .command("attach")
-    .description("attach this window to a running session (detach: Ctrl+] then d)")
-    .argument("<session>", "the session's id or name, as shown by `afk ls`")
-    .option("--port <n>", "the daemon port (default: the configured one)", parsePortOption)
-    .action((target: string, opts: ClientOptions) => runAttachCommand(target, opts));
 }

@@ -1,33 +1,8 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import { registerAttachCommand } from "./cli/attach-cmd.js";
-import { registerDaemonCommand } from "./cli/daemon-cmd.js";
-import { registerDevicesCommands } from "./cli/devices.js";
-import { registerKillCommand } from "./cli/kill.js";
-import { registerLaunchCommands } from "./cli/launch.js";
-import { registerLsCommand } from "./cli/ls.js";
-import { registerPairCommand } from "./cli/pair.js";
-import { registerRelayCommands } from "./cli/relay-cmd.js";
-import { registerServiceCommand } from "./cli/service.js";
-import { VERSION } from "./version.js";
-
-const program = new Command("afk")
-  .description("Remote control for Claude Code and Codex sessions on this machine")
-  .version(VERSION)
-  .enablePositionalOptions();
-
-registerDaemonCommand(program);
-registerLaunchCommands(program);
-registerAttachCommand(program);
-registerLsCommand(program);
-registerKillCommand(program);
-registerPairCommand(program);
-registerDevicesCommands(program);
-registerServiceCommand(program);
-registerRelayCommands(program);
+import { buildProgram } from "./cli/program.js";
 
 try {
-  await program.parseAsync();
+  await buildProgram().parseAsync();
 } catch (err) {
   process.stderr.write(`afk: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exitCode = 1;

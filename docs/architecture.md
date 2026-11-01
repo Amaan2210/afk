@@ -111,7 +111,10 @@ directory listing).
 
 ## CLI: `cli.ts`, `cli/`
 
-`cli.ts` registers the commands with commander. `run.ts`'s `withDaemon` is how every client command
+`cli.ts` runs the program `program.ts` builds: every command's name, arguments and options, wired
+to commander. Each action imports its implementation only when it runs, so `afk --version` and the
+relays every agent hook starts load neither the daemon nor its client (about 0.2 s instead of
+0.5 s and more). `run.ts`'s `withDaemon` is how every client command
 connects: it reads the port from the config, connects with the local token (`client.ts`), runs the
 command and sets the exit code (2 when no daemon runs). `launch.ts` creates a session and attaches;
 `attach.ts` puts the window in raw mode, forwards keys and resizes, and renders output, with

@@ -1,13 +1,6 @@
 import { createInterface } from "node:readline/promises";
-import type { Command } from "commander";
 import { pairPayload, renderQr } from "./format.js";
-import {
-  CliError,
-  parsePortOption,
-  withDaemon,
-  type ClientOptions,
-  type CommandIo,
-} from "./run.js";
+import { CliError, type ClientOptions, type CommandIo } from "./run.js";
 
 const DEFAULT_NAME = "device";
 
@@ -55,15 +48,4 @@ export async function runPair(opts: PairOptions, io: PairIo): Promise<void> {
   stdout.write(`${renderQr(payload)}\n`);
   stdout.write(`${JSON.stringify(payload)}\n`);
   stdout.write("Scan the QR code in the AFK app. The token is shown only this once.\n");
-}
-
-export function registerPairCommand(program: Command): void {
-  program
-    .command("pair")
-    .description("pair a phone: shows a QR code for the AFK app to scan")
-    .option("--name <name>", "the phone name (asked for if omitted)")
-    .option("--port <n>", "the daemon port (default: the configured one)", parsePortOption)
-    .action((opts: PairOptions) =>
-      withDaemon(opts, (io) => runPair(opts, { ...io, promptName: promptNameOnTty })),
-    );
 }

@@ -1,7 +1,6 @@
-import type { Command } from "commander";
 import type { SessionKind } from "../protocol/index.js";
 import { attach, exitCodeFor, requireTty, type AttachClient, type AttachIo } from "./attach.js";
-import { parsePortOption, withDaemon, type ClientOptions, type RunDeps } from "./run.js";
+import { withDaemon, type ClientOptions, type RunDeps } from "./run.js";
 import { SessionWatch } from "./session-watch.js";
 
 export interface LaunchIo extends AttachIo {
@@ -56,33 +55,4 @@ export function runLaunch(
   const command = ({ client }: { client: AttachClient }) =>
     launch(kind, args, { ...io, client, name: opts.name });
   return withDaemon(opts, command, deps, () => requireTty(io.stdin));
-}
-
-function launcher(program: Command, name: string, description: string): Command {
-  return program
-    .command(name)
-    .description(description)
-    .option("--name <name>", "the session's name (default: the folder's name)")
-    .option("--port <n>", "the daemon port (default: the configured one)", parsePortOption);
-}
-
-/**
- * `afk claude` and `afk codex` pass every argument after their own options to the agent
- * untouched; `--name` and `--port` count only before the first agent argument. `afk shell` runs
- * no agent and takes no arguments.
- */
-export function registerLaunchCommands(program: Command, run: LaunchRunner = runLaunch): void {
-  for (const agent of ["claude", "codex"] as const) {
-    launcher(program, agent, `start ${agent} in a new session in this folder and attach to it`)
-      .argument(
-        "[args...]",
-        `${agent}'s own arguments, passed untouched; afk's options go first, and -- passes -h on`,
-      )
-      .allowUnknownOption()
-      .passThroughOptions()
-      .action((args: string[], opts: LaunchOptions) => run(agent, args, opts));
-  }
-  launcher(program, "shell", "start a shell session in this folder and attach to it").action(
-    (opts: LaunchOptions) => run("shell", [], opts),
-  );
 }

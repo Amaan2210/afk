@@ -1,9 +1,8 @@
-/// <reference types="vite/client" />
 import { readFileSync } from "node:fs";
-import { Command } from "commander";
+import type { Command } from "commander";
 import { describe, expect, it } from "vitest";
+import { buildProgram } from "../../src/cli/program.js";
 
-const modules = import.meta.glob<Record<string, (p: Command) => void>>("../../src/cli/*.ts");
 const readme = readFileSync("../README.md", "utf8");
 
 describe("README", () => {
@@ -24,18 +23,9 @@ describe("README", () => {
     }
   });
 
-  it("documents every visible subcommand registered in src/cli.ts", async () => {
-    // Read the registrations from the entry point, so a new command cannot be left out.
-    const entry = readFileSync("src/cli.ts", "utf8");
-    const imports = [...entry.matchAll(/import \{ (register\w+) \} from "\.\/(.+?)\.js"/g)];
-    expect(imports.length).toBeGreaterThan(5);
-
-    const program = new Command("afk").enablePositionalOptions();
-    for (const [, fn, module] of imports) {
-      const load = modules[`../../src/${module}.ts`];
-      expect(load, `${module} exists`).toBeDefined();
-      (await load?.())?.[fn as string]?.(program);
-    }
+  it("documents every visible subcommand of the afk program", () => {
+    // The program src/cli.ts runs, so a new command cannot be left out.
+    const program = buildProgram();
 
     // The implicit `help` command is commander's, not ours.
     const help = program.createHelp();

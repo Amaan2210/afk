@@ -1,10 +1,6 @@
 import { Command, CommanderError } from "commander";
-import {
-  launch,
-  registerLaunchCommands,
-  runLaunch,
-  type LaunchOptions,
-} from "../../src/cli/launch.js";
+import { launch, runLaunch, type LaunchOptions } from "../../src/cli/launch.js";
+import { registerLaunchCommands } from "../../src/cli/program.js";
 import { CliError, NOT_RUNNING_HINT } from "../../src/cli/run.js";
 import type { SessionKind } from "../../src/protocol/index.js";
 import { FakeClient, fakeTerminal, noDaemon, session } from "../helpers/fake-attach.js";
