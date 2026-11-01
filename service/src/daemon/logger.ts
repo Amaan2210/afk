@@ -75,9 +75,14 @@ export async function pruneLogs(logDir: string, now: Date = new Date()): Promise
   for (const name of names) {
     if (!LOG_FILE.test(name) || name === today) continue;
     const file = path.join(logDir, name);
-    if ((await stat(file)).mtimeMs >= cutoff) continue;
-    await rm(file, { force: true });
-    deleted.push(name);
+    try {
+      if ((await stat(file)).mtimeMs >= cutoff) continue;
+      await rm(file, { force: true });
+      deleted.push(name);
+    } catch {
+      // A file that cannot be inspected or removed (locked, or a folder named like a log) is
+      // skipped so the rest of the pass still runs.
+    }
   }
   return deleted;
 }

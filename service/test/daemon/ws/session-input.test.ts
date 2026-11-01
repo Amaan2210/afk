@@ -17,6 +17,7 @@ const REMOTE = [
   "\\\\.\\pipe\\afk",
   "\\\\?\\C:\\app",
   "//server/share",
+  "/\\server\\share",
   "\\app",
 ];
 

@@ -90,6 +90,26 @@ describe("pruneLogs", () => {
     }
   });
 
+  it("skips an entry it cannot remove and still prunes the rest", async () => {
+    const root = mkdtempSync(join(tmpdir(), "afk-log-prune-"));
+    const logDir = join(root, "logs");
+    try {
+      await mkdir(logDir);
+      // A folder named like an old log: stat works, but rm without recursive refuses it.
+      const folder = join(logDir, "afk-2026-09-01.log");
+      await mkdir(folder);
+      const file = join(logDir, "afk-2026-09-02.log");
+      await writeFile(file, "");
+      const t = new Date(now.getTime() - 60 * DAY);
+      await utimes(folder, t, t);
+      await utimes(file, t, t);
+      expect(await pruneLogs(logDir, now)).toEqual(["afk-2026-09-02.log"]);
+      expect(await readdir(logDir)).toEqual(["afk-2026-09-01.log"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("does nothing when the folder is missing", async () => {
     expect(await pruneLogs(join(tmpdir(), "afk-no-such-logs"), now)).toEqual([]);
   });

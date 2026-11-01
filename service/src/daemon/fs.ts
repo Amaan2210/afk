@@ -9,8 +9,11 @@ export interface DirListing {
   recent: string[];
 }
 
-/** UNC and device paths (`\\server\share`, `//server/share`, `\\.\pipe`, `\\?\`) and rooted `\dir`. */
-const NOT_LOCAL = /^(?:\\|\/\/)/;
+/**
+ * UNC and device paths (`\\server\share`, `//server/share`, `/\server\share`, `\\.\pipe`, `\\?\`)
+ * and rooted `\dir`.
+ */
+const NOT_LOCAL = /^(?:\\|\/[\\/])/;
 
 /**
  * Throws a `bad_request:` error unless `p` is an absolute path on a local drive (or under `/`). A
