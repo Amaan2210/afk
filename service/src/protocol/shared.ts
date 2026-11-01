@@ -15,6 +15,7 @@ export const ErrorCodeSchema = z.enum([
   "bad_request",
   "not_found",
   "session_ended",
+  "pending_changed",
   "internal",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;

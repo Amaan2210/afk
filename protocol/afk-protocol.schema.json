@@ -560,6 +560,7 @@
                 "bad_request",
                 "not_found",
                 "session_ended",
+                "pending_changed",
                 "internal"
               ]
             },

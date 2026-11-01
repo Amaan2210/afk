@@ -83,7 +83,11 @@ export const ptyHandlers: Pick<HandlerMap, PtyType> = {
     resize(ctx, conn, liveSessionOf(ctx, msg.sessionId), msg.cols, msg.rows);
   },
 
-  /** Types the answer's chunks with a pause between them, for the prompt to re-render. */
+  /**
+   * Types the answer's chunks with a pause between them, for the prompt to re-render. Each chunk
+   * after the first is typed only while the same pending is still shown: if the agent moved on
+   * during the pause, the rest would land in whatever it shows now.
+   */
   async "pending.answer"(conn, msg, ctx) {
     const { sessionId, pendingId, choiceIndices, text, decision } = msg;
     const { session } = liveSessionOf(ctx, sessionId);
@@ -95,7 +99,12 @@ export const ptyHandlers: Pick<HandlerMap, PtyType> = {
     }
     for (const [i, chunk] of chunks.entries()) {
       if (i > 0) await sleep(ctx.answerChunkDelayMs);
-      liveSessionOf(ctx, sessionId);
+      if (liveSessionOf(ctx, sessionId).session.pending?.id !== pendingId) {
+        throw new WsError(
+          "pending_changed",
+          `pending ${pendingId} changed while its answer was typed; the rest was not typed`,
+        );
+      }
       ctx.deps.registry.input(sessionId, chunk);
     }
     conn.ack(msg.id);

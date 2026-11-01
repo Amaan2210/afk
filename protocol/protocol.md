@@ -120,7 +120,7 @@ interface DaemonSettings {
 
 Session names (`session.create` `name`, `session.rename` `name`) are trimmed and capped at 64 characters; a name with a control character is a `bad_request`. A blank name on `session.create` means the folder's name; on `session.rename` it is a `bad_request`.
 
-`pending.answer` semantics: the daemon translates the answer into the keystrokes the agent's prompt expects, then clears `pending` when the agent confirms (hook or transcript) or after the next output. `text` without `choiceIndices` means a free-text answer typed into the composer.
+`pending.answer` semantics: the daemon translates the answer into the keystrokes the agent's prompt expects, then clears `pending` when the agent confirms (hook or transcript) or after the next output. `text` without `choiceIndices` means a free-text answer typed into the composer. Some answers are typed in several chunks with a short pause between them; if the session's `pending` changes (or clears) during a pause, the daemon types nothing more and replies `pending_changed`: part of the answer may have reached the prompt, so the client should show the session's current state rather than retry.
 
 ## Daemon → client
 
@@ -143,7 +143,7 @@ Session names (`session.create` `name`, `session.rename` `name`) are trimmed and
 | `notify` | `event: "needs_input"\|"finished"\|"subagent_finished"`, `sessionId`, `sessionName`, `title`, `body`, `pending?` |
 | `fs.dirs` | `id`, `path?`, `parent?`, `dirs: {name,path}[]`, `recent: string[]` |
 
-Error codes: `unauthorized`, `protocol_mismatch`, `bad_request`, `not_found`, `session_ended`, `internal`.
+Error codes: `unauthorized`, `protocol_mismatch`, `bad_request`, `not_found`, `session_ended`, `pending_changed`, `internal`.
 
 ## Loopback HTTP (relays)
 
