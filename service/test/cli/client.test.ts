@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WebSocketServer } from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 import { DaemonClient, DaemonError, DaemonNotRunningError } from "../../src/cli/client.js";
 import { startDaemon, type Daemon } from "../../src/daemon/index.js";
 import { afkPaths, type AfkPaths } from "../../src/daemon/paths.js";
@@ -89,12 +89,20 @@ describe("DaemonClient.connectLocal", () => {
 
   it("gives up when no hello arrives in time", async () => {
     const dir = await configDir();
-    const daemon = await startOn(dir); // creates the local token
-    const port = await fakeServer(() => undefined);
+    await startOn(dir); // creates the local token
+    let serverSide: WebSocket | undefined;
+    const port = await fakeServer((ws) => (serverSide = ws));
     await expect(DaemonClient.connectLocal(afkPaths(dir), port, 50)).rejects.toThrow(
       /did not answer/,
     );
-    expect(daemon.port).toBeGreaterThan(0);
+    await vi.waitFor(() => expect(serverSide?.readyState).toBe(WebSocket.CLOSED));
+  });
+
+  it("rejects on a malformed frame before hello", async () => {
+    const dir = await configDir();
+    await startOn(dir);
+    const port = await fakeServer((ws) => ws.send("not json"));
+    await expect(DaemonClient.connectLocal(afkPaths(dir), port)).rejects.toThrow(/malformed/);
   });
 });
 
@@ -127,6 +135,45 @@ describe("DaemonClient.request", () => {
     const client = await connect(afkPaths(dir), port);
     await expect(client.request({ type: "device.list" })).rejects.toThrow(/closed/);
     await expect(client.request({ type: "device.list" })).rejects.toThrow(/closed/);
+  });
+});
+
+describe("DaemonClient.sessions", () => {
+  it("rejects when the daemon closes before the snapshot", async () => {
+    const dir = await configDir();
+    await startOn(dir);
+    const port = await fakeServer((ws) => {
+      ws.send(JSON.stringify({ type: "hello" }));
+      setTimeout(() => ws.close(), 20);
+    });
+    const client = await connect(afkPaths(dir), port);
+    await expect(client.sessions()).rejects.toThrow(/closed/);
+  });
+
+  it("ignores a malformed frame after hello", async () => {
+    const dir = await configDir();
+    await startOn(dir);
+    const port = await fakeServer((ws) => {
+      ws.send(JSON.stringify({ type: "hello" }));
+      ws.send("{oops");
+      ws.send(JSON.stringify({ type: "sessions.snapshot", sessions: [] }));
+    });
+    const client = await connect(afkPaths(dir), port);
+    expect(await client.sessions()).toEqual([]);
+  });
+});
+
+describe("DaemonClient.send failure", () => {
+  it("rejects the request and keeps no waiting entry", async () => {
+    const dir = await configDir();
+    await startOn(dir);
+    const port = await fakeServer((ws) => ws.send(JSON.stringify({ type: "hello" })));
+    const client = await connect(afkPaths(dir), port);
+    vi.spyOn(client, "send").mockImplementation(() => {
+      throw new Error("boom");
+    });
+    await expect(client.request({ type: "device.list" })).rejects.toThrow("boom");
+    expect((client as unknown as { waiting: Map<string, unknown> }).waiting.size).toBe(0);
   });
 });
 

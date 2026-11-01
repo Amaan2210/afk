@@ -1,6 +1,6 @@
 import { InvalidArgumentError } from "commander";
 import { loadConfig } from "../daemon/config.js";
-import { afkPaths, defaultConfigDir } from "../daemon/paths.js";
+import { afkPaths, defaultConfigDir, type AfkPaths } from "../daemon/paths.js";
 import { DaemonClient, DaemonNotRunningError, type CommandClient } from "./client.js";
 
 /** A failure to report on stderr and exit with `code`. */
@@ -41,6 +41,26 @@ export function parsePortOption(value: string): number {
   return port;
 }
 
+export interface RunDeps {
+  paths: AfkPaths;
+  loadPort: (paths: AfkPaths) => Promise<number>;
+  connect: (paths: AfkPaths, port: number) => Promise<DaemonClient>;
+  stdout: Output;
+  stderr: Output;
+  setExitCode: (code: number) => void;
+}
+
+function defaultDeps(): RunDeps {
+  return {
+    paths: afkPaths(defaultConfigDir()),
+    loadPort: async (paths) => (await loadConfig(paths)).port,
+    connect: (paths, port) => DaemonClient.connectLocal(paths, port),
+    stdout: process.stdout,
+    stderr: process.stderr,
+    setExitCode: (code) => void (process.exitCode = code),
+  };
+}
+
 /**
  * Connects to the local daemon, runs `command`, and closes the connection. Sets the exit code:
  * 0 on success, 2 when no daemon is running, 1 for anything else.
@@ -48,21 +68,21 @@ export function parsePortOption(value: string): number {
 export async function withDaemon(
   opts: ClientOptions,
   command: (io: CommandIo) => Promise<void>,
+  deps: RunDeps = defaultDeps(),
 ): Promise<void> {
-  const paths = afkPaths(defaultConfigDir());
   let client: DaemonClient | undefined = undefined;
   try {
-    const port = opts.port ?? (await loadConfig(paths)).port;
-    client = await DaemonClient.connectLocal(paths, port);
-    await command({ stdout: process.stdout, client, port });
+    const port = opts.port ?? (await deps.loadPort(deps.paths));
+    client = await deps.connect(deps.paths, port);
+    await command({ stdout: deps.stdout, client, port });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof DaemonNotRunningError) {
-      process.stderr.write(`afk: ${message}\n${NOT_RUNNING_HINT}\n`);
-      process.exitCode = EXIT_NOT_RUNNING;
+      deps.stderr.write(`afk: ${message}\n${NOT_RUNNING_HINT}\n`);
+      deps.setExitCode(EXIT_NOT_RUNNING);
     } else {
-      process.stderr.write(`afk: ${message}\n`);
-      process.exitCode = err instanceof CliError ? err.code : 1;
+      deps.stderr.write(`afk: ${message}\n`);
+      deps.setExitCode(err instanceof CliError ? err.code : 1);
     }
   } finally {
     client?.close();

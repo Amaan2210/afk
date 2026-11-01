@@ -47,10 +47,17 @@ export class DaemonClient implements CommandClient {
   private readonly waiting = new Map<string, Waiting>();
   private readonly listeners = new Map<string, Set<(m: Frame) => void>>();
   private gotSnapshot: (sessions: Session[]) => void = () => undefined;
-  private readonly firstSnapshot = new Promise<Session[]>((r) => (this.gotSnapshot = r));
+  private noSnapshot: (err: Error) => void = () => undefined;
+  private readonly firstSnapshot = new Promise<Session[]>((resolve, reject) => {
+    this.gotSnapshot = resolve;
+    this.noSnapshot = reject;
+  });
   private closed = false;
 
-  private constructor(private readonly ws: WebSocket) {}
+  private constructor(private readonly ws: WebSocket) {
+    // Whoever calls sessions() sees a rejection; one that never asks must not crash the process.
+    this.firstSnapshot.catch(() => undefined);
+  }
 
   /** Resolves once the daemon has said hello; rejects if it does not within 5 s. */
   static async connectLocal(
@@ -100,7 +107,14 @@ export class DaemonClient implements CommandClient {
         fail(new Error(CLOSED));
       });
       ws.on("message", (data) => {
-        const frame = JSON.parse(String(data)) as Frame;
+        let frame: Frame;
+        try {
+          frame = JSON.parse(String(data)) as Frame;
+        } catch {
+          // Before hello the daemon is not speaking our protocol; after, one bad frame is skipped.
+          if (this.helloFrame === undefined) fail(new Error("The daemon sent a malformed frame."));
+          return;
+        }
         if (this.helloFrame !== undefined) return this.dispatch(frame);
         if (frame.type === "hello") {
           this.helloFrame = frame as unknown as Hello;
@@ -131,6 +145,7 @@ export class DaemonClient implements CommandClient {
     this.closed = true;
     for (const waiting of this.waiting.values()) waiting.reject(new Error(CLOSED));
     this.waiting.clear();
+    this.noSnapshot(new Error(CLOSED));
   }
 
   get hello(): Hello {
@@ -149,7 +164,12 @@ export class DaemonClient implements CommandClient {
     const id = randomUUID();
     return new Promise<T>((resolve, reject) => {
       this.waiting.set(id, { resolve: (f) => resolve(f as T), reject });
-      this.send({ ...msg, id });
+      try {
+        this.send({ ...msg, id });
+      } catch (err) {
+        this.waiting.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
