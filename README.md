@@ -149,6 +149,9 @@ nothing loops.
   script, which Windows cannot start that way.
 - Some prompt keystrokes are not yet verified from the phone: the Codex approval keys and a few
   Claude keys. See [docs/notes/prompt-keystrokes.md](docs/notes/prompt-keystrokes.md).
+- The detach chord is fixed to `Ctrl+]` then `d` (making it configurable is planned). The session
+  shows it in a banner when its shell starts, which scrolls away; detaching prints the
+  `afk attach` command to come back.
 - Reattaching at a different window size can redraw imperfectly until the session next paints.
 - `npm run dev` in `service/` needs `npm run build` first, because sessions call `dist/cli.js`.
 

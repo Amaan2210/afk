@@ -22,7 +22,13 @@ The contract between the laptop daemon (`afk daemon`) and its clients: the Andro
    ```
 3. Any frame before a successful `auth`, a bad token, or a protocol mismatch closes the socket with an `error` (`unauthorized` / `protocol_mismatch`).
 
-Device tokens come from `afk pair`. The CLI uses a local token stored in the daemon config, readable only by the user.
+Device tokens come from `afk pair`, which shows a QR code holding this JSON (no whitespace):
+
+```json
+{"afk":1,"host":"100.84.12.9","port":2350,"token":"<device token>"}
+```
+
+`afk` is the payload's format version. `host` is the daemon's Tailscale IPv4 address (in 100.64.0.0/10), the one `hello` reports as `tailscaleIp`; `afk pair` refuses while the daemon has none. `port` is the daemon's port and `token` the new device's token, shown only this once. The CLI uses a local token stored in the daemon config, readable only by the user.
 
 ## Shared types
 
@@ -118,7 +124,7 @@ interface DaemonSettings {
 
 `session.create` semantics: the daemon spawns the shell in `cwd`, then types the launch line. For `claude`: `claude <args…> [prompt]`; for `codex`: `codex <args…> [prompt]`; for `shell`: nothing (`args` and `prompt` must be empty). `prompt` is passed as the agent's positional first prompt, quoted. `cwd` must be an absolute path to a folder on a local drive: a relative path, or a network or device path (one starting with `\`, or `//`), is a `bad_request`, and so is a folder that does not exist; any other failure to read it is `internal`. `fs.listDirs` refuses the same paths.
 
-Session names (`session.create` `name`, `session.rename` `name`) are trimmed and capped at 64 characters; a name with a control character is a `bad_request`. A blank name on `session.create` means the folder's name; on `session.rename` it is a `bad_request`.
+Session names (`session.create` `name`, `session.rename` `name`) are trimmed and capped at 64 characters; a name with a control character is a `bad_request`. A blank name on `session.create` means the folder's name; on `session.rename` it is a `bad_request`. Names are unique among live sessions, so the name a session ends up with can differ from the one asked for: one another live session holds gets the first free `-2`, `-3`, … suffix. The `ack` of `session.create` and `session.rename` does not carry the name; the final one arrives in the `session.updated` for that session (sent before the `ack`).
 
 `pending.answer` semantics: the daemon translates the answer into the keystrokes the agent's prompt expects, then clears `pending` when the agent confirms (hook or transcript) or after the next output. `text` without `choiceIndices` means a free-text answer typed into the composer. Some answers are typed in several chunks with a short pause between them; if the session's `pending` changes (or clears) during a pause, the daemon types nothing more and replies `pending_changed`: part of the answer may have reached the prompt, so the client should show the session's current state rather than retry.
 
