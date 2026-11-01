@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { registerDaemonCommand } from "./cli/daemon-cmd.js";
+import { registerDevicesCommands } from "./cli/devices.js";
+import { registerKillCommand } from "./cli/kill.js";
+import { registerLsCommand } from "./cli/ls.js";
+import { registerPairCommand } from "./cli/pair.js";
 import { VERSION } from "./version.js";
 
 const program = new Command("afk")
@@ -8,6 +12,10 @@ const program = new Command("afk")
   .version(VERSION);
 
 registerDaemonCommand(program);
+registerLsCommand(program);
+registerKillCommand(program);
+registerPairCommand(program);
+registerDevicesCommands(program);
 
 try {
   await program.parseAsync();
