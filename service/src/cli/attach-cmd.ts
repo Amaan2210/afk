@@ -57,11 +57,9 @@ export function registerAttachCommand(program: Command): void {
     .description("attach this window to a running session (detach: Ctrl+] then d)")
     .argument("<session>", "the session's id or name, as shown by `afk ls`")
     .option("--port <n>", "the daemon port (default: the configured one)", parsePortOption)
-    .action(async (target: string, opts: ClientOptions) => {
-      let code: number | undefined;
-      await withDaemon(opts, async ({ client }) => {
-        code = await runAttach(target, client, { stdin: process.stdin, stdout: process.stdout });
-      });
-      if (code !== undefined) process.exitCode = code;
-    });
+    .action((target: string, opts: ClientOptions) =>
+      withDaemon(opts, ({ client }) =>
+        runAttach(target, client, { stdin: process.stdin, stdout: process.stdout }),
+      ),
+    );
 }

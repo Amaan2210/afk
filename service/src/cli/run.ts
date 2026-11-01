@@ -63,18 +63,20 @@ function defaultDeps(): RunDeps {
 
 /**
  * Connects to the local daemon, runs `command`, and closes the connection. Sets the exit code:
- * 0 on success, 2 when no daemon is running, 1 for anything else.
+ * the one `command` returns, if any (else 0 on success), 2 when no daemon is running, 1 for
+ * anything else.
  */
 export async function withDaemon(
   opts: ClientOptions,
-  command: (io: CommandIo<DaemonClient>) => Promise<void>,
+  command: (io: CommandIo<DaemonClient>) => Promise<number | void>,
   deps: RunDeps = defaultDeps(),
 ): Promise<void> {
   let client: DaemonClient | undefined = undefined;
   try {
     const port = opts.port ?? (await deps.loadPort(deps.paths));
     client = await deps.connect(deps.paths, port);
-    await command({ stdout: deps.stdout, client, port });
+    const code = await command({ stdout: deps.stdout, client, port });
+    if (typeof code === "number") deps.setExitCode(code);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof DaemonNotRunningError) {

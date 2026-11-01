@@ -43,6 +43,16 @@ describe("withDaemon", () => {
     expect(s.close).toHaveBeenCalledOnce();
   });
 
+  it("sets the exit code a command returns, and still closes the client", async () => {
+    const s = setup();
+    await withDaemon({}, async () => 7, s.deps);
+    expect(s.exit).toHaveBeenCalledExactlyOnceWith(7);
+    expect(s.close).toHaveBeenCalledOnce();
+    const zero = setup();
+    await withDaemon({}, async () => 0, zero.deps);
+    expect(zero.exit).toHaveBeenCalledExactlyOnceWith(0);
+  });
+
   it("uses --port over the configured port", async () => {
     const s = setup();
     await withDaemon({ port: 4000 }, async () => undefined, s.deps);

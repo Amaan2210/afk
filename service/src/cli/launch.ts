@@ -41,18 +41,16 @@ export async function launch(kind: SessionKind, args: string[], io: LaunchIo): P
   }
 }
 
-async function runLaunch(kind: SessionKind, args: string[], opts: LaunchOptions): Promise<void> {
-  let code: number | undefined;
-  await withDaemon(opts, async ({ client }) => {
-    code = await launch(kind, args, {
+function runLaunch(kind: SessionKind, args: string[], opts: LaunchOptions): Promise<void> {
+  return withDaemon(opts, ({ client }) =>
+    launch(kind, args, {
       cwd: process.cwd(),
       client,
       name: opts.name,
       stdin: process.stdin,
       stdout: process.stdout,
-    });
-  });
-  if (code !== undefined) process.exitCode = code;
+    }),
+  );
 }
 
 function launcher(program: Command, name: string, description: string): Command {
