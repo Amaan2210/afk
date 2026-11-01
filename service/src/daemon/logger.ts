@@ -1,6 +1,15 @@
 import { mkdirSync } from "node:fs";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import pino from "pino";
+
+/** How long the daemon keeps a log file after its last write. */
+const KEEP_LOGS_DAYS = 14;
+const LOG_FILE = /^afk-\d{4}-\d{2}-\d{2}\.log$/;
+
+function logName(day: Date): string {
+  return `afk-${day.toISOString().slice(0, 10)}.log`;
+}
 
 export interface LoggerOptions {
   verbose?: boolean;
@@ -20,8 +29,7 @@ const closers = new WeakMap<pino.Logger, () => Promise<void>>();
  */
 export function createLogger(logDir: string, opts: LoggerOptions = {}): pino.Logger {
   mkdirSync(logDir, { recursive: true });
-  const day = new Date().toISOString().slice(0, 10);
-  const dest = path.join(logDir, `afk-${day}.log`);
+  const dest = path.join(logDir, logName(new Date()));
   const level = opts.verbose ? "debug" : "info";
   const file = pino.destination({ dest, mkdir: true, sync: opts.sync ?? false });
   let closing: Promise<void> | undefined;
@@ -48,4 +56,28 @@ export function createLogger(logDir: string, opts: LoggerOptions = {}): pino.Log
  */
 export function closeLogger(logger: pino.Logger): Promise<void> {
   return closers.get(logger)?.() ?? Promise.resolve();
+}
+
+/**
+ * Deletes the daemon's daily log files (`afk-YYYY-MM-DD.log`) last written more than 14 days
+ * before `now`, never today's. Returns the names deleted; a missing folder has none.
+ */
+export async function pruneLogs(logDir: string, now: Date = new Date()): Promise<string[]> {
+  let names: string[];
+  try {
+    names = await readdir(logDir);
+  } catch {
+    return [];
+  }
+  const cutoff = now.getTime() - KEEP_LOGS_DAYS * 24 * 60 * 60 * 1000;
+  const today = logName(now);
+  const deleted: string[] = [];
+  for (const name of names) {
+    if (!LOG_FILE.test(name) || name === today) continue;
+    const file = path.join(logDir, name);
+    if ((await stat(file)).mtimeMs >= cutoff) continue;
+    await rm(file, { force: true });
+    deleted.push(name);
+  }
+  return deleted;
 }

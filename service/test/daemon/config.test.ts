@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach } from "vitest";
 import { defaultConfigDir, afkPaths } from "../../src/daemon/paths.js";
-import { defaultConfig, loadConfig, saveConfig, readLocalToken } from "../../src/daemon/config.js";
+import {
+  defaultConfig,
+  loadConfig,
+  readConfig,
+  readLocalToken,
+  saveConfig,
+} from "../../src/daemon/config.js";
 import { verifyToken } from "../../src/daemon/tokens.js";
 
 const dirs: string[] = [];
@@ -133,5 +139,22 @@ describe("paths", () => {
     expect(p.sessionsDir).toBe(join("a", "afk", "sessions"));
     expect(p.lockFile).toBe(join("a", "afk", "daemon.lock"));
     expect(p.recentFoldersFile).toBe(join("a", "afk", "recent-folders.json"));
+  });
+});
+
+describe("readConfig", () => {
+  it("reads the config without creating, rewriting or moving anything", async () => {
+    const dir = tmp();
+    const paths = afkPaths(dir);
+    expect(await readConfig(paths)).toBeUndefined();
+    expect(readdirSync(dir)).toEqual([]);
+
+    writeFileSync(paths.configFile, JSON.stringify({ port: 2399, extra: true }));
+    expect(await readConfig(paths)).toMatchObject({ port: 2399, extra: true, devices: [] });
+
+    writeFileSync(paths.configFile, "{ not json");
+    expect((await readConfig(paths))?.port).toBe(2350);
+    expect(readdirSync(dir)).toEqual(["config.json"]);
+    expect(readFileSync(paths.configFile, "utf8")).toBe("{ not json");
   });
 });

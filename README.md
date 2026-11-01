@@ -103,12 +103,15 @@ afk service uninstall   # stop it and remove the task; ends every session
 Session names are unique among live sessions: a second session in the same folder is `name-2`,
 then `name-3`. Ended sessions keep their name and stay listed for 24 hours, then are removed.
 
-A command that cannot reach a daemon prints a hint and exits 2; other failures exit 1. After
+A command that cannot reach a daemon prints a hint and exits 2, as it does before the daemon has
+ever run (no configuration yet); other failures exit 1. Only the daemon creates the
+configuration and the local token: client commands read them and change nothing. After
 attaching, the exit code is 0 on detach, 1 if the connection to the daemon was lost, and the
 session's own exit code if it ended while you were attached.
 
 Configuration, the hashed pairing tokens and logs live in `%LOCALAPPDATA%\afk\` (`config.json`,
-`logs\`). The default port is 2350. With `bind` set to `"tailscale"` (the default) and no Tailscale
+`logs\`, where the daemon deletes log files last written more than 14 days ago when it starts).
+The default port is 2350. With `bind` set to `"tailscale"` (the default) and no Tailscale
 address yet, the daemon waits up to 30 seconds for one, then listens on loopback only and starts
 listening on the Tailscale address when it appears.
 

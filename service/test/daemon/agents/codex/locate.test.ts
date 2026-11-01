@@ -80,6 +80,26 @@ describe("findRolloutFile", () => {
     expect(await findRolloutFile(root, { cwd: CWD, since: exact })).toBeDefined();
   });
 
+  it("with since, does not look in day folders more than a day before it", async () => {
+    // Started after `since` by its meta, but filed two days before: a folder that old is skipped.
+    put(
+      "2026/10/28",
+      "rollout-2026-10-28T23-00-00-old.jsonl",
+      meta("old", CWD, "2026-10-30T10:00:00Z"),
+    );
+    const since = new Date("2026-10-30T09:00:00Z");
+    expect(await findRolloutFile(root, { cwd: CWD, since })).toBeUndefined();
+    // The day before is still searched: Codex files by local date, which can lag the UTC one.
+    const file = put(
+      "2026/10/29",
+      "rollout-2026-10-29T23-30-00-tz.jsonl",
+      meta("tz", CWD, "2026-10-30T09:30:00Z"),
+    );
+    expect(await findRolloutFile(root, { cwd: CWD, since })).toBe(file);
+    // Without since, and by thread id, every folder is searched.
+    expect(await findRolloutFile(root, { threadId: "old" })).toMatch(/old\.jsonl$/);
+  });
+
   it("falls back to the file name timestamp when the meta has none", async () => {
     const line = JSON.stringify({ type: "session_meta", payload: { id: "a", cwd: CWD } });
     const file = put("2026/10/30", "rollout-2026-10-30T10-00-00-a.jsonl", `${line}\n`);

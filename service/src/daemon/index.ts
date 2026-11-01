@@ -10,7 +10,7 @@ import { RecentFolders } from "./fs.js";
 import { createHttpHandler, type HttpHandler } from "./http.js";
 import { followSessions, KeepAwakeController } from "./keepawake.js";
 import { acquireLock } from "./lock.js";
-import { closeLogger, createLogger } from "./logger.js";
+import { closeLogger, createLogger, pruneLogs } from "./logger.js";
 import { closeServer, deferredListener, listenAll } from "./net.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "./paths.js";
 import { createPowerRequest } from "./power-request.js";
@@ -134,6 +134,11 @@ async function compose(
   const tailscale = opts.tailscale ?? {};
   // Before the config is read: a second daemon must not rewrite the running one's files.
   p.release = await acquireLock(paths.lockFile);
+  // Only the lock's holder tidies the log folder.
+  await pruneLogs(paths.logDir).then(
+    (deleted) => deleted.length > 0 && log.info({ deleted }, "old log files deleted"),
+    (err: unknown) => log.warn({ err }, "deleting old log files failed"),
+  );
   const config = await loadConfig(paths, {
     onCorrupt: (backup) =>
       log.warn({ backup }, "config was unreadable; moved aside, defaults used"),

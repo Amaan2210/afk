@@ -44,10 +44,16 @@ export async function readPid(lockFile: string): Promise<number | undefined> {
   return /^\d+$/.test(text) && Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 }
 
-/** While we still listen, no other process can have taken the lock and written the file. */
+/**
+ * While we still listen, no other process can have taken the lock and written the file. The
+ * endpoint is closed whatever happens to the file: it, not the file, is the lock.
+ */
 async function release(lockFile: string, server: Server): Promise<void> {
-  if ((await readPid(lockFile)) === process.pid) await rm(lockFile, { force: true });
-  await close(server);
+  try {
+    if ((await readPid(lockFile)) === process.pid) await rm(lockFile, { force: true });
+  } finally {
+    await close(server);
+  }
 }
 
 /**

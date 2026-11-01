@@ -21,11 +21,13 @@ over the WebSocket to the clients subscribed to it.
 `paths.ts` decides where AFK keeps its files: `%LOCALAPPDATA%\afk` on Windows (`~/.config/afk`
 elsewhere), holding `config.json`, `local-token`, `daemon.lock`, `recent-folders.json`, `logs/` and
 `sessions/` (one folder per session, with its generated profile). `config.ts` loads `config.json`
-over the defaults, keeps unknown keys, and writes atomically by temp file and rename. `tokens.ts`
+over the defaults, keeps unknown keys, and writes atomically by temp file and rename; the CLI
+reads it with `readConfig`, which never writes. `tokens.ts`
 makes 32-byte random tokens and compares them in constant time against stored sha256 hashes: only
 hashes are persisted, for the paired devices (`devices.ts`, which hands a token out once, on
 `add`) and for the local token the CLI uses on loopback. `logger.ts` is a pino JSON-lines logger
-writing `logs/afk-YYYY-MM-DD.log`, and to stdout too with `--verbose`.
+writing `logs/afk-YYYY-MM-DD.log`, and to stdout too with `--verbose`; once the daemon holds its
+lock, `pruneLogs` deletes the log files last written more than 14 days ago.
 
 ## Sessions: `sessions/`
 
@@ -119,7 +121,8 @@ to commander. Each action imports its implementation only when it runs, so `afk 
 relays every agent hook starts load neither the daemon nor its client (about 0.2 s instead of
 0.5 s and more). `run.ts`'s `withDaemon` is how every client command
 connects: it reads the port from the config, connects with the local token (`client.ts`), runs the
-command and sets the exit code (2 when no daemon runs). `launch.ts` creates a session and attaches;
+command and sets the exit code (2 when no daemon runs, or none was ever set up: with no config or
+token it creates neither). `launch.ts` creates a session and attaches;
 `attach.ts` puts the window in raw mode, forwards keys and resizes, and renders output, with
 `detach-detector.ts` watching for `Ctrl+]` then `d`, `conpty-filter.ts` dropping the pseudo-
 console's win32-input-mode request, and `terminal-reset.ts` restoring the window on exit.

@@ -19,6 +19,17 @@ export class DaemonNotRunningError extends Error {
   }
 }
 
+export const NOT_SET_UP =
+  "The AFK daemon is not set up — run `afk service install`, or `afk daemon` to run it in this window.";
+
+/** No config or local token yet: the daemon has never run for this user. */
+export class DaemonNotSetUpError extends Error {
+  constructor() {
+    super(NOT_SET_UP);
+    this.name = "DaemonNotSetUpError";
+  }
+}
+
 /** The daemon answered with an `error` frame. */
 export class DaemonError extends Error {
   constructor(
@@ -71,9 +82,8 @@ export class DaemonClient implements CommandClient {
     try {
       token = await readLocalToken(paths);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        throw new DaemonNotRunningError("no local token");
-      }
+      // Never minted here: the daemon writes the token when it first starts.
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new DaemonNotSetUpError();
       throw err;
     }
     const client = new DaemonClient(new WebSocket(`ws://127.0.0.1:${port}/ws`));
@@ -131,6 +141,12 @@ export class DaemonClient implements CommandClient {
 
   private dispatch(frame: Frame): void {
     if (frame.type === "sessions.snapshot") this.gotSnapshot(frame.sessions as Session[]);
+    if (frame.type === "error" && frame.id === undefined) {
+      // The daemon could not tell which request failed: none of them can be answered now.
+      const err = new DaemonError(String(frame.code), String(frame.message));
+      for (const waiting of this.waiting.values()) waiting.reject(err);
+      this.waiting.clear();
+    }
     if ((frame.type === "ack" || frame.type === "error") && frame.id !== undefined) {
       const waiting = this.waiting.get(frame.id);
       if (waiting !== undefined) {

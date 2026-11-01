@@ -4,7 +4,8 @@ import { get } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { loadConfig } from "../daemon/config.js";
+import { readConfig } from "../daemon/config.js";
+import { DEFAULT_PORT } from "../protocol/index.js";
 import { readPid } from "../daemon/lock.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "../daemon/paths.js";
 import { CLI_ENTRY } from "../util/cli-entry.js";
@@ -79,7 +80,7 @@ export function isDaemonUp(port: number, timeoutMs = HEALTH_TIMEOUT_MS): Promise
   });
 }
 
-type Verb = "create" | "start" | "stop" | "remove";
+type Verb = "create" | "start" | "stop" | "remove" | "query";
 
 /** `io` with its defaults filled in, and the few things every action does. */
 class Service {
@@ -103,8 +104,9 @@ class Service {
     return this.io.exec(SCHTASKS, args);
   }
 
+  /** The configured port, read without changing the config; the default before the first start. */
   async port(): Promise<number> {
-    return this.io.port ?? (await loadConfig(this.paths)).port;
+    return this.io.port ?? (await readConfig(this.paths))?.port ?? DEFAULT_PORT;
   }
 
   /** Writes the task XML to a temporary file for `/Create`, and removes it however that ends. */
@@ -224,6 +226,7 @@ async function uninstall(s: Service): Promise<number> {
 async function status(s: Service): Promise<number> {
   const query = await s.schtasks(schtasksArgs("query"));
   if (query.code !== 0) {
+    if (!isNotFound(`${query.stdout}${query.stderr ?? ""}`)) return s.failed("query", query);
     s.out("Not installed");
     return 1;
   }
@@ -239,7 +242,8 @@ async function status(s: Service): Promise<number> {
 /**
  * Manages the scheduled task that runs the daemon from logon, hidden: `install` creates and starts
  * it, `uninstall` stops and removes it, `start`, `stop`, and `status` (Running, exit 0; Not
- * running or Not installed, exit 1). Resolves to the exit code.
+ * running or Not installed, exit 1; a query that fails otherwise is explained on stderr, exit 1).
+ * Resolves to the exit code.
  */
 export async function runService(action: ServiceAction, io: ServiceIo): Promise<number> {
   const s = new Service(io);

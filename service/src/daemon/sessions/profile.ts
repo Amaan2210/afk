@@ -32,13 +32,17 @@ function psString(s: string): string {
  *     paired, so PowerShell never adds its own quotes;
  *   - otherwise: each `"` as `\"`, the backslashes before it doubled. PowerShell never quotes
  *     these.
- * PowerShell 7.3+ (`Standard`/`Windows`) passes args intact, so they go through unchanged, as do
- * non-string args.
+ * PowerShell 7.3 and later passes args intact when `$PSNativeCommandArgumentPassing` is `Standard`
+ * or `Windows` (its default), so then they go through unchanged, as non-string args always do.
+ * Both the version and the mode are checked: before 7.3 the variable is an ordinary one, which a
+ * user may have set without it changing anything.
  */
 const FORWARD_ARGS_HELPER = [
   "function afk-forward-args {",
+  "  $v = $PSVersionTable.PSVersion",
   "  $mode = Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction Ignore",
-  "  $intact = $mode -eq 'Standard' -or $mode -eq 'Windows'",
+  "  $intact = ($v.Major -gt 7 -or ($v.Major -eq 7 -and $v.Minor -ge 3)) -and",
+  "    ($mode -eq 'Standard' -or $mode -eq 'Windows')",
   "  foreach ($a in $args[0]) {",
   "    if ($intact -or $a -isnot [string]) { ,$a }",
   `    elseif ($a.Length -eq 0) { '""' }`,

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { schtasksArgs, TASK_NAME, taskStatus, taskXml } from "../../src/cli/schtasks.js";
@@ -228,6 +228,14 @@ describe("runService start", () => {
     expect(running.stdout.text()).toMatch(/already running on port 2351/);
   });
 
+  it("before the daemon's first start, checks the default port and writes no config", async () => {
+    const { io, calls } = setup({}, { port: undefined });
+    expect(await runService("start", io)).toBe(0);
+    expect(io.isUp).toHaveBeenCalledWith(2350);
+    expect(calls).toHaveLength(1);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it("tells the user to install the task first when it is missing", async () => {
     const { io, stderr } = setup({ "/Run": NOT_FOUND });
     expect(await runService("start", io)).toBe(1);
@@ -247,10 +255,20 @@ describe("runService status", () => {
     expect(ready.stdout.text()).toBe(`Not running\nLogs: ${paths.logDir}\n`);
   });
 
-  it("a failed query means the task is not installed", async () => {
+  it("a query that finds no task means the task is not installed", async () => {
     const { io, stdout } = setup({ "/Query": NOT_FOUND });
     expect(await runService("status", io)).toBe(1);
     expect(stdout.text()).toBe("Not installed\n");
+  });
+
+  it("any other failed query is reported as schtasks gave it, on stderr", async () => {
+    const broken = { code: 1, stdout: "", stderr: "ERROR: The task image is corrupt.\r\n" };
+    const { io, stdout, stderr } = setup({ "/Query": broken });
+    expect(await runService("status", io)).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      'Could not query the scheduled task "AFK Daemon": ERROR: The task image is corrupt.\n',
+    );
   });
 });
 

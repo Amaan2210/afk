@@ -1,8 +1,8 @@
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdir, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { closeLogger, createLogger } from "../../src/daemon/logger.js";
+import { closeLogger, createLogger, pruneLogs } from "../../src/daemon/logger.js";
 
 describe("createLogger", () => {
   it("writes JSON lines to a daily file in the log dir", async () => {
@@ -46,5 +46,51 @@ describe("createLogger", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("pruneLogs", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = new Date("2026-11-01T12:00:00Z");
+
+  it("deletes the daemon's logs last written more than 14 days ago, and nothing else", async () => {
+    const root = mkdtempSync(join(tmpdir(), "afk-log-prune-"));
+    const logDir = join(root, "logs");
+    try {
+      await mkdir(logDir);
+      const ages: [string, number][] = [
+        ["afk-2026-10-01.log", 31],
+        ["afk-2026-10-17.log", 15],
+        ["afk-2026-10-18.log", 14.5],
+        ["afk-2026-10-19.log", 13],
+        // Today's file, whatever its time says: the daemon is about to write to it.
+        ["afk-2026-11-01.log", 40],
+        ["notes.log", 40],
+        ["afk-old.txt", 40],
+      ];
+      for (const [name, days] of ages) {
+        const file = join(logDir, name);
+        await writeFile(file, "{}");
+        const t = new Date(now.getTime() - days * DAY);
+        await utimes(file, t, t);
+      }
+      expect((await pruneLogs(logDir, now)).sort()).toEqual([
+        "afk-2026-10-01.log",
+        "afk-2026-10-17.log",
+        "afk-2026-10-18.log",
+      ]);
+      expect((await readdir(logDir)).sort()).toEqual([
+        "afk-2026-10-19.log",
+        "afk-2026-11-01.log",
+        "afk-old.txt",
+        "notes.log",
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does nothing when the folder is missing", async () => {
+    expect(await pruneLogs(join(tmpdir(), "afk-no-such-logs"), now)).toEqual([]);
   });
 });

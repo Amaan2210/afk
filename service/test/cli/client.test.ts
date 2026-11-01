@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import WebSocket, { WebSocketServer } from "ws";
-import { DaemonClient, DaemonError, DaemonNotRunningError } from "../../src/cli/client.js";
+import {
+  DaemonClient,
+  DaemonError,
+  DaemonNotRunningError,
+  DaemonNotSetUpError,
+} from "../../src/cli/client.js";
 import { startDaemon, type Daemon } from "../../src/daemon/index.js";
 import { afkPaths, type AfkPaths } from "../../src/daemon/paths.js";
 
@@ -79,11 +84,11 @@ describe("DaemonClient.connectLocal", () => {
     );
   });
 
-  it("reports a missing local token as not running", async () => {
+  it("reports a missing local token as not set up", async () => {
     const dir = await mkdtemp(join(tmpdir(), "afk-cli-"));
     dirs.push(dir);
     await expect(DaemonClient.connectLocal(afkPaths(dir), 1)).rejects.toBeInstanceOf(
-      DaemonNotRunningError,
+      DaemonNotSetUpError,
     );
   });
 
@@ -135,6 +140,34 @@ describe("DaemonClient.request", () => {
     const client = await connect(afkPaths(dir), port);
     await expect(client.request({ type: "device.list" })).rejects.toThrow(/closed/);
     await expect(client.request({ type: "device.list" })).rejects.toThrow(/closed/);
+  });
+});
+
+describe("DaemonClient.request and an error without an id", () => {
+  it("rejects every request in flight: no reply can be matched to it any more", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "afk-cli-"));
+    dirs.push(dir);
+    await writeFile(afkPaths(dir).localTokenFile, "token\n");
+    let requests = 0;
+    const port = await fakeServer((ws) => {
+      ws.send(JSON.stringify({ type: "hello" }));
+      ws.on("message", (data) => {
+        if (JSON.parse(String(data)).type === "auth" || ++requests < 2) return;
+        // As the daemon answers a frame it could not read an id from.
+        ws.send(JSON.stringify({ type: "error", code: "bad_request", message: "invalid frame" }));
+      });
+    });
+    const client = await connect(afkPaths(dir), port);
+    const results = await Promise.allSettled([
+      client.request({ type: "device.list" }),
+      client.request({ type: "device.list" }),
+    ]);
+    for (const r of results) {
+      expect(r.status).toBe("rejected");
+      const reason = (r as PromiseRejectedResult).reason as DaemonError;
+      expect(reason).toBeInstanceOf(DaemonError);
+      expect(reason).toMatchObject({ code: "bad_request", message: "invalid frame" });
+    }
   });
 });
 

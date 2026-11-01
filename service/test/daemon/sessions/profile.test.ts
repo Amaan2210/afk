@@ -149,9 +149,26 @@ describe.skipIf(process.platform !== "win32")("session profile under Windows Pow
       { encoding: "utf8", timeout: 30_000 },
     );
     const got = receivedArgv(r.stdout);
+    expect(got).toHaveLength(cases.length);
     expect(cases.map(([typed], i) => [typed, got[i]])).toEqual(
       cases.map(([typed, argv]) => [typed, ["exec", ...argv]]),
     );
+  }, 40_000);
+
+  it("still rewrites args on 5.1 when the user set $PSNativeCommandArgumentPassing", () => {
+    // An ordinary variable before PowerShell 7.3: setting it changes nothing about passing args.
+    const script = [
+      "$PSNativeCommandArgumentPassing = 'Standard'",
+      `. '${profile.replace(/'/g, "''")}'`,
+      'claude "Fix `"it`"" ""',
+    ];
+    const encoded = Buffer.from(script.join("\r\n"), "utf16le").toString("base64");
+    const r = spawnSync(
+      "powershell.exe",
+      ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+      { encoding: "utf8", timeout: 30_000 },
+    );
+    expect(receivedArgv(r.stdout)).toEqual([["exec", "claude", 'Fix "it"', ""]]);
   }, 40_000);
 
   it("delivers the launch line a new session types intact", () => {

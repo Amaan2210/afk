@@ -1,5 +1,5 @@
 import { open, readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { isRecord } from "../../../util/is-record.js";
 
 /** Bytes read per step while looking for the end of a rollout's first line. */
@@ -20,10 +20,30 @@ export interface SessionIndexEntry {
   updatedAt?: string;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The first day folder that can hold a rollout started at or after `since`: Codex files a rollout
+ * under its local date, which can be a day behind the UTC one.
+ */
+function firstDay(since: Date | undefined): number | undefined {
+  if (since === undefined) return undefined;
+  const utcDay = Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate());
+  return utcDay - DAY_MS;
+}
+
+/** A `YYYY/MM/DD` folder's date, as UTC midnight; NaN when the path is not one. */
+function dayOf(dayDir: string): number {
+  const monthDir = dirname(dayDir);
+  const [year, month, day] = [dirname(monthDir), monthDir, dayDir].map((p) => Number(basename(p)));
+  return Date.UTC(year ?? NaN, (month ?? NaN) - 1, day ?? NaN);
+}
+
 /**
  * Finds the rollout file under `sessionsDir` (`YYYY/MM/DD/rollout-<time>-<thread id>.jsonl`) for a
  * thread id, else for a working directory (and a start no earlier than `since`). Returns the
- * newest match, searching the newest days first, or undefined when nothing matches.
+ * newest match, searching the newest days first, or undefined when nothing matches. With `since`,
+ * a cwd search stops at day folders too old to hold a match, rather than read every rollout ever.
  */
 export async function findRolloutFile(
   sessionsDir: string,
@@ -31,7 +51,10 @@ export async function findRolloutFile(
 ): Promise<string | undefined> {
   const wantCwd = q.cwd === undefined ? undefined : normalizePath(q.cwd);
   if (q.threadId === undefined && wantCwd === undefined) return undefined;
+  const oldest = q.threadId === undefined ? firstDay(q.since) : undefined;
   for (const day of await dayDirs(sessionsDir)) {
+    // Newest first: every folder after this one is older still.
+    if (oldest !== undefined && dayOf(day) < oldest) break;
     const names = (await listDir(day)).filter(isRollout).sort().reverse();
     for (const name of names) {
       const file = join(day, name);

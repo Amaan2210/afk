@@ -124,6 +124,29 @@ export async function loadConfig(
   return existing;
 }
 
+/**
+ * The config as it is on disk, for the CLI, which never creates, rewrites or moves anything:
+ * undefined when there is no config file yet; a file that is not a JSON object reads as the
+ * defaults (the daemon moves it aside when it next starts).
+ */
+export async function readConfig(paths: AfkPaths): Promise<DaemonConfig | undefined> {
+  let text: string;
+  try {
+    text = await readFile(paths.configFile, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    raw = undefined;
+  }
+  const isObject = raw !== null && typeof raw === "object" && !Array.isArray(raw);
+  return normalize(isObject ? (raw as Record<string, unknown>) : {});
+}
+
 /** Atomic on the same volume: write a temp file, then rename over the target. */
 export async function saveConfig(paths: AfkPaths, cfg: DaemonConfig): Promise<void> {
   const tmp = `${paths.configFile}.tmp`;
