@@ -33,7 +33,7 @@ function close(server: Server): Promise<void> {
 }
 
 /** The pid in the lock file; undefined when the file is missing, unreadable or holds no pid. */
-async function readPid(lockFile: string): Promise<number | undefined> {
+export async function readPid(lockFile: string): Promise<number | undefined> {
   let text: string;
   try {
     text = (await readFile(lockFile, "utf8")).trim();

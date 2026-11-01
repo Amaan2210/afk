@@ -8,6 +8,7 @@ import { registerLaunchCommands } from "./cli/launch.js";
 import { registerLsCommand } from "./cli/ls.js";
 import { registerPairCommand } from "./cli/pair.js";
 import { registerRelayCommands } from "./cli/relay-cmd.js";
+import { registerServiceCommand } from "./cli/service.js";
 import { VERSION } from "./version.js";
 
 const program = new Command("afk")
@@ -22,6 +23,7 @@ registerLsCommand(program);
 registerKillCommand(program);
 registerPairCommand(program);
 registerDevicesCommands(program);
+registerServiceCommand(program);
 registerRelayCommands(program);
 
 try {

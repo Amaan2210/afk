@@ -1,10 +1,12 @@
-import { InvalidArgumentError, type Command } from "commander";
+import { InvalidArgumentError, Option, type Command } from "commander";
 import { startDaemon, type Daemon, type DaemonOptions } from "../daemon/index.js";
 import { VERSION } from "../version.js";
 
 interface DaemonCommandOptions {
   verbose?: boolean;
   port?: number;
+  /** Stop once the parent process has exited (the scheduled task's PowerShell). */
+  exitWithParent?: boolean;
 }
 
 /** The parts of `process` the command uses. */
@@ -17,6 +19,24 @@ export interface DaemonCommandDeps {
   start: (opts: DaemonOptions) => Promise<Daemon>;
   proc: DaemonProcess;
   print: (line: string) => void;
+  /** Whether the parent process still runs (default: a signal-0 check of the parent's pid). */
+  parentAlive?: () => boolean;
+  /** How often `--exit-with-parent` checks (default 1 s). */
+  parentPollMs?: number;
+}
+
+/** Read once: the parent's pid is what to watch, even after the parent is gone. */
+const PARENT_PID = process.ppid;
+const PARENT_POLL_MS = 1000;
+
+/** Signal 0 checks that a process exists; EPERM means it does, under another account. */
+function parentAlive(): boolean {
+  try {
+    process.kill(PARENT_PID, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 const defaultDeps: DaemonCommandDeps = {
@@ -41,10 +61,12 @@ function hostPort(address: string, port: number): string {
 }
 
 /**
- * Runs the daemon until a stop signal. Signals are handled from the start: one that arrives while
- * the daemon starts stops it once it has started, so its lock is released; another one while it
- * stops exits at once. Once running, a stray exception in some event handler is logged and the
- * daemon keeps serving, rather than every session ending with it.
+ * Runs the daemon until a stop signal or, with `exitWithParent`, until the parent process exits
+ * (ending the scheduled task ends its PowerShell, not the daemon it started). Either is handled
+ * from the start: one that arrives while the daemon starts stops it once it has started, so its
+ * lock is released; another signal while it stops exits at once. Once running, a stray exception
+ * in some event handler is logged and the daemon keeps serving, rather than every session ending
+ * with it.
  */
 export async function runDaemon(
   opts: DaemonCommandOptions,
@@ -54,22 +76,43 @@ export async function runDaemon(
   // Set once started; the signal handler reads it before then.
   let daemon: Daemon | undefined = undefined;
   let stopRequested = false;
+  let parentWatch: NodeJS.Timeout | undefined;
   const stop = (d: Daemon): void => {
+    clearInterval(parentWatch);
     d.stop().then(
       () => proc.exit(0),
       () => proc.exit(1),
     );
   };
-  const onSignal = (signal: string): void => {
+  const requestStop = (why: { signal: string } | { reason: string }): void => {
     if (stopRequested) return proc.exit(1);
     stopRequested = true;
     if (daemon === undefined) return;
-    daemon.log.info({ signal }, "daemon stopping");
+    daemon.log.info(why, "daemon stopping");
     stop(daemon);
   };
-  for (const signal of STOP_SIGNALS) proc.on(signal, () => onSignal(signal));
+  for (const signal of STOP_SIGNALS) proc.on(signal, () => requestStop({ signal }));
+  if (opts.exitWithParent === true) {
+    const alive = deps.parentAlive ?? parentAlive;
+    parentWatch = setInterval(() => {
+      if (alive()) return;
+      clearInterval(parentWatch);
+      requestStop({ reason: "parent exited" });
+    }, deps.parentPollMs ?? PARENT_POLL_MS);
+    // The servers keep a running daemon alive; this must not keep a failed start alive.
+    parentWatch.unref();
+  }
 
-  daemon = await deps.start({ port: opts.port, verbose: opts.verbose ?? false, print: deps.print });
+  try {
+    daemon = await deps.start({
+      port: opts.port,
+      verbose: opts.verbose ?? false,
+      print: deps.print,
+    });
+  } catch (err) {
+    clearInterval(parentWatch);
+    throw err;
+  }
   const { log } = daemon;
   if (stopRequested) {
     log.info("daemon stopping: asked to while it started");
@@ -88,5 +131,7 @@ export function registerDaemonCommand(program: Command): void {
     .description("run the AFK daemon in the foreground; stopping it ends every session")
     .option("--verbose", "log at debug level, to stdout as well as to the log file")
     .option("--port <n>", "listen on this port instead of the configured one", parsePort)
+    // For the scheduled task (afk service), whose PowerShell is the parent.
+    .addOption(new Option("--exit-with-parent", "stop when the parent process exits").hideHelp())
     .action((opts: DaemonCommandOptions) => runDaemon(opts));
 }

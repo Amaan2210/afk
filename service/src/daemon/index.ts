@@ -1,8 +1,8 @@
 import { createServer, type RequestListener, type Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type pino from "pino";
+import { CLI_ENTRY } from "../util/cli-entry.js";
 import { VERSION } from "../version.js";
 import { ChatHub } from "./agents/hub.js";
 import { loadConfig, saveConfig } from "./config.js";
@@ -29,12 +29,6 @@ import { attachWsServer, type WsDeps, type WsServer } from "./ws/server.js";
 const PRUNE_INTERVAL_MS = 10 * 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const HEADERS_TIMEOUT_MS = 10_000;
-
-/**
- * The CLI that session shells run for `claude` and `codex`: the package's built dist/cli.js, which
- * this path reaches from dist/daemon/index.js and from src/daemon/index.ts (tsx, tests) alike.
- */
-const CLI_ENTRY = fileURLToPath(new URL("../../dist/cli.js", import.meta.url));
 
 export interface DaemonOptions {
   /** Defaults to `defaultConfigDir()`. */

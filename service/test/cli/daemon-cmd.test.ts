@@ -112,3 +112,70 @@ describe("runDaemon", () => {
     expect(proc.exit).toHaveBeenCalledWith(1);
   });
 });
+
+describe("runDaemon --exit-with-parent", () => {
+  let alive: boolean;
+  let parentAlive: Mock<() => boolean>;
+
+  beforeEach(() => {
+    alive = true;
+    parentAlive = vi.fn(() => alive);
+    deps = { ...deps, parentAlive, parentPollMs: 5 };
+  });
+
+  const settle = (): Promise<unknown> => new Promise((resolve) => setTimeout(resolve, 30));
+
+  it("stops the daemon cleanly once the parent process is gone, then exits 0", async () => {
+    await runDaemon({ exitWithParent: true }, deps);
+    await settle();
+    expect(parentAlive).toHaveBeenCalled();
+    expect(daemon.stop).not.toHaveBeenCalled();
+
+    alive = false;
+    await vi.waitFor(() => expect(proc.exit).toHaveBeenCalledWith(0));
+    expect(daemon.stop).toHaveBeenCalledTimes(1);
+    expect(daemon.log.info).toHaveBeenCalledWith({ reason: "parent exited" }, "daemon stopping");
+    // The watch ends with the stop.
+    const checks = parentAlive.mock.calls.length;
+    await settle();
+    expect(parentAlive).toHaveBeenCalledTimes(checks);
+  });
+
+  it("does not watch the parent without the flag", async () => {
+    await runDaemon({}, deps);
+    await settle();
+    expect(parentAlive).not.toHaveBeenCalled();
+  });
+
+  it("a signal stop ends the watch", async () => {
+    await runDaemon({ exitWithParent: true }, deps);
+    proc.emit("SIGINT");
+    await vi.waitFor(() => expect(proc.exit).toHaveBeenCalledWith(0));
+    const checks = parentAlive.mock.calls.length;
+    await settle();
+    expect(parentAlive).toHaveBeenCalledTimes(checks);
+    expect(daemon.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("a parent gone while the daemon starts stops it once started", async () => {
+    let started!: (d: Daemon) => void;
+    start.mockReturnValue(new Promise<Daemon>((resolve) => (started = resolve)));
+    const run = runDaemon({ exitWithParent: true }, deps);
+    alive = false;
+    await settle();
+    expect(proc.exit).not.toHaveBeenCalled();
+
+    started(daemon);
+    await run;
+    await vi.waitFor(() => expect(proc.exit).toHaveBeenCalledWith(0));
+    expect(daemon.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed start ends the watch", async () => {
+    start.mockRejectedValue(new Error("already running (pid 7)"));
+    await expect(runDaemon({ exitWithParent: true }, deps)).rejects.toThrow("already running");
+    const checks = parentAlive.mock.calls.length;
+    await settle();
+    expect(parentAlive).toHaveBeenCalledTimes(checks);
+  });
+});

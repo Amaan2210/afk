@@ -1,13 +1,12 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afkPaths, defaultConfigDir } from "../daemon/paths.js";
 import { buildClaudeLaunch, buildCodexLaunch, type LaunchContext } from "../launch/launch-spec.js";
 import { resolveAgentBinary } from "../launch/resolve-binary.js";
+import { CLI_ENTRY } from "../util/cli-entry.js";
 import { resolveCmdShim } from "./cmd-shim.js";
 import { portFromEnv, type PostFn } from "./post.js";
 
-const CLI_ENTRY = fileURLToPath(new URL("../../dist/cli.js", import.meta.url));
 const NOT_FOUND = 127;
 const POST_TIMEOUT_MS = 1500;
 
