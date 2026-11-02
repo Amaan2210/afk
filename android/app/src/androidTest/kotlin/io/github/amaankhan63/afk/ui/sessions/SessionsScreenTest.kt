@@ -95,6 +95,7 @@ class SessionsScreenTest {
 
         longPress("s_work")
         rule.onNodeWithText("Kill").performClick()
+        rule.onNodeWithText("Kill shop-estimator?").assertIsDisplayed()
         assertEquals(emptyList<String>(), killed)
         rule.onNodeWithText("Kill").performClick()
         rule.waitForIdle()
