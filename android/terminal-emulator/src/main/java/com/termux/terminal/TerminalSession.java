@@ -28,6 +28,7 @@ import java.util.UUID;
  * <p>
  * NOTE: The terminal session may outlive the EmulatorView, so be careful with callbacks!
  */
+// AFK: no longer final, so that AfkTerminalSession can extend it.
 public class TerminalSession extends TerminalOutput {
 
     private static final int MSG_NEW_INPUT = 1;
@@ -35,6 +36,7 @@ public class TerminalSession extends TerminalOutput {
 
     public final String mHandle = UUID.randomUUID().toString();
 
+    // AFK: protected instead of package-private, so that AfkTerminalSession can set it.
     protected TerminalEmulator mEmulator;
 
     /**

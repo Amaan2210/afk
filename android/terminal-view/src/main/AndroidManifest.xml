@@ -1,2 +1,3 @@
+<!-- AFK: removed package="com.termux.view"; the namespace is set in build.gradle.kts. -->
 <manifest>
 </manifest>

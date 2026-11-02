@@ -1,5 +1,6 @@
 package io.github.amaankhan63.afk.ui.session.terminal
 
+import android.os.Looper
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import io.github.amaankhan63.afk.data.protocol.AfkError
@@ -46,20 +47,28 @@ class TerminalBridge(
     private var frames: Job? = null
     private var pendingResize: Job? = null
 
+    /** The grid the view last laid out; null until it has. */
+    private var viewGrid: Grid? = null
+
+    private val attached: Boolean get() = frames?.isActive == true
+
     /**
-     * Shows the terminal at [cols] × [rows] (the view's grid once it has one): subscribes, and
-     * through the repository subscribes again after every reconnect, until [detach]. Replaces an
-     * earlier [attach].
+     * Shows the terminal: subscribes, and through the repository subscribes again after every
+     * reconnect, until [detach]. Replaces an earlier [attach]. The subscription asks for the grid
+     * the view last laid out, or for [cols] × [rows] until the view has laid out.
      */
     fun attach(cols: Int, rows: Int) {
+        checkMainThread()
         frames?.cancel()
         mutableFailure.value = null
+        val grid = viewGrid ?: Grid(cols, rows)
         // The subscription resizes the daemon's pty to this grid, and the emulator must exist
         // before the first frame.
-        session.applyRemoteSize(cols, rows)
+        session.applyRemoteSize(grid.cols, grid.rows)
         frames = scope.launch {
+            checkMainThread()
             try {
-                repo.pty(sessionId, cols, rows).collect(::show)
+                repo.pty(sessionId, grid.cols, grid.rows).collect(::show)
             } catch (e: AfkError) {
                 mutableFailure.value = e
             }
@@ -75,12 +84,17 @@ class TerminalBridge(
     }
 
     /**
-     * The view's grid; sent once it has held still for [debounceMs], so a rotation or the keyboard
-     * opening sends one resize.
+     * The view's grid. While attached, it is sent once it has held still for [debounceMs], so a
+     * rotation or the keyboard opening sends one resize. While detached, it is only kept for the
+     * next [attach]: the laptop's terminal is not resized for a phone that is not watching.
      */
     fun onSizeChanged(cols: Int, rows: Int) {
+        checkMainThread()
+        viewGrid = Grid(cols, rows)
         pendingResize?.cancel()
+        if (!attached) return
         pendingResize = scope.launch {
+            checkMainThread()
             delay(debounceMs)
             repo.ptyResize(sessionId, cols, rows)
             // A snapshot can have sized the emulator to the old grid meanwhile.
@@ -103,8 +117,8 @@ class TerminalBridge(
     }
 
     /**
-     * Passes screen changes to [onScreenChanged]. There is no process to finish, and the copy and
-     * paste requests of terminal programs are ignored. Logs are dropped: the emulator's can quote
+     * Passes screen changes to [onScreenChanged]. There is no process to finish, and copy and paste
+     * never get here: [AfkTerminalSession] handles them. Logs are dropped: the emulator's can quote
      * terminal output.
      */
     private inner class ScreenClient : TerminalSessionClient {
@@ -145,4 +159,11 @@ class TerminalBridge(
 
         override fun logStackTrace(tag: String?, e: Exception?) = Unit
     }
+}
+
+private data class Grid(val cols: Int, val rows: Int)
+
+/** Termux's emulator and TerminalView are not thread-safe: a scope off the main thread fails. */
+private fun checkMainThread() = check(Looper.myLooper() == Looper.getMainLooper()) {
+    "TerminalBridge must run on the main thread"
 }

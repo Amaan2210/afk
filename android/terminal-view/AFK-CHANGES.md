@@ -18,6 +18,8 @@ Copied from [termux/termux-app](https://github.com/termux/termux-app) tag `v0.11
 
 ## Edited
 
+The edited file carries an `AFK:` comment saying what changed.
+
 - `src/main/AndroidManifest.xml`: removed `package="com.termux.view"`, which AGP 8 and later
   reject; the namespace is set in `build.gradle.kts`.
 

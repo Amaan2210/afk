@@ -1293,7 +1293,8 @@ public final class TerminalEmulator {
                 // * vim checks xterm version number >140 for "Request termcap/terminfo string" functionality >276 for SGR
                 // mouse report.
                 // The third number is a keyboard identifier not used nowadays.
-                mSession.write("\033[>41;320;0c");
+                // AFK: answer only a request (no parameter, or 0), never a reply such as this one.
+                if (getArg0(0) == 0) mSession.write("\033[>41;320;0c");
                 break;
             case 'm':
                 // https://bugs.launchpad.net/gnome-terminal/+bug/96676/comments/25

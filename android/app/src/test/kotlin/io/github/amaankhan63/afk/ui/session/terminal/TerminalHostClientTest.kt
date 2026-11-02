@@ -1,6 +1,7 @@
 package io.github.amaankhan63.afk.ui.session.terminal
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Pinch: TerminalView passes the scale gathered so far and keeps whatever onScale returns. */
@@ -23,6 +24,8 @@ class TerminalHostClientTest {
         assertEquals(1f, client.onScale(0.8f), 0f)
         assertEquals(listOf(13), changes)
     }
+
+    @Test fun keyboardSendsKeysAsTyped() = assertTrue(client.isTerminalViewSelected())
 
     @Test fun fontSizeStaysWithinBounds() {
         fontSizeSp = MAX_FONT_SP

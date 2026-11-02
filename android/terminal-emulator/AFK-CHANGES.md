@@ -21,12 +21,20 @@ emulator from the daemon's WebSocket instead of a local process, so the native p
 
 ## Edited
 
+Each edited line carries an `AFK:` comment saying what changed (the stub's class comment, in
+`JNI.java`).
+
 - `src/main/java/com/termux/terminal/JNI.java`: replaced by a stub with the same class and method
   signatures (no longer `native`) and no `System.loadLibrary("termux")`; every method throws
   `UnsupportedOperationException("AFK feeds the terminal from the daemon; no local pty")`.
 - `src/main/java/com/termux/terminal/TerminalSession.java`: the class is no longer `final`, and
   the `mEmulator` field is `protected` instead of package-private, so AFK's `AfkTerminalSession`
   can extend it and set the emulator it builds.
+- `src/main/java/com/termux/terminal/TerminalEmulator.java`, `doCsiBiggerThan`: the Secondary
+  Device Attributes request (`CSI > c`) is answered only when its parameter is absent or 0, as
+  upstream already does for the primary request. Upstream answered any `CSI > … c`, its own reply
+  `CSI >41;320;0c` included, so a program that echoes its input would bounce replies through the
+  daemon forever.
 - `src/main/AndroidManifest.xml`: removed `package="com.termux.terminal"`, which AGP 8 and later
   reject; the namespace is set in `build.gradle.kts`.
 

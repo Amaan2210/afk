@@ -36,6 +36,15 @@ class AfkTerminalSession(
 
     @Volatile private var finished = false
 
+    // True while the emulator reads daemon output, to tell a program's copy request from the user's.
+    private var feeding = false
+
+    /** Puts text the user selected and copied on the clipboard; TerminalHost sets it. */
+    var onCopyText: ((String) -> Unit)? = null
+
+    /** The clipboard's text, for a paste the user asked for; TerminalHost sets it. */
+    var onPasteRequest: (() -> String?)? = null
+
     override fun initializeEmulator(
         columns: Int,
         rows: Int,
@@ -104,10 +113,30 @@ class AfkTerminalSession(
     /** Shows [bytes] of the daemon's output; dropped before the emulator has a grid. */
     fun feed(bytes: ByteArray) {
         val emulator: TerminalEmulator = mEmulator ?: return
-        emulator.append(bytes, bytes.size)
+        feeding = true
+        try {
+            emulator.append(bytes, bytes.size)
+        } finally {
+            feeding = false
+        }
         notifyScreenUpdate()
     }
 
     /** Clears the screen and the scrollback and resets the terminal's modes, for a snapshot. */
     override fun reset() = feed(FULL_RESET)
+
+    /**
+     * Copy from TerminalView's selection menu goes to [onCopyText]. A program's request to set the
+     * clipboard (OSC 52) arrives while its output is fed, and is ignored.
+     */
+    override fun onCopyTextToClipboard(text: String?) {
+        if (feeding || text == null) return
+        onCopyText?.invoke(text)
+    }
+
+    /** Paste from TerminalView's selection menu: types the clipboard, bracketed if the program asked. */
+    override fun onPasteTextFromClipboard() {
+        val text = onPasteRequest?.invoke()
+        if (!text.isNullOrEmpty()) mEmulator?.paste(text)
+    }
 }
