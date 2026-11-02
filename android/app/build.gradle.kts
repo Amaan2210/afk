@@ -53,6 +53,10 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.coroutines.core)
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.mockwebserver)
 }
