@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.datastore.preferences)
     implementation(libs.zxing.embedded)
+    implementation(project(":terminal-view"))
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

@@ -1,6 +1,7 @@
 package io.github.amaankhan63.afk.data.sessions
 
 import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.DaemonSettings
 import io.github.amaankhan63.afk.data.protocol.DaemonSettingsPatch
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
@@ -11,7 +12,11 @@ import io.github.amaankhan63.afk.data.protocol.Strip
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onSubscription
 
 /**
  * Plays the repository by hand: tests set its flows, push pty and chat updates, and script the
@@ -51,6 +56,9 @@ class FakeSessionsRepository : SessionsRepository {
     val ptyInputs = mutableListOf<Pair<String, ByteArray>>()
     val ptyResizes = mutableListOf<Triple<String, Int, Int>>()
 
+    /** Every terminal subscription [pty] made, in order: session id, cols, rows. */
+    val ptySubscriptions = mutableListOf<Triple<String, Int, Int>>()
+
     var createResult: Result<String> = Result.success("s_new")
     var killResult: Result<Unit> = Result.success(Unit)
     var resumeResult: Result<String> = Result.success("s_resumed")
@@ -60,11 +68,14 @@ class FakeSessionsRepository : SessionsRepository {
         Result.success(ServerMessage.FsDirs(id = "r1", dirs = emptyList(), recent = emptyList()))
     var settingsResult: Result<DaemonSettings> = Result.success(DaemonSettings())
 
+    /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
+    var ptyFailure: AfkError? = null
+
     private val strips = mutableMapOf<String, MutableStateFlow<Strip?>>()
     private val ptys = mutableMapOf<String, MutableSharedFlow<PtyFrame>>()
     private val chats = mutableMapOf<Pair<String, String>, MutableSharedFlow<ChatUpdate>>()
 
-    /** What collectors of session [id]'s terminal receive; it never completes. */
+    /** What collectors of session [id]'s terminal receive while connected; it never completes. */
     fun ptyFrames(id: String): MutableSharedFlow<PtyFrame> =
         ptys.getOrPut(id) { MutableSharedFlow(extraBufferCapacity = Int.MAX_VALUE) }
 
@@ -78,7 +89,22 @@ class FakeSessionsRepository : SessionsRepository {
     override fun strip(id: String): MutableStateFlow<Strip?> =
         strips.getOrPut(id) { MutableStateFlow(null) }
 
-    override fun pty(id: String, cols: Int, rows: Int): Flow<PtyFrame> = ptyFrames(id)
+    /**
+     * Subscribes like the real repository: whenever [connection] is up, again after every
+     * reconnect, relaying [ptyFrames] meanwhile.
+     */
+    override fun pty(id: String, cols: Int, rows: Int): Flow<PtyFrame> = channelFlow {
+        connection
+            .map { it is ConnectionState.Connected }
+            .distinctUntilChanged()
+            .collectLatest { connected ->
+                if (!connected) return@collectLatest
+                ptyFailure?.let { throw it }
+                ptyFrames(id)
+                    .onSubscription { ptySubscriptions += Triple(id, cols, rows) }
+                    .collect { send(it) }
+            }
+    }
 
     override fun chat(id: String, threadId: String): Flow<ChatUpdate> = chatUpdates(id, threadId)
 

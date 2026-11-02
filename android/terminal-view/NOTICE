@@ -1,0 +1,9 @@
+terminal-view
+Copied from Termux, https://github.com/termux/termux-app, tag v0.118.3, directory terminal-view/.
+Termux's repository is GPLv3, but its LICENSE.md releases the terminal-emulator and
+terminal-view libraries under the Apache License, Version 2.0 (see LICENSE), as code derived
+from Terminal Emulator for Android, https://github.com/jackpal/Android-Terminal-Emulator.
+
+Copyright the Termux developers and the Terminal Emulator for Android (jackpal) contributors.
+
+AFK's changes to this copy are listed in AFK-CHANGES.md.

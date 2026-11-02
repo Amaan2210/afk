@@ -23,3 +23,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "afk"
 include(":app")
+// Vendored from termux/termux-app v0.118.3 (Apache-2.0); see each module's AFK-CHANGES.md.
+include(":terminal-emulator", ":terminal-view")
