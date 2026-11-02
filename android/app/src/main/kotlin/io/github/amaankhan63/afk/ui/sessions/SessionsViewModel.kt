@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  * What the sessions screen shows. [sessions] is filtered, searched and ordered; [counts] counts
  * every session per state chip, whatever the filter and query; [hostname] is the laptop's name
  * from the latest `hello`; [workingSince] holds, per working session id, when it was first seen
- * working.
+ * working; [allSessions] is every session, unfiltered, as the repository lists them.
  */
 data class SessionsUiState(
     val sessions: List<Session> = emptyList(),
@@ -42,7 +42,8 @@ data class SessionsUiState(
     val stats: Stats? = null,
     val hostname: String? = null,
     val connection: ConnectionState = ConnectionState.Disconnected,
-    val workingSince: Map<String, Instant> = emptyMap()
+    val workingSince: Map<String, Instant> = emptyMap(),
+    val allSessions: List<Session> = emptyList()
 )
 
 /** The sessions list as the screen filters and searches it, and the actions of its cards. */
@@ -97,7 +98,8 @@ class SessionsViewModel internal constructor(
             stats = stats,
             hostname = host,
             connection = connection,
-            workingSince = since
+            workingSince = since,
+            allSessions = all
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SessionsUiState())
 

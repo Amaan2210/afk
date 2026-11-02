@@ -1,6 +1,8 @@
 package io.github.amaankhan63.afk.ui.util
 
 import java.util.Locale
+import kotlin.math.pow
+import kotlin.math.roundToLong
 
 private val UNITS = listOf("B", "KB", "MB", "GB", "TB")
 private const val GB = 3
@@ -10,10 +12,17 @@ private const val STEP = 1024.0
 fun humanBytes(bytes: Long): String {
     var value = bytes.toDouble()
     var unit = 0
-    while (value >= STEP && unit < UNITS.lastIndex) {
+    // Decided on the value as shown, so 1023.9996 KB reads 1 MB, not 1024 KB.
+    while (unit < UNITS.lastIndex && rounded(value, decimals(unit)) >= STEP) {
         value /= STEP
         unit++
     }
-    val pattern = if (unit >= GB) "%.1f %s" else "%.0f %s"
-    return String.format(Locale.ROOT, pattern, value, UNITS[unit])
+    return String.format(Locale.ROOT, "%.${decimals(unit)}f %s", value, UNITS[unit])
+}
+
+private fun decimals(unit: Int) = if (unit >= GB) 1 else 0
+
+private fun rounded(value: Double, decimals: Int): Double {
+    val scale = 10.0.pow(decimals)
+    return (value * scale).roundToLong() / scale
 }

@@ -10,8 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -30,8 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -51,6 +54,11 @@ private val FAB_CLEARANCE = 88.dp
 fun SessionsScreen(onOpen: (String) -> Unit, onNew: () -> Unit, onSettings: () -> Unit) {
     val viewModel: SessionsViewModel = hiltViewModel()
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    // The field's text lives here, not in the round trip through the view model's flows: a
+    // recomposition before that trip ends would put stale text back under the keyboard.
+    var query by rememberSaveable { mutableStateOf(viewModel.ui.value.query) }
+    // After process death the field gets its text back but the view model starts empty.
+    LaunchedEffect(viewModel) { viewModel.onQuery(query) }
     val snackbar = remember { SnackbarHostState() }
     val open by rememberUpdatedState(onOpen)
     var now by remember { mutableStateOf(Instant.now()) }
@@ -65,11 +73,14 @@ fun SessionsScreen(onOpen: (String) -> Unit, onNew: () -> Unit, onSettings: () -
     }
     LaunchedEffect(viewModel) { viewModel.resumed.collect { open(it) } }
     SessionsScreen(
-        state = state,
+        state = state.copy(query = query),
         onOpen = onOpen,
         onNew = onNew,
         onSettings = onSettings,
-        onQuery = viewModel::onQuery,
+        onQuery = {
+            query = it
+            viewModel.onQuery(it)
+        },
         onFilter = viewModel::onFilter,
         onRename = viewModel::rename,
         onKill = viewModel::kill,
@@ -102,13 +113,7 @@ fun SessionsScreen(
                 title = { Text("Sessions", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onSettings) {
-                        // U+FE0E asks for the gear's text form rather than an emoji.
-                        Text(
-                            "\u2699\uFE0E",
-                            Modifier.clearAndSetSemantics {
-                                contentDescription = "Settings"
-                            }
-                        )
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )
@@ -120,7 +125,7 @@ fun SessionsScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Text("＋", Modifier.clearAndSetSemantics {})
+                Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(12.dp))
                 Text("New session", fontWeight = FontWeight.Bold)
             }
@@ -139,6 +144,7 @@ fun SessionsScreen(
                 onValueChange = onQuery,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                 placeholder = { Text("Search sessions, projects, branches") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium
             )
@@ -166,8 +172,9 @@ fun SessionsScreen(
         }
     }
 
-    // Looked up on every change, so the actions see the session's current name and state.
-    val target = state.sessions.find { it.id == actionsFor }
+    // Looked up in every session, not just the listed ones, on every change: the actions see the
+    // session's current name and state, and stay open when a filter hides it.
+    val target = state.allSessions.find { it.id == actionsFor }
     if (target != null) {
         SessionActionsSheet(
             session = target,
@@ -177,7 +184,7 @@ fun SessionsScreen(
             onResume = { onResume(target.id) }
         )
     }
-    // A session that leaves the list, removed or filtered out, takes its actions with it for good.
+    // A session the daemon removes takes its actions with it for good.
     LaunchedEffect(target == null) {
         if (target == null) actionsFor = null
     }

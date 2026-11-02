@@ -20,4 +20,10 @@ class BytesTest {
         assertEquals("1 KB", humanBytes(1_024))
         assertEquals("1.0 GB", humanBytes(1_073_741_824))
     }
+
+    @Test fun roundingUpToTheNextUnitShowsThatUnit() {
+        assertEquals("1 MB", humanBytes(1_048_575))
+        assertEquals("1.0 TB", humanBytes(1_099_511_627_775))
+        assertEquals("1023.9 GB", humanBytes(1_099_404_253_594))
+    }
 }

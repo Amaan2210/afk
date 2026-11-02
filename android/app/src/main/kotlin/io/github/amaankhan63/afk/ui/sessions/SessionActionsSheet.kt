@@ -34,8 +34,9 @@ import kotlinx.coroutines.launch
 private enum class Step { Menu, Rename, Kill }
 
 /**
- * What a long press on [session] offers: a sheet with Rename, Kill and, for an ended agent session
- * that can be picked up again, Resume. Renaming and killing go through a dialog first.
+ * What a long press on [session] offers: a sheet with Rename, Kill while the session has not
+ * ended, and Resume for an ended agent session that can be picked up again. Renaming and killing
+ * go through a dialog first.
  */
 @Composable
 internal fun SessionActionsSheet(
@@ -103,7 +104,10 @@ private fun ActionsMenu(
             style = MaterialTheme.typography.titleMedium
         )
         Action("Rename") { afterHiding(onRename) }
-        Action("Kill", color = MaterialTheme.colorScheme.error) { afterHiding(onKill) }
+        // The daemon ignores a kill of an ended session: there is nothing left to stop.
+        if (session.state != SessionState.ended) {
+            Action("Kill", color = MaterialTheme.colorScheme.error) { afterHiding(onKill) }
+        }
         if (session.canResume()) Action("Resume") { afterHiding(onResume) }
     }
 }

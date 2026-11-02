@@ -102,6 +102,9 @@ class SessionsViewModelTest {
         vm.onQuery("toolkit")
         assertEquals(emptyList<String>(), vm.ids())
         assertEquals(everything, vm.ui.value.counts)
+        // Every session stays reachable for the long-press actions, whatever the list shows.
+        val all = vm.ui.value.allSessions.map { it.id }
+        assertEquals(listOf("s_codex", "s_work", "s_shell", "s_ended"), all)
     }
 
     @Test fun carriesStatsAndConnection() = runTest {

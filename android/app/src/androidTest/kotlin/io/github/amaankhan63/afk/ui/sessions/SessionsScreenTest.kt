@@ -1,5 +1,7 @@
 package io.github.amaankhan63.afk.ui.sessions
 
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
@@ -63,6 +65,15 @@ class SessionsScreenTest {
         rule.onNodeWithText("Resume").assertDoesNotExist()
     }
 
+    @Test fun endedSessionOffersResumeButNotKill() {
+        showScreen()
+
+        longPress("s_ended")
+
+        rule.onNodeWithText("Resume").assertIsDisplayed()
+        rule.onNodeWithText("Kill").assertDoesNotExist()
+    }
+
     @Test fun resumeFromTheSheet() {
         val resumed = mutableListOf<String>()
         showScreen(onResume = { resumed += it })
@@ -103,15 +114,41 @@ class SessionsScreenTest {
         assertEquals(listOf("s_work"), killed)
     }
 
+    @Test fun actionsStayOpenUntilTheSessionIsRemoved() {
+        val state = showScreen()
+
+        longPress("s_work")
+        rule.onNodeWithText("Rename").performClick()
+        val nameField = rule.onNode(hasSetTextAction() and hasAnyAncestor(isDialog()))
+        nameField.performTextReplacement("estimates")
+
+        // The agent finishes and the Working filter hides the session: the dialog keeps the draft.
+        rule.runOnIdle {
+            state.value =
+                state.value.copy(sessions = state.value.sessions.filterNot { it.id == "s_work" })
+        }
+        rule.onNodeWithTag("session-s_work").assertDoesNotExist()
+        nameField.assert(hasText("estimates"))
+
+        // The daemon removes the session: its dialog goes with it.
+        rule.runOnIdle {
+            val left = state.value.allSessions.filterNot { it.id == "s_work" }
+            state.value = state.value.copy(allSessions = left)
+        }
+        rule.onNodeWithText("Rename session").assertDoesNotExist()
+    }
+
+    /** Shows [state] and returns it, so a test can change what the screen shows. */
     private fun showScreen(
         onRename: (String, String) -> Unit = { _, _ -> },
         onKill: (String) -> Unit = {},
-        onResume: (String) -> Unit = {}
-    ) {
+        onResume: (String) -> Unit = {},
+        state: MutableState<SessionsUiState> = mutableStateOf(sampleState())
+    ): MutableState<SessionsUiState> {
         rule.setContent {
             AfkTheme(AfkThemeId.Graphite, ThemeMode.Dark) {
                 SessionsScreen(
-                    state = sampleState(),
+                    state = state.value,
                     onOpen = {},
                     onNew = {},
                     onSettings = {},
@@ -123,6 +160,7 @@ class SessionsScreenTest {
                 )
             }
         }
+        return state
     }
 
     private fun longPress(id: String) {
@@ -130,46 +168,49 @@ class SessionsScreenTest {
         rule.onNodeWithTag("session-$id").performTouchInput { longClick() }
     }
 
-    private fun sampleState() = SessionsUiState(
-        sessions = listOf(
-            session(
-                "s_needs",
-                "web-platform",
-                SessionKind.claude,
-                SessionState.needs_input,
-                lastMessage = "Which auth approach should I use?",
-                gitBranch = "feature/ci",
-                subagentsRunning = 2,
-                agentSessionId = "c1"
-            ),
-            session(
-                "s_done",
-                "remote-dev",
-                SessionKind.claude,
-                SessionState.finished,
-                lastMessage = "Added README and CI workflow. Tests pass.",
-                gitBranch = "main",
-                agentSessionId = "c2"
-            ),
-            session(
-                "s_work",
-                "shop-estimator",
-                SessionKind.codex,
-                SessionState.working,
-                lastMessage = "● Edit(src/parsers/estimate.ts)",
-                gitBranch = "main",
-                agentSessionId = "x1"
-            ),
-            session("s_shell", "ToolKit", SessionKind.shell, SessionState.idle),
-            session(
-                "s_ended",
-                "api",
-                SessionKind.claude,
-                SessionState.ended,
-                lastMessage = "Done.",
-                agentSessionId = "c3"
-            )
+    private val sampleSessions = listOf(
+        session(
+            "s_needs",
+            "web-platform",
+            SessionKind.claude,
+            SessionState.needs_input,
+            lastMessage = "Which auth approach should I use?",
+            gitBranch = "feature/ci",
+            subagentsRunning = 2,
+            agentSessionId = "c1"
         ),
+        session(
+            "s_done",
+            "remote-dev",
+            SessionKind.claude,
+            SessionState.finished,
+            lastMessage = "Added README and CI workflow. Tests pass.",
+            gitBranch = "main",
+            agentSessionId = "c2"
+        ),
+        session(
+            "s_work",
+            "shop-estimator",
+            SessionKind.codex,
+            SessionState.working,
+            lastMessage = "● Edit(src/parsers/estimate.ts)",
+            gitBranch = "main",
+            agentSessionId = "x1"
+        ),
+        session("s_shell", "ToolKit", SessionKind.shell, SessionState.idle),
+        session(
+            "s_ended",
+            "api",
+            SessionKind.claude,
+            SessionState.ended,
+            lastMessage = "Done.",
+            agentSessionId = "c3"
+        )
+    )
+
+    private fun sampleState() = SessionsUiState(
+        sessions = sampleSessions,
+        allSessions = sampleSessions,
         counts = mapOf(
             StateFilter.All to 5,
             StateFilter.NeedsYou to 1,

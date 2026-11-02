@@ -73,6 +73,7 @@ fun LaptopStrip(
         )
         if (stats != null) {
             val ram = ramFraction(stats)
+            val barColor = if (ram >= RAM_HIGH) palette.amber else colors.primary
             Text("RAM", style = small, color = colors.onSurfaceVariant)
             Box(
                 Modifier
@@ -85,16 +86,7 @@ fun LaptopStrip(
                     Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(ram)
-                        .background(
-                            if (ram >=
-                                RAM_HIGH
-                            ) {
-                                palette.amber
-                            } else {
-                                colors.primary
-                            },
-                            BAR_SHAPE
-                        )
+                        .background(barColor, BAR_SHAPE)
                 )
             }
             Text(
