@@ -30,30 +30,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.amaankhan63.afk.data.protocol.Session
-import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.ui.components.KillDialog
 import io.github.amaankhan63.afk.ui.components.RenameDialog
 import io.github.amaankhan63.afk.ui.components.StateDot
 import io.github.amaankhan63.afk.ui.sessions.canResume
-import io.github.amaankhan63.afk.ui.sessions.stateLabel
 import java.time.Instant
 import kotlinx.coroutines.launch
 
 private const val CLIP_LABEL = "AFK attach command"
 
+/** A session name the laptop's shell takes as one word without quotes. */
+private val PLAIN_NAME = Regex("[A-Za-z0-9._-]+")
+
 private enum class Dialog { Rename, Kill }
 
 /**
- * The session screen's app bar: back, the session's name, and its agent and state under it. The
- * overflow menu offers Rename, Kill while the session has not ended, Resume for an ended agent
- * session that can be picked up again, and Copy attach command, which puts [attachCommand] on the
- * clipboard and then calls [onCopied]. Renaming and killing go through a dialog first.
+ * The session screen's app bar: back, the session's name, and its agent and state under it, a
+ * working session's time counted from [workingSince] to [now]. The overflow menu offers Rename,
+ * Kill while the session has not ended, Resume for an ended agent session that can be picked up
+ * again, and Copy attach command, which puts [attachCommand] on the clipboard and then calls
+ * [onCopied]. Renaming and killing go through a dialog first.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionTopBar(
     session: Session?,
+    workingSince: Instant?,
+    now: Instant,
     onBack: () -> Unit,
     onRename: (name: String) -> Unit,
     onKill: () -> Unit,
@@ -62,7 +66,7 @@ fun SessionTopBar(
 ) {
     var dialog by rememberSaveable { mutableStateOf<Dialog?>(null) }
     TopAppBar(
-        title = { if (session != null) Title(session) },
+        title = { if (session != null) Title(session, workingSince, now) },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -98,7 +102,7 @@ fun SessionTopBar(
 }
 
 @Composable
-private fun Title(session: Session) {
+private fun Title(session: Session, workingSince: Instant?, now: Instant) {
     Column {
         Text(
             text = session.name,
@@ -113,7 +117,7 @@ private fun Title(session: Session) {
         ) {
             StateDot(session.state)
             Text(
-                text = sessionSubtitle(session),
+                text = sessionSubtitle(session, workingSince, now),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -170,15 +174,12 @@ private fun Overflow(
     }
 }
 
-/** What opens [session]'s terminal in a window on the laptop. */
-internal fun attachCommand(session: Session) = "afk attach ${session.name}"
-
-/** The session's agent and state, `Claude · Needs your input`, the state as its card says it. */
-internal fun sessionSubtitle(session: Session): String =
-    "${agentName(session.kind)} · ${stateLabel(session, workingSince = null, now = Instant.now())}"
-
-internal fun agentName(kind: SessionKind): String = when (kind) {
-    SessionKind.claude -> "Claude"
-    SessionKind.codex -> "Codex"
-    SessionKind.shell -> "Shell"
+/**
+ * What opens [session]'s terminal in a window on the laptop. A name with anything but letters,
+ * digits, `.`, `_` and `-`, such as a folder name with spaces, is quoted.
+ */
+internal fun attachCommand(session: Session): String {
+    val name = session.name
+    val quoted = if (PLAIN_NAME.matches(name)) name else "\"${name.replace("\"", "\\\"")}\""
+    return "afk attach $quoted"
 }

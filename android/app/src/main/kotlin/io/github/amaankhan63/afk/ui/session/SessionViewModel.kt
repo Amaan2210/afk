@@ -5,15 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.Session
-import io.github.amaankhan63.afk.data.protocol.SessionKind
-import io.github.amaankhan63.afk.data.protocol.Stats
-import io.github.amaankhan63.afk.data.protocol.Strip
+import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.di.StripChipsFlow
 import io.github.amaankhan63.afk.service.ForegroundTracker
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalBridge
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,29 +24,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-enum class SessionTab { Terminal, Chat }
-
-/** What the session screen shows; [chips] are the strip's chips Settings picked, in order. */
-data class SessionUiState(
-    val session: Session? = null,
-    val strip: Strip? = null,
-    val stats: Stats? = null,
-    val chips: List<StripChip> = DEFAULT_STRIP_CHIPS,
-    val tab: SessionTab = SessionTab.Terminal,
-    val composer: String = "",
-    val connection: ConnectionState
-) {
-    /** The strip's chips that have a value, as text; none, which hides the strip, in a shell. */
-    val shownChips: List<String> =
-        if (session == null || session.kind == SessionKind.shell) {
-            emptyList()
-        } else {
-            chips.mapNotNull { StripChips.render(it, strip, stats) }
-        }
-}
 
 /**
  * Session [sessionId] as its screen shows it: its terminal, strip and tabs, what the composer and
@@ -56,7 +36,8 @@ data class SessionUiState(
 class SessionViewModel internal constructor(
     private val repo: SessionsRepository,
     private val sessionId: String,
-    stripChips: Flow<List<StripChip>> = flowOf(DEFAULT_STRIP_CHIPS)
+    stripChips: Flow<List<StripChip>> = flowOf(DEFAULT_STRIP_CHIPS),
+    private val clock: () -> Instant = Instant::now
 ) : ViewModel() {
     /** [savedStateHandle] holds the session's id as the route's `id`. */
     @Inject constructor(
@@ -75,19 +56,36 @@ class SessionViewModel internal constructor(
     private val tab = MutableStateFlow(SessionTab.Terminal)
     private val composer = MutableStateFlow("")
 
+    // The session, and when it was first seen working while it is. It lives as long as the view
+    // model, not the screen's subscription, so a rotation keeps the time.
+    private val tracked: StateFlow<Pair<Session?, Instant?>> = repo.session(sessionId)
+        .scan<Session?, Pair<Session?, Instant?>>(null to null) { (_, since), session ->
+            session to if (session?.state == SessionState.working) since ?: clock() else null
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null to null)
+
     private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
 
-    /** Failures of [answer], [kill], [rename] and [resume]. */
+    /** Failures of [sendLine], [answer], [kill], [rename] and [resume]. */
     val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
 
     val ui: StateFlow<SessionUiState> = combine(
-        combine(repo.session(sessionId), repo.strip(sessionId), repo.stats, ::Triple),
+        combine(tracked, repo.strip(sessionId), repo.stats, ::Triple),
         stripChips,
         tab,
         composer,
         repo.connection
-    ) { (session, strip, stats), chips, selected, text, connection ->
-        SessionUiState(session, strip, stats, chips, selected, text, connection)
+    ) { (watched, strip, stats), chips, selected, text, connection ->
+        SessionUiState(
+            watched.first,
+            strip,
+            stats,
+            chips,
+            selected,
+            text,
+            connection,
+            workingSince = watched.second
+        )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -102,11 +100,19 @@ class SessionViewModel internal constructor(
         composer.value = text
     }
 
-    /** Types the composer's text and Enter, and empties the composer. */
-    fun sendLine() {
+    /**
+     * Types the composer's text and Enter, empties the composer and returns true. While not
+     * connected the text would be dropped, so it stays, [errors] says why, and this returns false.
+     */
+    fun sendLine(): Boolean {
+        if (repo.connection.value !is ConnectionState.Connected) {
+            mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+            return false
+        }
         val line = composer.value + "\r"
         composer.value = ""
         sendKeys(line.toByteArray(Charsets.UTF_8))
+        return true
     }
 
     /** Types [bytes] as they are, such as a key bar key's sequence. */

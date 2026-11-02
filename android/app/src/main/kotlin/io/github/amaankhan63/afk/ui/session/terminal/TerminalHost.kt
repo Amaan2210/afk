@@ -20,6 +20,7 @@ import com.termux.terminal.TerminalColors as EmulatorColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import io.github.amaankhan63.afk.ui.session.KeyBarState
 import io.github.amaankhan63.afk.ui.theme.TerminalColors
 
 private const val ANSI_COLORS = 16
@@ -38,7 +39,8 @@ private val COLOR_SLOTS = (0 until ANSI_COLORS) + listOf(
  * The view reports its grid to the bridge on every layout; a pinch asks [onFontSizeChange] for a
  * size one step larger or smaller, within [MIN_FONT_SP]..[MAX_FONT_SP]. A long press selects text,
  * and its Copy and Paste use the system clipboard. [TerminalBridge.toggleKeyboard] opens and closes
- * the soft keyboard on the view.
+ * the soft keyboard on the view, and [keyBarState]'s armed Ctrl applies to the next character typed
+ * into it.
  *
  * Termux keeps its default colours process-wide, so every TerminalHost shows the [colors] set last.
  */
@@ -48,11 +50,13 @@ fun TerminalHost(
     colors: TerminalColors,
     fontSizeSp: Int,
     onFontSizeChange: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    keyBarState: KeyBarState? = null
 ) {
     val textSizePx = with(LocalDensity.current) { fontSizeSp.sp.roundToPx() }
     val currentFontSizeSp by rememberUpdatedState(fontSizeSp)
     val currentOnFontSizeChange by rememberUpdatedState(onFontSizeChange)
+    val currentKeyBarState by rememberUpdatedState(keyBarState)
     // Another session's bridge gets a view of its own.
     key(bridge) {
         val shown = remember { Shown() }
@@ -60,7 +64,11 @@ fun TerminalHost(
             factory = { context ->
                 TerminalView(context, null).apply {
                     setTerminalViewClient(
-                        TerminalHostClient({ currentFontSizeSp }, { currentOnFontSizeChange(it) })
+                        TerminalHostClient(
+                            fontSizeSp = { currentFontSizeSp },
+                            onFontSizeChange = { currentOnFontSizeChange(it) },
+                            keyBar = { currentKeyBarState }
+                        )
                     )
                     isFocusable = true
                     isFocusableInTouchMode = true

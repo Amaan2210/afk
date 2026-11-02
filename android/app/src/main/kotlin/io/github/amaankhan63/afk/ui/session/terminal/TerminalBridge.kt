@@ -109,6 +109,21 @@ class TerminalBridge(
         }
     }
 
+    /**
+     * Sends the view's grid again when the terminal has another, as after the laptop resized it
+     * while the view was out of sight: a view shown again lays out no new grid to send. Only while
+     * attached, and not while a resize of the view's grid is about to go out anyway.
+     */
+    fun reclaimGrid() {
+        checkMainThread()
+        val grid = viewGrid ?: return
+        val emulator = session.emulator ?: return
+        if (!attached || pendingResize?.isActive == true) return
+        if (emulator.mColumns == grid.cols && emulator.mRows == grid.rows) return
+        repo.ptyResize(sessionId, grid.cols, grid.rows)
+        session.applyRemoteSize(grid.cols, grid.rows)
+    }
+
     private fun show(frame: PtyFrame) {
         when (frame) {
             is PtyFrame.Snapshot -> {

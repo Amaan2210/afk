@@ -27,8 +27,9 @@ private val TERMINAL_SHAPE = RoundedCornerShape(10.dp)
 
 /**
  * The Terminal tab: [bridge]'s terminal and, when [keyBar] is on, the key bar under it, whose keys
- * go to [onBytes] and whose keyboard key calls [onToggleKeyboard]. A [failure] to show the
- * terminal is reported over it, with a Retry that calls [onRetry].
+ * go to [onBytes] and whose keyboard key calls [onToggleKeyboard]. Its armed Ctrl also applies to
+ * the next character typed into the terminal. A [failure] to show the terminal is reported over
+ * it, with a Retry that calls [onRetry].
  */
 @Composable
 fun TerminalTab(
@@ -59,7 +60,8 @@ fun TerminalTab(
                 colors = colors,
                 fontSizeSp = fontSizeSp,
                 onFontSizeChange = onFontSizeChange,
-                modifier = Modifier.fillMaxSize().padding(8.dp)
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                keyBarState = keyBarState.takeIf { keyBar }
             )
             if (failure != null) {
                 TerminalFailure(failure, onRetry, Modifier.align(Alignment.TopCenter))

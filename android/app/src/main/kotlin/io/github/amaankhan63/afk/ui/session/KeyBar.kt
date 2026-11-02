@@ -57,6 +57,11 @@ class KeyBarState {
         }
     }
 
+    /** Drops an armed Ctrl, as when it was used outside the bar or the composer changed tabs. */
+    fun disarm() {
+        ctrlArmed = false
+    }
+
     /** Ctrl+[c] when Ctrl is armed, which disarms it; null, leaving [c] alone, otherwise. */
     fun press(c: Char): ByteArray? {
         if (!ctrlArmed) return null

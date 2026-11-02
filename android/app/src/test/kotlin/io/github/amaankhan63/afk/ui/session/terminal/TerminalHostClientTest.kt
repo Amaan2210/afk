@@ -1,6 +1,9 @@
 package io.github.amaankhan63.afk.ui.session.terminal
 
+import io.github.amaankhan63.afk.ui.session.KeyBarKey
+import io.github.amaankhan63.afk.ui.session.KeyBarState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,6 +29,23 @@ class TerminalHostClientTest {
     }
 
     @Test fun keyboardSendsKeysAsTyped() = assertTrue(client.isTerminalViewSelected())
+
+    @Test fun armedCtrlReachesTheNextCharacterTypedIntoTheTerminalOnce() {
+        val keyBar = KeyBarState()
+        val client = TerminalHostClient({ fontSizeSp }, { changes += it }, { keyBar })
+        keyBar.press(KeyBarKey.Ctrl)
+
+        // TerminalView also asks on every hardware key event, Shift included: asking keeps it.
+        assertTrue(client.readControlKey())
+        assertTrue(client.readControlKey())
+        // False: TerminalView writes the control character itself.
+        assertFalse(client.onCodePoint('c'.code, true, null))
+
+        assertFalse(client.readControlKey())
+        assertFalse(keyBar.ctrlArmed)
+    }
+
+    @Test fun unarmedCtrlIsNotHeld() = assertFalse(client.readControlKey())
 
     @Test fun fontSizeStaysWithinBounds() {
         fontSizeSp = MAX_FONT_SP

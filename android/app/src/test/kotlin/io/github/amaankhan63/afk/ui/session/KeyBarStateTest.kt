@@ -58,6 +58,14 @@ class KeyBarStateTest {
         assertFalse(k.ctrlArmed)
     }
 
+    @Test fun disarmDropsAnArmedCtrl() {
+        val k = KeyBarState()
+        k.press(KeyBarKey.Ctrl)
+        k.disarm()
+        assertFalse(k.ctrlArmed)
+        assertNull(k.press('c'))
+    }
+
     @Test fun insertedCharacterIsFoundAnywhere() {
         assertEquals('c', insertedChar("", "c"))
         assertEquals('x', insertedChar("ab", "axb"))

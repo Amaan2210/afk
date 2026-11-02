@@ -166,6 +166,44 @@ class TerminalBridgeTest {
         assertEquals(100 to 40, bridge.grid)
     }
 
+    @Test fun reclaimGridSendsTheViewsGridAfterARemoteResize() = runTest {
+        val bridge = attached()
+        bridge.session.updateSize(120, 40, 10, 20)
+        advanceTimeBy(200)
+        repo.ptyResizes.clear()
+        // The laptop resized the terminal while the phone showed another tab.
+        receive(PtyFrame.Resized(100, 40))
+
+        bridge.reclaimGrid()
+
+        assertEquals(listOf(Triple("s_1", 120, 40)), repo.ptyResizes)
+        assertEquals(120 to 40, bridge.grid)
+    }
+
+    @Test fun reclaimGridSendsNothingWhenTheGridsAgree() = runTest {
+        val bridge = attached()
+        bridge.session.updateSize(120, 40, 10, 20)
+        advanceTimeBy(200)
+        repo.ptyResizes.clear()
+
+        bridge.reclaimGrid()
+
+        assertEquals(emptyList<Triple<String, Int, Int>>(), repo.ptyResizes)
+    }
+
+    @Test fun reclaimGridSendsNothingWhileDetached() = runTest {
+        val bridge = attached()
+        bridge.session.updateSize(120, 40, 10, 20)
+        advanceTimeBy(200)
+        receive(PtyFrame.Resized(100, 40))
+        bridge.detach()
+        repo.ptyResizes.clear()
+
+        bridge.reclaimGrid()
+
+        assertEquals(emptyList<Triple<String, Int, Int>>(), repo.ptyResizes)
+    }
+
     @Test fun tooSmallRemoteSizeIsClamped() = runTest {
         val bridge = attached()
         receive(PtyFrame.Resized(1, 1))

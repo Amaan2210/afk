@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalViewClient
+import io.github.amaankhan63.afk.ui.session.KeyBarState
 
 /** The font sizes a pinch can reach. */
 const val MIN_FONT_SP = 8
@@ -15,12 +16,15 @@ private const val PINCH_OUT = 1.1f
 
 /**
  * TerminalView's client: keys are left to the view, which writes them to the session, and a pinch
- * steps the font size through [onFontSizeChange]. A long press starts the view's text selection,
- * whose Copy and Paste reach [AfkTerminalSession]. Logs are dropped: they can quote what is typed.
+ * steps the font size through [onFontSizeChange]. The key bar's Ctrl, while [keyBar]'s is armed,
+ * holds Ctrl down for the next character typed into the view. A long press starts the view's text
+ * selection, whose Copy and Paste reach [AfkTerminalSession]. Logs are dropped: they can quote
+ * what is typed.
  */
 internal class TerminalHostClient(
     private val fontSizeSp: () -> Int,
-    private val onFontSizeChange: (Int) -> Unit
+    private val onFontSizeChange: (Int) -> Unit,
+    private val keyBar: () -> KeyBarState? = { null }
 ) : TerminalViewClient {
     /** [scale] is the pinch gathered so far; TerminalView keeps what this returns. */
     override fun onScale(scale: Float): Float {
@@ -54,7 +58,11 @@ internal class TerminalHostClient(
 
     override fun onLongPress(event: MotionEvent?): Boolean = false
 
-    override fun readControlKey(): Boolean = false
+    /**
+     * Whether the key bar's Ctrl is armed. Asking never uses it up: TerminalView also asks on
+     * every hardware key event, Shift included. [onCodePoint] uses it up.
+     */
+    override fun readControlKey(): Boolean = keyBar()?.ctrlArmed == true
 
     override fun readAltKey(): Boolean = false
 
@@ -62,11 +70,18 @@ internal class TerminalHostClient(
 
     override fun readFnKey(): Boolean = false
 
+    /**
+     * A character typed into the view: an armed Ctrl, which [readControlKey] has just applied to
+     * it, is used up. False: TerminalView writes the character, as a control character if so.
+     */
     override fun onCodePoint(
         codePoint: Int,
         ctrlDown: Boolean,
         session: TerminalSession?
-    ): Boolean = false
+    ): Boolean {
+        keyBar()?.disarm()
+        return false
+    }
 
     override fun onEmulatorSet() = Unit
 

@@ -1,12 +1,17 @@
 package io.github.amaankhan63.afk.ui.session
 
+import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ModelInfo
 import io.github.amaankhan63.afk.data.protocol.SessionKind
+import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.protocol.Strip
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
+import io.github.amaankhan63.afk.data.sessions.HELLO
 import io.github.amaankhan63.afk.data.sessions.session
 import io.github.amaankhan63.afk.service.ForegroundTracker
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +25,9 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,14 +56,45 @@ class SessionViewModelTest {
     }
 
     @Test fun sendLineAppendsCarriageReturnAndClears() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
         collecting(vm.ui)
         vm.onComposer("hello")
         assertEquals("hello", vm.ui.value.composer)
 
-        vm.sendLine()
+        assertTrue(vm.sendLine())
 
         assertArrayEquals("hello\r".toByteArray(), repo.lastInput)
         assertEquals("", vm.ui.value.composer)
+    }
+
+    @Test fun sendLineWhileDisconnectedKeepsTheText() = runTest {
+        repo.connection.value = ConnectionState.Connecting(attempt = 1)
+        val errors = mutableListOf<AfkError>()
+        collecting(vm.ui)
+        collecting(vm.errors, errors)
+        vm.onComposer("hello")
+
+        assertFalse(vm.sendLine())
+
+        assertEquals(emptyList<Pair<String, ByteArray>>(), repo.ptyInputs)
+        assertEquals("hello", vm.ui.value.composer)
+        assertEquals(ERROR_DISCONNECTED, errors.single().code)
+    }
+
+    @Test fun workingSessionKeepsTheTimeItWasFirstSeenWorking() = runTest {
+        val start = Instant.parse("2026-11-02T10:00:00Z")
+        var now = start
+        val timed = SessionViewModel(repo, "s_1", clock = { now })
+        collecting(timed.ui)
+
+        repo.sessions.value = listOf(session(id = "s_1", state = SessionState.working))
+        now = start.plusSeconds(60)
+        repo.sessions.value =
+            listOf(session(id = "s_1", state = SessionState.working, lastMessage = "still"))
+        assertEquals(start, timed.ui.value.workingSince)
+
+        repo.sessions.value = listOf(session(id = "s_1", state = SessionState.finished))
+        assertNull(timed.ui.value.workingSince)
     }
 
     @Test fun sendKeysWritesBytesUnchanged() {

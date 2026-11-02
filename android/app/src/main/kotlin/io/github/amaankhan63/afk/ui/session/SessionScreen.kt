@@ -34,16 +34,20 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.ui.session.chat.ChatTab
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalTab
 import io.github.amaankhan63.afk.ui.theme.AfkThemeId
 import io.github.amaankhan63.afk.ui.theme.Palettes
+import java.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The terminal's font size and the key bar's visibility, until Settings holds them (Task 14). */
 private const val DEFAULT_FONT_SP = 12
 private const val KEY_BAR = true
+
+/** How often a working session's time is brought up to date. */
+private const val CLOCK_TICK_MS = 30_000L
 
 /**
  * One session: its Terminal and Chat tabs, which the segmented control and a swipe switch, with
@@ -71,6 +75,7 @@ fun SessionScreen(
     val composerFocus = remember { FocusRequester() }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var now by remember { mutableStateOf(Instant.now()) }
     val pager = rememberPagerState(initialPage = state.tab.ordinal) { SessionTab.entries.size }
     // Graphite until Settings holds the theme and Always dark terminal (Task 14).
     val terminalColors = Palettes.terminal(AfkThemeId.Graphite, dark = isSystemInDarkTheme())
@@ -80,6 +85,12 @@ fun SessionScreen(
     LaunchedEffect(viewModel) {
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }
     }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(CLOCK_TICK_MS)
+            now = Instant.now()
+        }
+    }
     LifecycleStartEffect(viewModel) {
         viewModel.attachTerminal()
         onStopOrDispose { viewModel.detachTerminal() }
@@ -88,18 +99,30 @@ fun SessionScreen(
         viewModel.onResumed()
         onPauseOrDispose { viewModel.onPaused() }
     }
-    // The segmented control moves the pager, and a swipe, once it settles, selects the tab.
+    // The segmented control moves the pager, also out of a scroll it cut short, and a swipe, once
+    // it settles, selects the tab. Ctrl armed on one tab does not carry over to the other.
     LaunchedEffect(state.tab) {
-        if (pager.currentPage != state.tab.ordinal) pager.animateScrollToPage(state.tab.ordinal)
+        keyBarState.disarm()
+        val page = state.tab.ordinal
+        if (pager.currentPage != page || pager.currentPageOffsetFraction != 0f) {
+            pager.animateScrollToPage(page)
+        }
     }
     LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.collect { viewModel.selectTab(SessionTab.entries[it]) }
+        snapshotFlow { pager.settledPage }.collect {
+            val tab = SessionTab.entries[it]
+            viewModel.selectTab(tab)
+            // The laptop may have resized the terminal while it was out of sight.
+            if (tab == SessionTab.Terminal) viewModel.bridge.reclaimGrid()
+        }
     }
 
     Scaffold(
         topBar = {
             SessionTopBar(
                 session = state.session,
+                workingSince = state.workingSince,
+                now = now,
                 onBack = onBack,
                 onRename = viewModel::rename,
                 onKill = viewModel::kill,
@@ -149,11 +172,9 @@ fun SessionScreen(
                         viewModel.onComposer(text)
                     }
                 },
-                onSend = {
-                    viewModel.sendLine()
-                    composer = ""
-                },
-                placeholder = placeholder(state),
+                // While not connected the text stays, for a send once the connection is back.
+                onSend = { if (viewModel.sendLine()) composer = "" },
+                placeholder = state.composerPlaceholder,
                 modifier = Modifier.focusRequester(composerFocus)
             )
         }
@@ -173,15 +194,5 @@ private fun SessionTabs(tab: SessionTab, onSelect: (SessionTab) -> Unit) {
                 icon = {}
             ) { Text(it.name) }
         }
-    }
-}
-
-/** On the Chat tab of an agent session the composer talks to the agent; elsewhere it types. */
-private fun placeholder(state: SessionUiState): String {
-    val kind = state.session?.kind
-    return if (state.tab == SessionTab.Chat && kind != null && kind != SessionKind.shell) {
-        "Message ${agentName(kind)}…"
-    } else {
-        "Type, then send as a line…"
     }
 }
