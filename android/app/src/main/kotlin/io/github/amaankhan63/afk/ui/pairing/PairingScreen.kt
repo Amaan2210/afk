@@ -169,3 +169,5 @@ private fun scanOptions(): ScanOptions = ScanOptions()
     .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
     .setPrompt("Scan the QR code that afk pair shows")
     .setBeepEnabled(false)
+    // Follows the device's rotation; the manifest lifts zxing's landscape-only declaration.
+    .setOrientationLocked(false)
