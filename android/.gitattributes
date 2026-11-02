@@ -1,0 +1,2 @@
+# cmd.exe misreads labels in LF batch files; the root rule would check gradlew.bat out with LF.
+*.bat text eol=crlf
