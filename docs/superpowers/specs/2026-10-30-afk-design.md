@@ -58,6 +58,7 @@ AFK is the phone app and the laptop service that solve all four, built well enou
 - Session replay: scrub back through recorded terminal output.
 - Multi-laptop: pair more than one machine.
 - Web client reusing the same protocol; macOS/Linux daemon; Wear OS actions; alternative push transports (ntfy / FCM) for phones with aggressive battery killers.
+- Persisted session list: the daemon keeps its session list in memory only, so a daemon restart empties the phone's list. Saving the list (with resume ids) to disk would let the phone resume sessions from before the restart.
 
 ## 3. Context and constraints
 
