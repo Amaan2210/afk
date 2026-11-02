@@ -135,8 +135,7 @@ internal class TerminalHostClient(
         return 1f
     }
 
-    // The terminal is the only text field in its view: raw keys, no suggestions.
-    override fun isTerminalViewSelected(): Boolean = true
+    override fun isTerminalViewSelected(): Boolean = false
 
     override fun onSingleTapUp(e: MotionEvent?) = Unit
 
