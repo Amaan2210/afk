@@ -33,8 +33,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
 /**
@@ -66,6 +64,13 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
     /** The grid each open terminal asked for last; a re-subscription asks for it again. */
     private val grids = ConcurrentHashMap<String, Grid>()
 
+    /**
+     * How many collections hold each daemon subscription, by [PtyKey] or [ChatKey]. The daemon
+     * keeps one per session (and thread) per connection, so only the last to end unsubscribes.
+     * Guarded by itself.
+     */
+    private val holders = HashMap<Any, Int>()
+
     init {
         // Undispatched: listening before this returns, so no push is missed however soon the
         // manager starts.
@@ -78,20 +83,24 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
     override fun strip(id: String): StateFlow<Strip?> = stripState(id).asStateFlow()
 
     override fun pty(id: String, cols: Int, rows: Int): Flow<PtyFrame> = subscription(
+        key = PtyKey(id),
         subscribe = {
             val grid = grids[id] ?: Grid(cols, rows)
             ClientMessage.PtySubscribe(NO_ID, id, grid.cols, grid.rows)
         },
-        unsubscribe = ClientMessage.PtyUnsubscribe(id),
-        frameOf = { it.ptyFrameOf(id) }
+        frameOf = { it.ptyFrameOf(id) },
+        onHold = { grids[id] = Grid(cols, rows) },
+        onLastRelease = {
+            grids.remove(id)
+            manager.send(ClientMessage.PtyUnsubscribe(id))
+        }
     )
-        .onStart { grids[id] = Grid(cols, rows) }
-        .onCompletion { grids.remove(id) }
 
     override fun chat(id: String, threadId: String): Flow<ChatUpdate> = subscription(
+        key = ChatKey(id, threadId),
         subscribe = { ClientMessage.ChatSubscribe(NO_ID, id, threadId) },
-        unsubscribe = ClientMessage.ChatUnsubscribe(id, threadId),
-        frameOf = { it.chatUpdateOf(id, threadId) }
+        frameOf = { it.chatUpdateOf(id, threadId) },
+        onLastRelease = { manager.send(ClientMessage.ChatUnsubscribe(id, threadId)) }
     )
 
     override fun ptyInput(id: String, bytes: ByteArray) =
@@ -178,24 +187,52 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
 
     /**
      * One daemon subscription, held while the flow is collected: [subscribe] goes out on every
-     * new connection, [frameOf] picks its frames out of `incoming`, and [unsubscribe] goes out
-     * when collection ends. The buffer is unbounded so a slow collector never holds up
-     * `incoming`, which carries every reply.
+     * new connection and [frameOf] picks its frames out of `incoming`. Collections of the same
+     * [key] share the daemon's subscription: each start runs [onHold], and only the last to end
+     * runs [onLastRelease], which unsubscribes. The buffer is unbounded so a slow collector never
+     * holds up `incoming`, which carries every reply.
      */
     private fun <T : Any> subscription(
+        key: Any,
         subscribe: () -> ClientMessage,
-        unsubscribe: ClientMessage,
-        frameOf: (ServerMessage) -> T?
+        frameOf: (ServerMessage) -> T?,
+        onHold: () -> Unit = {},
+        onLastRelease: () -> Unit
     ): Flow<T> = channelFlow {
+        hold(key, onHold)
         try {
             manager.state
                 .map { it is ConnectionState.Connected }
                 .distinctUntilChanged()
                 .collectLatest { connected -> if (connected) relay(subscribe(), frameOf) }
         } finally {
-            manager.send(unsubscribe)
+            release(key, onLastRelease)
         }
     }.buffer(Channel.UNLIMITED)
+
+    /** Counts one more collection of [key] and runs [onHold], both under the [holders] lock. */
+    private fun hold(key: Any, onHold: () -> Unit) {
+        synchronized(holders) {
+            holders[key] = (holders[key] ?: 0) + 1
+            onHold()
+        }
+    }
+
+    /**
+     * Counts one collection of [key] less; the last one runs [onLastRelease] under the same lock,
+     * so a collection starting meanwhile subscribes only after the unsubscribe has gone out.
+     */
+    private fun release(key: Any, onLastRelease: () -> Unit) {
+        synchronized(holders) {
+            val left = (holders[key] ?: 1) - 1
+            if (left > 0) {
+                holders[key] = left
+                return
+            }
+            holders.remove(key)
+            onLastRelease()
+        }
+    }
 
     /**
      * Subscribes with [request] on the current connection and forwards its frames until
@@ -251,6 +288,10 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
     }
 
     private data class Grid(val cols: Int, val rows: Int)
+
+    private data class PtyKey(val id: String)
+
+    private data class ChatKey(val id: String, val threadId: String)
 
     private companion object {
         /** `request` stamps its own id over this placeholder. */

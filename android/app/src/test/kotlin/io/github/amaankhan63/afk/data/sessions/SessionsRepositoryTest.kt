@@ -168,6 +168,39 @@ class SessionsRepositoryTest {
         assertEquals(listOf(ClientMessage.PtyUnsubscribe("s_1")), manager.sent)
     }
 
+    @Test fun overlappingPtyCollectorsShareTheSubscription() = runTest {
+        val repo = repo()
+        manager.connect()
+        val first = collecting(repo.pty("s_1", 80, 24))
+        val second = collecting(repo.pty("s_1", 100, 30))
+
+        first.job.cancel()
+        runCurrent()
+        assertEquals(emptyList<ClientMessage>(), manager.sent)
+        manager.receive(snapshot("aGk="))
+        manager.receive(ServerMessage.PtyData("s_1", "IQ=="))
+        runCurrent()
+        assertEquals(listOf(shown("hi"), typed("!")), second.items)
+
+        // The first collector's end leaves the grid to the second one.
+        repo.ptyResize("s_1", 120, 40)
+        manager.drop()
+        runCurrent()
+        manager.connect()
+        runCurrent()
+        assertEquals(
+            listOf(subscribe(80, 24), subscribe(100, 30), subscribe(120, 40)),
+            manager.requests
+        )
+
+        second.job.cancel()
+        runCurrent()
+        assertEquals(
+            listOf(ClientMessage.PtyResize("s_1", 120, 40), ClientMessage.PtyUnsubscribe("s_1")),
+            manager.sent
+        )
+    }
+
     @Test fun ptyErrorReplyFailsTheFlow() = runTest {
         val repo = repo()
         manager.connect()
@@ -238,6 +271,34 @@ class SessionsRepositoryTest {
             updates.items
         )
         assertEquals(listOf(ClientMessage.ChatUnsubscribe("s_1", "main")), manager.sent)
+    }
+
+    @Test fun overlappingChatCollectorsShareTheSubscriptionPerThread() = runTest {
+        val repo = repo()
+        manager.connect()
+        val first = collecting(repo.chat("s_1"))
+        val otherThread = collecting(repo.chat("s_1", "t_2"))
+        val second = collecting(repo.chat("s_1"))
+
+        first.job.cancel()
+        runCurrent()
+        assertEquals(emptyList<ClientMessage>(), manager.sent)
+        val event = chatEvent("e1")
+        manager.receive(ServerMessage.ChatSnapshot("s_1", "main", listOf(event)))
+        runCurrent()
+        assertEquals(listOf(ChatUpdate.Snapshot(listOf(event))), second.items)
+
+        otherThread.job.cancel()
+        runCurrent()
+        second.job.cancel()
+        runCurrent()
+        assertEquals(
+            listOf(
+                ClientMessage.ChatUnsubscribe("s_1", "t_2"),
+                ClientMessage.ChatUnsubscribe("s_1", "main")
+            ),
+            manager.sent
+        )
     }
 
     @Test fun sessionsAreSortedAndKeptWhileDisconnected() = runTest {

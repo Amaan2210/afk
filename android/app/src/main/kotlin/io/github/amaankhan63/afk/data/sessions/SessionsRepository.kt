@@ -39,9 +39,10 @@ interface SessionsRepository {
     /**
      * Session [id]'s terminal at [cols] × [rows]. Collecting subscribes, and subscribes again
      * whenever the connection comes back; every subscription starts with a [PtyFrame.Snapshot].
-     * Cancelling unsubscribes. Fails with [AfkError] when the daemon refuses the subscription or
-     * does not answer it. Keep one collector per session: the daemon holds one subscription per
-     * session and connection.
+     * Fails with [AfkError] when the daemon refuses the subscription or does not answer it.
+     * Collectors of the same session may overlap: they share the daemon's one subscription, each
+     * new one makes the daemon send a fresh snapshot to all of them, and the last to end
+     * unsubscribes.
      */
     fun pty(id: String, cols: Int, rows: Int): Flow<PtyFrame>
 
@@ -51,7 +52,7 @@ interface SessionsRepository {
     /** Types [bytes] into session [id]; dropped while disconnected. */
     fun ptyInput(id: String, bytes: ByteArray)
 
-    /** Resizes session [id]'s terminal; later re-subscriptions of [pty] ask for this grid. */
+    /** Resizes session [id]'s terminal; later re-subscriptions of open [pty]s ask for this grid. */
     fun ptyResize(id: String, cols: Int, rows: Int)
 
     /** The new session's id. Its final name arrives in [sessions] and can carry a `-2` suffix. */
