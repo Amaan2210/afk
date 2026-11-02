@@ -19,8 +19,12 @@ class FakeAfkSocket : AfkSocket {
     var isOpen = false
         private set
 
+    /** Thrown by every `open` while set, as OkHttp does for a URL it cannot build. */
+    var openFailure: Exception? = null
+
     override fun open(endpoint: Endpoint, token: String, clientName: String) {
         opens += token
+        openFailure?.let { throw it }
         isOpen = true
     }
 

@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.StateFlow
 /** [AfkError] code of a request made while not connected, or whose connection ended first. */
 const val ERROR_DISCONNECTED = "disconnected"
 
+/** [ConnectionState.Failed] code for an endpoint no socket can be opened to, such as a bad host. */
+const val ERROR_BAD_ENDPOINT = "bad_endpoint"
+
 /** Keeps one authenticated connection to the daemon and matches replies to requests. */
 interface ConnectionManager {
     val state: StateFlow<ConnectionState>
@@ -16,7 +19,10 @@ interface ConnectionManager {
     /** Every frame the daemon sends, replies and id-less `error` notices included. */
     val incoming: SharedFlow<ServerMessage>
 
-    /** Connects with [token] and reconnects until [stop] or a rejection; replaces a running one. */
+    /**
+     * Connects with [token] and reconnects until [stop], a rejection, or an endpoint no socket
+     * can be opened to ([ERROR_BAD_ENDPOINT]); replaces a running connection.
+     */
     fun start(endpoint: Endpoint, token: String)
 
     /** Closes the connection and stops reconnecting; leaves [ConnectionState.Disconnected]. */

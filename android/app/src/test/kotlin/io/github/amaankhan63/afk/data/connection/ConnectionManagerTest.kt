@@ -292,6 +292,28 @@ class ConnectionManagerTest {
         assertEquals(ConnectionState.Connected(hello), manager.state.value)
     }
 
+    @Test fun unusableEndpointFailsWithoutRetrying() = runTest {
+        val manager = manager()
+        socket.openFailure = IllegalArgumentException("Invalid URL host: \"100.84.12.9 \"")
+
+        manager.start(Endpoint("100.84.12.9 "), "tok")
+        runCurrent()
+        assertEquals(ConnectionState.Failed(ERROR_BAD_ENDPOINT), manager.state.value)
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, socket.opens.size)
+        val error = runCatching { manager.request(kill) }.exceptionOrNull()
+        assertTrue(error.isAfkError(ERROR_DISCONNECTED))
+
+        // Nothing escaped to the scope: the same manager connects on the next start.
+        socket.openFailure = null
+        manager.start(endpoint, "tok")
+        runCurrent()
+        socket.receive(hello)
+        runCurrent()
+        assertEquals(ConnectionState.Connected(hello), manager.state.value)
+    }
+
     @Test fun aLoopReplacedBeforeItRanNeverRevivesTheOldOne() = runTest {
         val manager = connectedManager()
 

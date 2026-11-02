@@ -11,6 +11,9 @@ sealed interface ConnectionState {
 
     data class Connected(val hello: ServerMessage.Hello) : ConnectionState
 
-    /** The daemon rejected this client with error [code]; no retries until the next start. */
+    /**
+     * The daemon rejected this client with error [code], or the endpoint is unusable
+     * ([ERROR_BAD_ENDPOINT]); no retries until the next start.
+     */
     data class Failed(val code: String) : ConnectionState
 }

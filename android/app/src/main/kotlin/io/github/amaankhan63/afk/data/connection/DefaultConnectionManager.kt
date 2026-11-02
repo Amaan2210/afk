@@ -5,6 +5,7 @@ import io.github.amaankhan63.afk.data.protocol.ClientMessage
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -70,7 +71,7 @@ class DefaultConnectionManager(
 
     override fun start(endpoint: Endpoint, token: String) {
         synchronized(lock) {
-            // Cancelled here, not from the new loop: a loop cancelled before it ran cancels nothing.
+            // Cancelled here, not by the new loop: a loop cancelled before it ran cancels nothing.
             loop?.cancel()
             loop = scope.launch { loopMutex.withLock { connectUntilStopped(endpoint, token) } }
         }
@@ -105,18 +106,25 @@ class DefaultConnectionManager(
         if (state.value is ConnectionState.Connected) socket.send(msg)
     }
 
-    /** Connects, and reconnects after every drop, until cancelled or rejected. */
+    /** Connects, reconnecting after drops, until cancelled, rejected or given a bad endpoint. */
     private suspend fun connectUntilStopped(endpoint: Endpoint, token: String) {
         try {
             var attempt = 0
             mutableState.value = ConnectionState.Connecting(attempt)
             while (true) {
                 discardStale()
-                socket.open(endpoint, token, clientName)
+                try {
+                    socket.open(endpoint, token, clientName)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // OkHttp cannot build a URL from it (bad host or port); a retry would not help.
+                    fail(ERROR_BAD_ENDPOINT, e.message ?: e.javaClass.name)
+                    return
+                }
                 when (val end = readUntilEnd()) {
                     is End.Rejected -> {
-                        mutableState.value = ConnectionState.Failed(end.error.code)
-                        failPending(end.error.code, end.error.message)
+                        fail(end.error.code, end.error.message)
                         return
                     }
 
@@ -170,6 +178,12 @@ class DefaultConnectionManager(
         do {
             val stale = inbox.tryReceive()
         } while (stale.isSuccess)
+    }
+
+    /** Ends in the terminal [ConnectionState.Failed]; pending requests fail with the same code. */
+    private fun fail(code: String, message: String) {
+        mutableState.value = ConnectionState.Failed(code)
+        failPending(code, message)
     }
 
     private fun failPending(code: String, message: String) {
