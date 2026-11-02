@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,6 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -49,8 +50,11 @@ class DefaultConnectionManager(
     private val requestCount = AtomicLong()
     private val lock = Any()
 
-    /** The running connect loop. Guarded by [lock]. */
+    /** The latest connect loop. Guarded by [lock]. */
     private var loop: Job? = null
+
+    /** Held by a loop from its first open until its `finally` is done, so loops never overlap. */
+    private val loopMutex = Mutex()
 
     init {
         // Undispatched: both subscribe before any open(). Unconfined: each value is queued on the
@@ -66,11 +70,9 @@ class DefaultConnectionManager(
 
     override fun start(endpoint: Endpoint, token: String) {
         synchronized(lock) {
-            val previous = loop
-            loop = scope.launch {
-                previous?.cancelAndJoin()
-                connectUntilStopped(endpoint, token)
-            }
+            // Cancelled here, not from the new loop: a loop cancelled before it ran cancels nothing.
+            loop?.cancel()
+            loop = scope.launch { loopMutex.withLock { connectUntilStopped(endpoint, token) } }
         }
     }
 

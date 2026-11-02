@@ -292,6 +292,22 @@ class ConnectionManagerTest {
         assertEquals(ConnectionState.Connected(hello), manager.state.value)
     }
 
+    @Test fun aLoopReplacedBeforeItRanNeverRevivesTheOldOne() = runTest {
+        val manager = connectedManager()
+
+        // The "b" loop is replaced before it ever runs; the first loop must still be gone.
+        manager.start(endpoint, "b")
+        manager.stop()
+        runCurrent()
+        manager.start(endpoint, "d")
+        runCurrent()
+        socket.fails()
+        runCurrent()
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(listOf("tok", "d", "d"), socket.opens)
+    }
+
     private companion object {
         const val SEED = 42
     }
