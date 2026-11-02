@@ -3,6 +3,7 @@ package io.github.amaankhan63.afk.ui.session.terminal
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Typeface
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -13,6 +14,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.termux.terminal.TerminalColors as EmulatorColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
@@ -34,7 +37,8 @@ private val COLOR_SLOTS = (0 until ANSI_COLORS) + listOf(
  * The terminal of [bridge]'s session in Termux's TerminalView, in [colors] and at [fontSizeSp].
  * The view reports its grid to the bridge on every layout; a pinch asks [onFontSizeChange] for a
  * size one step larger or smaller, within [MIN_FONT_SP]..[MAX_FONT_SP]. A long press selects text,
- * and its Copy and Paste use the system clipboard.
+ * and its Copy and Paste use the system clipboard. [TerminalBridge.toggleKeyboard] opens and closes
+ * the soft keyboard on the view.
  *
  * Termux keeps its default colours process-wide, so every TerminalHost shows the [colors] set last.
  */
@@ -90,12 +94,16 @@ private class Shown {
     var redraw: (() -> Unit)? = null
 }
 
-/** Points [bridge]'s redraw at this view, and its session's copy and paste at the clipboard. */
+/**
+ * Points [bridge]'s redraw and keyboard toggle at this view, and its session's copy and paste at
+ * the clipboard.
+ */
 private fun TerminalView.takeOver(bridge: TerminalBridge, shown: Shown) {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     val redraw = this::onScreenUpdated
     shown.redraw = redraw
     bridge.onScreenChanged = redraw
+    bridge.toggleKeyboard = ::toggleSoftKeyboard
     bridge.session.onCopyText = { text ->
         clipboard?.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text))
     }
@@ -108,10 +116,24 @@ private fun TerminalView.takeOver(bridge: TerminalBridge, shown: Shown) {
     }
 }
 
+/** Closes the keyboard when this view has it; otherwise focuses the view and opens the keyboard. */
+private fun TerminalView.toggleSoftKeyboard() {
+    val keyboard = context.getSystemService(InputMethodManager::class.java) ?: return
+    val insets = ViewCompat.getRootWindowInsets(this)
+    if (insets?.isVisible(WindowInsetsCompat.Type.ime()) == true && hasFocus()) {
+        keyboard.hideSoftInputFromWindow(windowToken, 0)
+        return
+    }
+    requestFocus()
+    // Asked at once, the keyboard can still be bound to the field that had the focus before.
+    post { keyboard.showSoftInput(this, 0) }
+}
+
 /** Undoes [takeOver], unless another TerminalHost has taken the bridge over meanwhile. */
 private fun TerminalBridge.release(shown: Shown) {
     if (onScreenChanged !== shown.redraw) return
     onScreenChanged = null
+    toggleKeyboard = null
     session.onCopyText = null
     session.onPasteRequest = null
 }

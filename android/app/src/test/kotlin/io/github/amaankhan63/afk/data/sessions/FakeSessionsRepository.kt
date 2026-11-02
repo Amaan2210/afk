@@ -56,6 +56,9 @@ class FakeSessionsRepository : SessionsRepository {
     val ptyInputs = mutableListOf<Pair<String, ByteArray>>()
     val ptyResizes = mutableListOf<Triple<String, Int, Int>>()
 
+    /** The bytes of the last [ptyInput], if any. */
+    val lastInput: ByteArray? get() = ptyInputs.lastOrNull()?.second
+
     /** Every terminal subscription [pty] made, in order: session id, cols, rows. */
     val ptySubscriptions = mutableListOf<Triple<String, Int, Int>>()
 

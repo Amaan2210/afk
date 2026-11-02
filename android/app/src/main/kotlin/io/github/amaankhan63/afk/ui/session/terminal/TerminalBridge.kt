@@ -33,6 +33,13 @@ class TerminalBridge(
     /** Redraws the view showing [session]; [TerminalHost] sets it while it shows one. */
     var onScreenChanged: (() -> Unit)? = null
 
+    /**
+     * Focuses the view showing [session] and opens the soft keyboard on it, or closes the keyboard
+     * when that view has it; [TerminalHost] sets it while it shows one. The key bar's keyboard key
+     * calls it.
+     */
+    var toggleKeyboard: (() -> Unit)? = null
+
     val session = AfkTerminalSession(
         client = ScreenClient(),
         onInput = { repo.ptyInput(sessionId, it) },
