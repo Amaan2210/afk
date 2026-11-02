@@ -26,9 +26,9 @@ private val KEY_SHAPE = RoundedCornerShape(9.dp)
 enum class KeyBarKey { Esc, Tab, Ctrl, Up, Down, Left, Right, Enter, Keyboard }
 
 /**
- * The key bar's Ctrl, sticky for one key: pressed, it arms, and the next character typed in the
- * composer goes out as its control character. Pressing Ctrl again, or another key of the bar,
- * disarms it.
+ * The key bar's Ctrl, sticky for one key: pressed, it arms, and the next character typed, in the
+ * composer or into the terminal, goes out as its control character. Pressing Ctrl again, another
+ * key of the bar, or a change of tab disarms it.
  */
 class KeyBarState {
     var ctrlArmed: Boolean by mutableStateOf(false)
@@ -57,7 +57,7 @@ class KeyBarState {
         }
     }
 
-    /** Drops an armed Ctrl, as when it was used outside the bar or the composer changed tabs. */
+    /** Drops an armed Ctrl, as when it was used in the terminal or the screen changed tabs. */
     fun disarm() {
         ctrlArmed = false
     }
