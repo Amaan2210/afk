@@ -29,11 +29,13 @@ fun AfkTheme(id: AfkThemeId, mode: ThemeMode, content: @Composable () -> Unit) {
     val resolved = Palettes.resolvesDynamic(id, Build.VERSION.SDK_INT)
     val palette = Palettes.palette(resolved, dark)
     val context = LocalContext.current
+    // resolvesDynamic already falls back below Android 12; the SDK check repeats it where lint
+    // can see it.
     val colorScheme =
-        when {
-            resolved != AfkThemeId.Dynamic -> palette.toColorScheme(dark)
-            dark -> dynamicDarkColorScheme(context)
-            else -> dynamicLightColorScheme(context)
+        if (resolved == AfkThemeId.Dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            palette.toColorScheme(dark)
         }
     val phosphor = resolved == AfkThemeId.Phosphor
     CompositionLocalProvider(LocalAfkPalette provides palette) {

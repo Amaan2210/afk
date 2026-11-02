@@ -44,21 +44,22 @@ class SessionNotifier(
             .setContentIntent(open)
             .setAutoCancel(true)
             .setGroup(n.sessionId)
-        answerActions(n).forEach(builder::addAction)
-        builder.addAction(NotificationCompat.Action.Builder(0, "Open", open).build())
+        val actions = answerActions(n)
+        actions.forEach(builder::addAction)
+        // Tapping the notification opens the session too, so Open only takes a slot left free.
+        if (actions.size < MAX_ACTIONS) {
+            builder.addAction(NotificationCompat.Action.Builder(0, "Open", open).build())
+        }
         return builder.build()
     }
 
-    /** The actions before Open: a question's first choices and Reply, Allow and Deny, or Reply. */
+    /** The actions that answer [n], at most [MAX_ACTIONS] of them. */
     private fun answerActions(n: ServerMessage.Notify): List<NotificationCompat.Action> =
         when (n.event) {
             EVENT_FINISHED -> listOf(reply(n.sessionId))
 
             EVENT_NEEDS_INPUT -> when (val pending = n.pending) {
-                is Pending.Question ->
-                    pending.options.take(MAX_CHOICES).mapIndexed { index, option ->
-                        choice(n.sessionId, pending.id, index, option.label)
-                    } + reply(n.sessionId)
+                is Pending.Question -> questionActions(n.sessionId, pending)
 
                 is Pending.Permission -> listOf(
                     decision(n.sessionId, pending.id, "allow", "Allow"),
@@ -70,6 +71,21 @@ class SessionNotifier(
             }
 
             else -> emptyList()
+        }
+
+    /**
+     * The first options as buttons, plus Reply when the question takes a typed answer. A
+     * multi-select question gets none: one tap cannot pick several options.
+     */
+    private fun questionActions(sessionId: String, q: Pending.Question) = when {
+        q.multiSelect -> emptyList()
+        q.allowsText -> choices(sessionId, q, MAX_ACTIONS - 1) + reply(sessionId, q.id)
+        else -> choices(sessionId, q, MAX_ACTIONS)
+    }
+
+    private fun choices(sessionId: String, q: Pending.Question, max: Int) =
+        q.options.take(max).mapIndexed { index, option ->
+            choice(sessionId, q.id, index, option.label)
         }
 
     private fun choice(sessionId: String, pendingId: String, index: Int, label: String) =
@@ -98,17 +114,18 @@ class SessionNotifier(
             )
         ).build()
 
-    private fun reply(sessionId: String): NotificationCompat.Action {
+    /**
+     * Inline reply. With [pendingId] the text answers that question; without it, it is typed into
+     * the session followed by Enter.
+     */
+    private fun reply(sessionId: String, pendingId: String? = null): NotificationCompat.Action {
         val input = RemoteInput.Builder(NotificationActions.REMOTE_INPUT_KEY)
             .setLabel("Reply")
             .build()
+        val replyIntent = actionIntent(NotificationActions.ACTION_REPLY, sessionId)
+        if (pendingId != null) replyIntent.putExtra(NotificationActions.EXTRA_PENDING, pendingId)
         // Mutable: Android writes the typed text into the intent.
-        val intent = broadcast(
-            sessionId,
-            "reply",
-            actionIntent(NotificationActions.ACTION_REPLY, sessionId),
-            mutable = true
-        )
+        val intent = broadcast(sessionId, "reply", replyIntent, mutable = true)
         return NotificationCompat.Action.Builder(0, "Reply", intent).addRemoteInput(input).build()
     }
 
@@ -159,7 +176,7 @@ class SessionNotifier(
         private const val EVENT_FINISHED = "finished"
         private const val EVENT_SUBAGENT_FINISHED = "subagent_finished"
 
-        /** A question offers its first three options as buttons; the others are picked in the app. */
-        private const val MAX_CHOICES = 3
+        /** Android shows at most three action buttons; a notification carries no more. */
+        private const val MAX_ACTIONS = 3
     }
 }

@@ -9,12 +9,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.service.AfkConnectionService
 import javax.inject.Inject
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -29,8 +31,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent { Text("AFK") }
         if (savedInstanceState == null) requestNotificationPermission()
+        // Starts the connection service whenever a pairing exists, one saved in the app included.
+        // Starting it again while it runs is harmless.
         lifecycleScope.launch {
-            if (pairingStore.pairing.first() != null) AfkConnectionService.start(applicationContext)
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                pairingStore.pairing.filterNotNull().collect {
+                    AfkConnectionService.start(applicationContext)
+                }
+            }
         }
     }
 

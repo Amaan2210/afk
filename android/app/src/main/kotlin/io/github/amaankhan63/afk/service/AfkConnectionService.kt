@@ -29,6 +29,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -72,7 +74,9 @@ class AfkConnectionService : Service() {
             }
         }
         scope.launch {
-            manager.state.collect { post(FOREGROUND_ID, connectionNotification(statusText(it))) }
+            manager.state.map(::statusText).distinctUntilChanged().collect {
+                post(FOREGROUND_ID, connectionNotification(it))
+            }
         }
     }
 
@@ -130,11 +134,14 @@ class AfkConnectionService : Service() {
         false
     )
 
+    /**
+     * While this service runs a pairing exists, so a disconnected manager is about to connect: it
+     * reads "Connecting…" rather than flashing "Disconnected" at start-up and on a new pairing.
+     */
     private fun statusText(state: ConnectionState): String = when (state) {
         is ConnectionState.Connected -> "Connected to ${state.hello.daemon.hostname}"
-        is ConnectionState.Connecting -> CONNECTING
+        is ConnectionState.Connecting, ConnectionState.Disconnected -> CONNECTING
         is ConnectionState.Failed -> "Connection failed: ${state.code}"
-        ConnectionState.Disconnected -> "Disconnected"
     }
 
     /** Shows [notification] when the user allows notifications; never throws. */

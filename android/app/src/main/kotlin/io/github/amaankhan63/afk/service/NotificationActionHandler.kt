@@ -5,12 +5,16 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
+import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
+import io.github.amaankhan63.afk.data.sessions.ERROR_TIMEOUT
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * What a session notification's action does (see [NotificationActions]): answers the pending
@@ -33,19 +37,24 @@ class NotificationActionHandler(
     }
 
     /**
-     * Sends what [intent] asks for. An answer to a prompt that no longer exists shows
-     * "Already answered"; other failures, `pending_changed` included, are not retried. The
-     * session's notification is removed in every case.
+     * Sends what [intent] asks for, giving up after [BUDGET_MS] so the receiver finishes within
+     * Android's limit. An answer to a prompt that no longer exists shows "Already answered"; any
+     * other failure shows "Not sent: …" and is not retried (a `pending_changed` answer may be
+     * partly typed). The session's notification is removed in every case.
      */
     suspend fun handle(context: Context, intent: Intent) {
         val sessionId = intent.getStringExtra(NotificationActions.EXTRA_SESSION) ?: return
         try {
-            val failure = send(sessionId, intent)?.exceptionOrNull()
-            if ((failure as? AfkError)?.code == ERROR_NOT_FOUND) {
-                withContext(Dispatchers.Main.immediate) {
-                    Toast.makeText(context, "Already answered", Toast.LENGTH_SHORT).show()
-                }
+            // Nothing to send counts as sent: there is nothing to report.
+            val outcome = withTimeoutOrNull(BUDGET_MS) {
+                send(sessionId, intent) ?: Result.success(Unit)
             }
+            val failure = if (outcome == null) {
+                AfkError(ERROR_TIMEOUT, "timeout")
+            } else {
+                outcome.exceptionOrNull()
+            }
+            if (failure != null) toast(context, messageFor(failure))
         } finally {
             NotificationManagerCompat.from(context)
                 .cancel(NotificationActions.notificationId(sessionId))
@@ -71,16 +80,45 @@ class NotificationActionHandler(
             NotificationActions.ACTION_REPLY -> {
                 val text = RemoteInput.getResultsFromIntent(intent)
                     ?.getCharSequence(NotificationActions.REMOTE_INPUT_KEY)
+                    ?.toString()
                 if (text.isNullOrEmpty()) return null
-                repo.ptyInput(sessionId, "$text\r".toByteArray(Charsets.UTF_8))
-                Result.success(Unit)
+                if (pendingId != null) {
+                    repo.answerPending(sessionId, pendingId, text = text)
+                } else {
+                    type(sessionId, text)
+                }
             }
 
             else -> null
         }
     }
 
+    /** Types [text] and Enter into the session; input sent while not connected would be lost. */
+    private fun type(sessionId: String, text: String): Result<Unit> {
+        if (repo.connection.value !is ConnectionState.Connected) {
+            return Result.failure(AfkError(ERROR_DISCONNECTED, "not connected to the laptop"))
+        }
+        repo.ptyInput(sessionId, "$text\r".toByteArray(Charsets.UTF_8))
+        return Result.success(Unit)
+    }
+
+    private fun messageFor(failure: Throwable): String =
+        if ((failure as? AfkError)?.code == ERROR_NOT_FOUND) {
+            "Already answered"
+        } else {
+            "Not sent: ${failure.message ?: "unknown error"}"
+        }
+
+    /** A Toast must be shown from the main thread; the handler runs in the background. */
+    private suspend fun toast(context: Context, text: String) =
+        withContext(Dispatchers.Main.immediate) {
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
+
     private companion object {
         const val ERROR_NOT_FOUND = "not_found"
+
+        /** Under the 10 s Android gives a receiver that called `goAsync`. */
+        const val BUDGET_MS = 8_000L
     }
 }
