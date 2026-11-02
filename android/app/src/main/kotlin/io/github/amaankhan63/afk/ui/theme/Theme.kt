@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 val LocalAfkPalette: ProvidableCompositionLocal<AfkPalette> =
@@ -45,19 +46,44 @@ fun AfkTheme(id: AfkThemeId, mode: ThemeMode, content: @Composable () -> Unit) {
     }
 }
 
-private fun AfkPalette.toColorScheme(dark: Boolean): ColorScheme {
+/**
+ * Maps every palette-derived slot so no component falls back to Material's baseline purple.
+ * The error* slots keep Material's baseline red: the palette has no red token.
+ */
+internal fun AfkPalette.toColorScheme(dark: Boolean): ColorScheme {
     val base = if (dark) darkColorScheme() else lightColorScheme()
     return base.copy(
         primary = accent,
         onPrimary = onAccent,
+        primaryContainer = accentSoft,
+        onPrimaryContainer = accent,
+        secondary = accent,
+        onSecondary = onAccent,
+        secondaryContainer = accentSoft,
+        onSecondaryContainer = accent,
+        tertiary = accent,
+        onTertiary = onAccent,
+        tertiaryContainer = accentSoft,
+        onTertiaryContainer = accent,
         background = bg,
         onBackground = text,
         surface = surface,
         onSurface = text,
         surfaceVariant = surface2,
         onSurfaceVariant = text2,
+        surfaceTint = accent,
+        surfaceDim = bg,
+        surfaceBright = surface2,
+        surfaceContainerLowest = bg,
+        surfaceContainerLow = surface,
+        surfaceContainer = surface,
+        surfaceContainerHigh = surface2,
+        surfaceContainerHighest = surface2,
         outline = border,
-        primaryContainer = accentSoft,
-        onPrimaryContainer = accent
+        outlineVariant = border,
+        inverseSurface = text,
+        inverseOnSurface = bg,
+        inversePrimary = accentSoft,
+        scrim = Color.Black
     )
 }
