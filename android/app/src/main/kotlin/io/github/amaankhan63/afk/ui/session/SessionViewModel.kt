@@ -12,6 +12,7 @@ import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.di.StripChipsFlow
 import io.github.amaankhan63.afk.service.ForegroundTracker
+import io.github.amaankhan63.afk.ui.session.chat.ChatEvents
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalBridge
 import java.time.Instant
 import javax.inject.Inject
@@ -52,6 +53,9 @@ class SessionViewModel internal constructor(
 
     /** The session's terminal. It lives as long as the view model, so a rotation keeps it. */
     val bridge = TerminalBridge(repo, sessionId, viewModelScope)
+
+    /** The session's main thread, for the Chat tab. */
+    val chat = ChatEvents(repo, sessionId, scope = viewModelScope)
 
     private val tab = MutableStateFlow(SessionTab.Terminal)
     private val composer = MutableStateFlow("")

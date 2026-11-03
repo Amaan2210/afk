@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 
@@ -74,6 +76,9 @@ class FakeSessionsRepository : SessionsRepository {
     /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
     var ptyFailure: AfkError? = null
 
+    /** When set, every subscription [chat] makes fails with it, as when the daemon refuses one. */
+    var chatFailure: AfkError? = null
+
     private val strips = mutableMapOf<String, MutableStateFlow<Strip?>>()
     private val ptys = mutableMapOf<String, MutableSharedFlow<PtyFrame>>()
     private val chats = mutableMapOf<Pair<String, String>, MutableSharedFlow<ChatUpdate>>()
@@ -109,7 +114,10 @@ class FakeSessionsRepository : SessionsRepository {
             }
     }
 
-    override fun chat(id: String, threadId: String): Flow<ChatUpdate> = chatUpdates(id, threadId)
+    override fun chat(id: String, threadId: String): Flow<ChatUpdate> = flow {
+        chatFailure?.let { throw it }
+        emitAll(chatUpdates(id, threadId))
+    }
 
     override fun ptyInput(id: String, bytes: ByteArray) {
         ptyInputs += id to bytes

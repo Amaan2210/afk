@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amaankhan63.afk.ui.session.chat.ChatTab
+import io.github.amaankhan63.afk.ui.session.chat.ChatUnavailable
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalTab
 import io.github.amaankhan63.afk.ui.theme.AfkThemeId
 import io.github.amaankhan63.afk.ui.theme.Palettes
@@ -151,12 +152,18 @@ fun SessionScreen(
                         onRetry = viewModel::attachTerminal
                     )
 
-                    SessionTab.Chat -> ChatTab(
-                        events = emptyList(),
-                        onOpenThread = onOpenThread,
-                        onAnswer = viewModel::answer,
-                        onFocusComposer = { composerFocus.requestFocus() }
-                    )
+                    SessionTab.Chat -> Column {
+                        val events by viewModel.chat.events.collectAsStateWithLifecycle()
+                        val chatError by viewModel.chat.error.collectAsStateWithLifecycle()
+                        chatError?.let { ChatUnavailable(it) }
+                        ChatTab(
+                            events = events,
+                            onOpenThread = onOpenThread,
+                            onAnswer = viewModel::answer,
+                            onFocusComposer = { composerFocus.requestFocus() },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
             StatusStrip(state.shownChips)
