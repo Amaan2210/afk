@@ -7,14 +7,20 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.amaankhan63.afk.data.InMemoryDataStore
+import io.github.amaankhan63.afk.data.pairing.PairingPayload
+import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.ui.session.DEFAULT_STRIP_CHIPS
 import io.github.amaankhan63.afk.ui.session.StripChip
 import io.github.amaankhan63.afk.ui.theme.AfkThemeId
 import io.github.amaankhan63.afk.ui.theme.ThemeMode
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,6 +32,7 @@ import org.junit.rules.TemporaryFolder
  * The store's [AppSettingsStore.settings] follows the file a moment after each write, so the tests
  * wait for the change they expect; one that never comes fails on the timeout.
  */
+@OptIn(ExperimentalCoroutinesApi::class) // runCurrent, advanceTimeBy
 class AppSettingsStoreTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -35,7 +42,7 @@ class AppSettingsStoreTest {
             File(tmp.root, "afk_prefs.preferences_pb")
         }
 
-    private fun TestScope.store(dataStore: DataStore<Preferences> = dataStore()) =
+    private fun TestScope.store(dataStore: DataStore<Preferences>) =
         AppSettingsStore(dataStore, backgroundScope)
 
     @Test fun defaultsMatchSpec() = runTest(timeout = TIMEOUT) {
@@ -117,6 +124,38 @@ class AppSettingsStoreTest {
 
         dataStore.edit { it[font] = 3 }
         assertEquals(10, store.settings.first { it.terminalFontSp != 20 }.terminalFontSp)
+    }
+
+    /** The settings share the file with the pairing: writing them leaves the pairing as it was. */
+    @Test fun updateKeepsThePairing() = runTest(timeout = TIMEOUT) {
+        val dataStore = dataStore()
+        val pairing = PairingPayload("100.84.12.9", 2351, "tok_abc")
+        PairingStore(dataStore).save(pairing)
+
+        val store = store(dataStore)
+        store.update { it.copy(theme = AfkThemeId.Ember) }
+
+        assertEquals(pairing, PairingStore(dataStore).pairing.first())
+        assertEquals(AfkThemeId.Ember, store.settings.first { it != AppSettings() }.theme)
+    }
+
+    /** A read that fails is tried again a second later, so later writes still show. */
+    @Test fun readFailureDoesNotStick() = runTest {
+        val dataStore = InMemoryDataStore()
+        dataStore.edit { it[stringPreferencesKey("settings.theme")] = "Ember" }
+        dataStore.readFailures = 1
+        val store = store(dataStore)
+
+        runCurrent()
+        assertEquals(AppSettings(), store.settings.value)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(AfkThemeId.Ember, store.settings.value.theme)
+
+        store.update { it.copy(mode = ThemeMode.Dark) }
+        runCurrent()
+        assertEquals(ThemeMode.Dark, store.settings.value.mode)
     }
 
     @Test fun unknownThemeNameFallsBackToDefault() = runTest(timeout = TIMEOUT) {

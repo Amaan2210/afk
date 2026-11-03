@@ -1,5 +1,6 @@
 package io.github.amaankhan63.afk.ui.settings
 
+import androidx.datastore.preferences.core.intPreferencesKey
 import io.github.amaankhan63.afk.data.InMemoryDataStore
 import io.github.amaankhan63.afk.data.settings.AppSettings
 import io.github.amaankhan63.afk.data.settings.AppSettingsStore
@@ -32,5 +33,10 @@ class AppSettingsViewModelTest {
             .first { it != AppSettings() }
         assertEquals(15, reread.terminalFontSp)
         assertEquals(15, vm.settings.first { it != AppSettings() }.terminalFontSp)
+
+        // Saved within the range, not only read back within it.
+        vm.setFontSize(40)
+        assertEquals(20, vm.settings.first { it.terminalFontSp != 15 }.terminalFontSp)
+        assertEquals(20, dataStore.current[intPreferencesKey("settings.terminalFontSp")])
     }
 }

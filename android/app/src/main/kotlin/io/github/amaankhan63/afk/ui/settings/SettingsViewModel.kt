@@ -34,9 +34,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -65,6 +67,11 @@ class SettingsViewModel internal constructor(
 
     /** Settings that could not be saved, keep-awake changes the daemon refused, a failed unpair. */
     val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
+
+    private val mutableSaveFailures = MutableStateFlow(0)
+
+    /** How many settings could not be saved; the screen drops edits it shows but did not save. */
+    val saveFailures: StateFlow<Int> = mutableSaveFailures.asStateFlow()
 
     // Unpairing lasts past a success: the screen is leaving.
     private var unpairing = false
@@ -144,6 +151,7 @@ class SettingsViewModel internal constructor(
             try {
                 store.update(transform)
             } catch (e: IOException) {
+                mutableSaveFailures.update { it + 1 }
                 mutableErrors.tryEmit(AfkError(ERROR_NOT_SAVED, NOT_SAVED))
             }
         }

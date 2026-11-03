@@ -32,8 +32,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.amaankhan63.afk.data.settings.MAX_TERMINAL_FONT_SP
-import io.github.amaankhan63.afk.data.settings.MIN_TERMINAL_FONT_SP
 import io.github.amaankhan63.afk.ui.session.chat.ChatTab
 import io.github.amaankhan63.afk.ui.session.chat.ChatUnavailable
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalTab
@@ -145,11 +143,7 @@ fun SessionScreen(
                         colors = terminalColors,
                         fontSizeSp = settings.terminalFontSp,
                         // Saved, so Settings and the next session open at the pinched size.
-                        onFontSizeChange = {
-                            appSettings.setFontSize(
-                                it.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP)
-                            )
-                        },
+                        onFontSizeChange = appSettings::setFontSize,
                         keyBar = settings.keyBar,
                         keyBarState = keyBarState,
                         onBytes = viewModel::sendKeys,

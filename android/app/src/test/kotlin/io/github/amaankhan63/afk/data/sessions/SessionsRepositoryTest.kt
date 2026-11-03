@@ -361,6 +361,22 @@ class SessionsRepositoryTest {
         assertEquals(DaemonSettings(keepAwake = false), repo.daemonSettings.value)
     }
 
+    /** Offline the daemon's settings are unknown, and the next laptop sends its own. */
+    @Test fun daemonSettingsAreDroppedWithTheConnection() = runTest {
+        val repo = repo()
+        manager.connect()
+        manager.receive(
+            ServerMessage.DaemonSettingsMsg(settings = DaemonSettings(keepAwake = false))
+        )
+        runCurrent()
+        assertEquals(DaemonSettings(keepAwake = false), repo.daemonSettings.value)
+
+        manager.drop()
+        runCurrent()
+
+        assertNull(repo.daemonSettings.value)
+    }
+
     @Test fun stripFollowsUpdatesAndIsDroppedWithItsSession() = runTest {
         val repo = repo()
         val first = repo.strip("s_1")

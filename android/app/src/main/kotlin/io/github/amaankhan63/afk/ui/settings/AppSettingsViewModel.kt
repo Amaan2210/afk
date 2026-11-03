@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.amaankhan63.afk.data.settings.AppSettings
 import io.github.amaankhan63.afk.data.settings.AppSettingsStore
+import io.github.amaankhan63.afk.data.settings.MAX_TERMINAL_FONT_SP
+import io.github.amaankhan63.afk.data.settings.MIN_TERMINAL_FONT_SP
 import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +18,12 @@ import kotlinx.coroutines.launch
 class AppSettingsViewModel @Inject constructor(private val store: AppSettingsStore) : ViewModel() {
     val settings: StateFlow<AppSettings> = store.settings
 
-    /** Saves the terminal's font size, as a pinch changes it. */
+    /** Saves the terminal's font size, as a pinch changes it, within the sizes Settings allows. */
     fun setFontSize(sp: Int) {
+        val size = sp.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP)
         viewModelScope.launch {
             try {
-                store.update { it.copy(terminalFontSp = sp) }
+                store.update { it.copy(terminalFontSp = size) }
             } catch (e: IOException) {
                 // The size stays as it was; the next pinch tries again.
                 Log.w(TAG, "font size not saved", e)

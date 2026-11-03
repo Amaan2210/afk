@@ -27,6 +27,8 @@ interface SessionsRepository {
     /** Every session in [SessionOrder]; the last known list while disconnected. */
     val sessions: StateFlow<List<Session>>
     val stats: StateFlow<Stats?>
+
+    /** The connected daemon's settings; null until they arrive and while not connected. */
     val daemonSettings: StateFlow<DaemonSettings?>
     val notifications: SharedFlow<ServerMessage.Notify>
 

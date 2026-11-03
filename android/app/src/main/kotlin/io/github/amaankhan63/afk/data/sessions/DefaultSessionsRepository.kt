@@ -75,6 +75,13 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
         // Undispatched: listening before this returns, so no push is missed however soon the
         // manager starts.
         scope.launch(start = CoroutineStart.UNDISPATCHED) { manager.incoming.collect(::onPush) }
+        // The settings are the connected daemon's: unknown while offline, and a laptop paired
+        // next sends its own after its hello.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            manager.state.collect {
+                if (it !is ConnectionState.Connected) mutableSettings.value = null
+            }
+        }
     }
 
     override fun session(id: String): Flow<Session?> =

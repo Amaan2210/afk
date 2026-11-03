@@ -1,6 +1,7 @@
 package io.github.amaankhan63.afk.ui.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.amaankhan63.afk.data.InMemoryDataStore
 import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
@@ -61,10 +62,19 @@ class SettingsViewModelTest {
         context,
         stopService = {
             assertEquals(context, it)
-            val cleared = dataStore.current.asMap().isEmpty()
+            val cleared = dataStore.current[stringPreferencesKey("host")] == null
             events += if (cleared) "stop after clear" else "stop before clear"
         }
     )
+
+    /** What [vm] reports from now on. */
+    private fun TestScope.errorsOf(vm: SettingsViewModel): List<AfkError> {
+        val errors = mutableListOf<AfkError>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.errors.toList(errors)
+        }
+        return errors
+    }
 
     @Test fun keepAwakeToggleSendsDaemonSettingsSet() = runTest {
         repo.daemonSettings.value = DaemonSettings(keepAwake = true)
@@ -82,10 +92,7 @@ class SettingsViewModelTest {
         val reply = CompletableDeferred<Result<DaemonSettings>>()
         repo.settingsReply = reply
         val vm = viewModel()
-        val errors = mutableListOf<AfkError>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            vm.errors.toList(errors)
-        }
+        val errors = errorsOf(vm)
 
         vm.setKeepAwake(false)
         vm.setKeepAwake(false)
@@ -106,6 +113,35 @@ class SettingsViewModelTest {
 
         assertNull(pairingStore.pairing.first())
         assertEquals(listOf("stop after clear", "done"), events)
+    }
+
+    @Test fun unpairFailureReportsAndAllowsRetry() = runTest {
+        pairingStore.save(pairing)
+        val vm = viewModel()
+        val errors = errorsOf(vm)
+        dataStore.failWrites = true
+
+        vm.unpair { events += "done" }
+
+        assertEquals(listOf("Could not unpair; try again"), errors.map { it.message })
+        assertEquals(emptyList<String>(), events)
+        assertEquals(pairing, pairingStore.pairing.first())
+
+        dataStore.failWrites = false
+        vm.unpair { events += "done" }
+        assertEquals(listOf("stop after clear", "done"), events)
+    }
+
+    /** The slider drops a size it could not save when [SettingsViewModel.saveFailures] moves. */
+    @Test fun settingThatCannotBeSavedIsReportedAndCounted() = runTest {
+        val vm = viewModel()
+        val errors = errorsOf(vm)
+        dataStore.failWrites = true
+
+        vm.setFontSize(15)
+
+        assertEquals(listOf("The setting could not be saved"), errors.map { it.message })
+        assertEquals(1, vm.saveFailures.value)
     }
 
     @Test fun laptopComesFromHelloElseFromThePairing() = runTest {

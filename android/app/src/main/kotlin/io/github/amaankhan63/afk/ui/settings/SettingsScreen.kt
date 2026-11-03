@@ -47,6 +47,7 @@ import io.github.amaankhan63.afk.ui.settings.sections.TerminalSection
 fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Unit = {}) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val saveFailures by viewModel.saveFailures.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var confirmUnpair by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
@@ -91,6 +92,7 @@ fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Un
             TerminalSection(
                 fontSizeSp = settings.terminalFontSp,
                 keyBar = settings.keyBar,
+                saveFailures = saveFailures,
                 onFontSize = viewModel::setFontSize,
                 onKeyBar = viewModel::setKeyBar
             )

@@ -16,17 +16,21 @@ import io.github.amaankhan63.afk.data.settings.MAX_TERMINAL_FONT_SP
 import io.github.amaankhan63.afk.data.settings.MIN_TERMINAL_FONT_SP
 import kotlin.math.roundToInt
 
-/** The terminal's font size, which a pinch on the terminal also changes, and its key bar. */
+/**
+ * The terminal's font size, which a pinch on the terminal also changes, and its key bar. A change
+ * of [saveFailures] says a save failed: the slider goes back to the saved size.
+ */
 @Composable
 internal fun TerminalSection(
     fontSizeSp: Int,
     keyBar: Boolean,
+    saveFailures: Int,
     onFontSize: (Int) -> Unit,
     onKeyBar: (Boolean) -> Unit
 ) {
     // The size under the thumb while dragging and until it is saved; only the end is saved.
     var dragged by remember { mutableStateOf<Float?>(null) }
-    LaunchedEffect(fontSizeSp) { dragged = null }
+    LaunchedEffect(fontSizeSp, saveFailures) { dragged = null }
     val shown = dragged ?: fontSizeSp.toFloat()
     SettingsGroup("Terminal") {
         SettingRow(title = "Font size") {

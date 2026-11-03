@@ -3,15 +3,18 @@ package io.github.amaankhan63.afk
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
@@ -27,12 +30,18 @@ import io.github.amaankhan63.afk.service.AfkConnectionService
 import io.github.amaankhan63.afk.ui.navigation.AfkNavHost
 import io.github.amaankhan63.afk.ui.navigation.Routes
 import io.github.amaankhan63.afk.ui.theme.AfkTheme
+import io.github.amaankhan63.afk.ui.theme.LocalAfkDark
 import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+// The navigation bar's scrims in three-button mode, as androidx.activity's own defaults, which it
+// keeps internal.
+private val LIGHT_SCRIM = Color.argb(0xe6, 0xff, 0xff, 0xff)
+private val DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -60,6 +69,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settings by settingsStore.settings.collectAsStateWithLifecycle()
             AfkTheme(settings.theme, settings.mode) {
+                // The bare call above picks the bars' icons by the phone's night mode, read once;
+                // Settings can force the app light or dark, so the icons follow the app instead.
+                val dark = LocalAfkDark.current
+                DisposableEffect(dark) {
+                    enableEdgeToEdge(
+                        statusBarStyle =
+                            SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+                        navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark }
+                    )
+                    onDispose {}
+                }
                 val start by produceState<String?>(initialValue = null) {
                     // Preferences that cannot be read hold no pairing.
                     val pairing = try {

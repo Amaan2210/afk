@@ -12,14 +12,16 @@ import io.github.amaankhan63.afk.ui.session.DEFAULT_STRIP_CHIPS
 import io.github.amaankhan63.afk.ui.session.StripChip
 import io.github.amaankhan63.afk.ui.theme.AfkThemeId
 import io.github.amaankhan63.afk.ui.theme.ThemeMode
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.enums.enumEntries
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -35,10 +37,13 @@ class AppSettingsStore @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     @AppScope scope: CoroutineScope
 ) {
-    /** The defaults until the file is read, and from then on if it cannot be. */
+    /**
+     * The defaults until the file is read. A read that fails keeps what was read last and is tried
+     * again a second later, so the settings follow the file again once it can be read.
+     */
     val settings: StateFlow<AppSettings> = dataStore.data
         .map(::decode)
-        .catch { emit(AppSettings()) }
+        .retryWhen { cause, _ -> (cause is IOException).also { if (it) delay(READ_RETRY_MS) } }
         .stateIn(scope, SharingStarted.Eagerly, AppSettings())
 
     /** Saves [transform] of the settings as saved, every field written; a failed write throws. */
@@ -58,6 +63,7 @@ class AppSettingsStore @Inject constructor(
         val KEY_BAR = booleanPreferencesKey("settings.keyBar")
 
         const val SEPARATOR = ","
+        const val READ_RETRY_MS = 1_000L
 
         fun decode(prefs: Preferences): AppSettings {
             val defaults = AppSettings()
