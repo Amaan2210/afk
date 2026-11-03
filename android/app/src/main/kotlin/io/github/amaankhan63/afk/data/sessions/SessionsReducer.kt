@@ -2,6 +2,8 @@ package io.github.amaankhan63.afk.data.sessions
 
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.protocol.Session
+import io.github.amaankhan63.afk.data.protocol.SessionState
+import java.time.Instant
 
 /** Folds the daemon's session messages into the sessions it knows, keyed by id. */
 object SessionsReducer {
@@ -13,4 +15,16 @@ object SessionsReducer {
             is ServerMessage.SessionRemoved -> current - msg.sessionId
             else -> current
         }
+
+    /**
+     * The ids of the working sessions in [sessions], each with its time in [since], or [now] for
+     * one not working before.
+     */
+    fun workingSince(
+        since: Map<String, Instant>,
+        sessions: Collection<Session>,
+        now: Instant
+    ): Map<String, Instant> = sessions
+        .filter { it.state == SessionState.working }
+        .associate { it.id to (since[it.id] ?: now) }
 }

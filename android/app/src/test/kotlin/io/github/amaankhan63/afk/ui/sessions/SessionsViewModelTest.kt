@@ -35,7 +35,6 @@ import org.junit.Test
 class SessionsViewModelTest {
     private val repo = FakeSessionsRepository()
     private val start = Instant.parse("2026-10-30T10:00:00Z")
-    private var now = start
 
     private val needsCodex =
         session(id = "s_codex", kind = SessionKind.codex, state = SessionState.needs_input)
@@ -55,7 +54,7 @@ class SessionsViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = SessionsViewModel(repo) { now }
+    private fun viewModel() = SessionsViewModel(repo)
 
     /** Collects [flow] into [into] until the test ends or the job is cancelled, as a screen does. */
     private fun <T> TestScope.collecting(
@@ -142,19 +141,21 @@ class SessionsViewModelTest {
     @Test fun theFirstStateIsTheRepositorysCurrentOne() = runTest {
         repo.connection.value = ConnectionState.Connected(HELLO)
         repo.sessions.value = listOf(workingClaude)
+        repo.workingSince.value = mapOf("s_work" to start)
 
         // Read before any screen collects: the state a new screen draws first.
         val first = viewModel().ui.value
 
         assertEquals(ConnectionState.Connected(HELLO), first.connection)
         assertEquals(listOf("s_work"), first.sessions.map { it.id })
+        assertEquals(mapOf("s_work" to start), first.workingSince)
         assertEquals("MY-LAPTOP", first.hostname)
     }
 
     /** The banner names the paired address until the first `hello` names the laptop. */
     @Test fun carriesThePairingHost() = runTest {
         val pairingHost = MutableStateFlow<String?>(null)
-        val vm = SessionsViewModel(repo, pairingHost) { now }
+        val vm = SessionsViewModel(repo, pairingHost)
         collecting(vm.ui)
         assertNull(vm.ui.value.pairingHost)
 
@@ -163,25 +164,15 @@ class SessionsViewModelTest {
         assertNull(vm.ui.value.hostname)
     }
 
-    @Test fun workingSinceCountsFromTheFirstWorkingObservation() = runTest {
+    /** The repository's times, which the session screen reads too. */
+    @Test fun workingSinceIsTheRepositorys() = runTest {
         repo.sessions.value = listOf(workingClaude)
         val vm = shownViewModel()
+
+        repo.workingSince.value = mapOf("s_work" to start)
         assertEquals(mapOf("s_work" to start), vm.ui.value.workingSince)
 
-        // Output keeps arriving: the session has been working since it was first seen working.
-        now = start.plusSeconds(60)
-        val later = workingClaude.copy(lastActivityAt = "2026-10-30T10:01:00.000Z")
-        repo.sessions.value = listOf(later, needsCodex)
-        assertEquals(mapOf("s_work" to start), vm.ui.value.workingSince)
-
-        repo.sessions.value = listOf(workingClaude.copy(state = SessionState.finished))
-        assertEquals(emptyMap<String, Instant>(), vm.ui.value.workingSince)
-
-        now = start.plusSeconds(120)
-        repo.sessions.value = listOf(workingClaude)
-        assertEquals(mapOf("s_work" to start.plusSeconds(120)), vm.ui.value.workingSince)
-
-        repo.sessions.value = emptyList()
+        repo.workingSince.value = emptyMap()
         assertEquals(emptyMap<String, Instant>(), vm.ui.value.workingSince)
     }
 

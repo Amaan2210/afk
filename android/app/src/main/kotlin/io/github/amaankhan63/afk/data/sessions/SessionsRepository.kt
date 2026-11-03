@@ -9,6 +9,7 @@ import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.protocol.Strip
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,14 @@ interface SessionsRepository {
 
     /** Every session in [SessionOrder]; the last known list while disconnected. */
     val sessions: StateFlow<List<Session>>
+
+    /**
+     * When each working session in [sessions] started working, by id: from the first list that
+     * shows it working, so one already working when the app first hears of it counts from then.
+     * A session leaves the map when it stops working. The list and the session screen both read
+     * it, so they count alike.
+     */
+    val workingSince: StateFlow<Map<String, Instant>>
     val stats: StateFlow<Stats?>
 
     /** The connected daemon's settings; null until they arrive and while not connected. */

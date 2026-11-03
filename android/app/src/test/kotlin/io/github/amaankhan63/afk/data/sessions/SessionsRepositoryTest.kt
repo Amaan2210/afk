@@ -11,6 +11,7 @@ import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.protocol.Strip
+import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -346,6 +347,44 @@ class SessionsRepositoryTest {
         runCurrent()
 
         assertEquals(listOf(null, idle, busy, null), seen.items)
+    }
+
+    /**
+     * A session counts from the first list that shows it working, even after a reconnect: the
+     * list and the session screen read the same time.
+     */
+    @Test fun workingSinceCountsFromTheFirstListShowingItWorking() = runTest {
+        val start = Instant.parse("2026-10-30T10:00:00Z")
+        var now = start
+        val repo = DefaultSessionsRepository(manager, backgroundScope) { now }
+        collecting(repo.sessions)
+        val working = session("s_1", state = SessionState.working)
+        fun receive(msg: ServerMessage) {
+            manager.receive(msg)
+            runCurrent()
+        }
+
+        // Already working when the app first hears of it: from then.
+        receive(ServerMessage.SessionsSnapshot(listOf(working, session("s_2"))))
+        assertEquals(mapOf("s_1" to start), repo.workingSince.value)
+
+        // Output keeps arriving, and a reconnect sends the list again: the time stays.
+        now = start.plusSeconds(60)
+        receive(ServerMessage.SessionUpdated(working.copy(lastMessage = "still")))
+        receive(ServerMessage.SessionsSnapshot(listOf(working, session("s_2"))))
+        assertEquals(mapOf("s_1" to start), repo.workingSince.value)
+
+        // Another one starts working.
+        receive(ServerMessage.SessionUpdated(session("s_2", state = SessionState.working)))
+        assertEquals(mapOf("s_1" to start, "s_2" to now), repo.workingSince.value)
+
+        // Stopping, or going away, drops a session; working again counts anew.
+        receive(ServerMessage.SessionUpdated(session("s_1", state = SessionState.finished)))
+        receive(ServerMessage.SessionRemoved("s_2"))
+        assertEquals(emptyMap<String, Instant>(), repo.workingSince.value)
+        now = start.plusSeconds(120)
+        receive(ServerMessage.SessionUpdated(working))
+        assertEquals(mapOf("s_1" to now), repo.workingSince.value)
     }
 
     @Test fun pushesFeedStatsAndDaemonSettings() = runTest {

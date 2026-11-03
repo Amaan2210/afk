@@ -153,20 +153,17 @@ class SessionViewModelTest {
         assertEquals(ERROR_DISCONNECTED, errors.single().code)
     }
 
-    @Test fun workingSessionKeepsTheTimeItWasFirstSeenWorking() = runTest {
+    /** The repository's time for this session, which the list reads too. */
+    @Test fun workingSinceIsTheRepositorysForThisSession() = runTest {
         val start = Instant.parse("2026-11-02T10:00:00Z")
-        var now = start
-        val timed = SessionViewModel(repo, "s_1", clock = { now })
-        collecting(timed.ui)
-
+        collecting(vm.ui)
         repo.sessions.value = listOf(session(id = "s_1", state = SessionState.working))
-        now = start.plusSeconds(60)
-        repo.sessions.value =
-            listOf(session(id = "s_1", state = SessionState.working, lastMessage = "still"))
-        assertEquals(start, timed.ui.value.workingSince)
 
-        repo.sessions.value = listOf(session(id = "s_1", state = SessionState.finished))
-        assertNull(timed.ui.value.workingSince)
+        repo.workingSince.value = mapOf("s_1" to start, "s_2" to start.plusSeconds(60))
+        assertEquals(start, vm.ui.value.workingSince)
+
+        repo.workingSince.value = mapOf("s_2" to start.plusSeconds(60))
+        assertNull(vm.ui.value.workingSince)
     }
 
     @Test fun sendKeysWritesBytesUnchanged() {

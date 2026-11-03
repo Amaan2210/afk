@@ -223,6 +223,29 @@ class NewSessionViewModelTest {
         assertEquals(listOf("D:\\b\\recent"), vm.ui.value.recent)
     }
 
+    /** The picker shows progress while a listing is under way, and only then. */
+    @Test fun browsingHoldsWhileAListingIsUnderWay() {
+        repo.holdListDirs = true
+        assertFalse(vm.ui.value.browsing)
+
+        vm.browse("D:\\a")
+        assertTrue(vm.ui.value.browsing)
+        repo.dirsReply("D:\\a").complete(Result.success(listing("D:\\a")))
+        assertFalse(vm.ui.value.browsing)
+
+        // An older reply ends nothing: the newer listing is still under way.
+        vm.browse("D:\\b")
+        vm.browse("D:\\c")
+        repo.dirsReply("D:\\b").complete(Result.success(listing("D:\\b")))
+        assertTrue(vm.ui.value.browsing)
+        repo.dirsReply("D:\\c").complete(Result.failure(AfkError("bad_request", "gone")))
+        assertFalse(vm.ui.value.browsing)
+
+        vm.browse("D:\\d")
+        vm.pick("D:\\Repos\\app")
+        assertFalse(vm.ui.value.browsing)
+    }
+
     @Test fun pickDropsTheListingInFlight() {
         repo.holdListDirs = true
         vm.browse("D:\\a")

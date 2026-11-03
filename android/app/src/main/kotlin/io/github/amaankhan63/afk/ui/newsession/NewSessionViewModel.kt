@@ -36,25 +36,30 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
     val created: Flow<String> = createdIds.receiveAsFlow()
 
     // The latest listing asked for: a newer one replaces it, so an older reply cannot land last.
-    private var browsing: Job? = null
+    private var listing: Job? = null
 
     /**
      * Lists the folders in [path], the drives for null. A failure keeps the listing shown, so the
      * picker stays where it was.
      */
     fun browse(path: String?) {
-        browsing?.cancel()
-        browsing = viewModelScope.launch {
+        listing?.cancel()
+        state.update { it.copy(browsing = true) }
+        listing = viewModelScope.launch {
             repo.listDirs(path)
-                .onSuccess { dirs -> state.update { it.copy(browse = dirs, recent = dirs.recent) } }
-                .onFailure { e -> state.update { it.copy(error = e.shownMessage()) } }
+                .onSuccess { dirs ->
+                    state.update { it.copy(browse = dirs, recent = dirs.recent, browsing = false) }
+                }
+                .onFailure { e ->
+                    state.update { it.copy(error = e.shownMessage(), browsing = false) }
+                }
         }
     }
 
     /** Chooses folder [path] and closes the listing; the daemon checks the folder on start. */
     fun pick(path: String) {
-        browsing?.cancel()
-        state.update { it.copy(cwd = path.trim(), browse = null) }
+        listing?.cancel()
+        state.update { it.copy(cwd = path.trim(), browse = null, browsing = false) }
     }
 
     /** Another agent starts from its own default chips; the model and prompt stay. */

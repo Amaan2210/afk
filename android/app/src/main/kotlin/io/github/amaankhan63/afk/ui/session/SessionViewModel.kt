@@ -8,7 +8,6 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.Session
-import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.di.StripChipsFlow
 import io.github.amaankhan63.afk.service.ForegroundTracker
@@ -26,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -38,8 +36,7 @@ import kotlinx.coroutines.launch
 class SessionViewModel internal constructor(
     private val repo: SessionsRepository,
     private val sessionId: String,
-    stripChips: Flow<List<StripChip>> = flowOf(DEFAULT_STRIP_CHIPS),
-    private val clock: () -> Instant = Instant::now
+    stripChips: Flow<List<StripChip>> = flowOf(DEFAULT_STRIP_CHIPS)
 ) : ViewModel() {
     /** [savedStateHandle] holds the session's id as the route's `id`. */
     @Inject constructor(
@@ -63,13 +60,14 @@ class SessionViewModel internal constructor(
     private val tab = MutableStateFlow(SessionTab.Terminal)
     private val composer = MutableStateFlow("")
 
-    // The session, and when it was first seen working while it is. It lives as long as the view
-    // model, not the screen's subscription, so a rotation keeps the time.
-    private val tracked: StateFlow<Pair<Session?, Instant?>> = repo.session(sessionId)
-        .scan<Session?, Pair<Session?, Instant?>>(null to null) { (_, since), session ->
-            session to if (session?.state == SessionState.working) since ?: clock() else null
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null to null)
+    // The session as it changes, also for [sendLine]: it lives as long as the view model, not the
+    // screen's subscription.
+    private val current: StateFlow<Session?> = repo.session(sessionId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // The session, and since when it is working while it is.
+    private val watched: Flow<Pair<Session?, Instant?>> =
+        combine(current, repo.workingSince) { session, since -> session to since[sessionId] }
 
     // Buffered for the one screen that collects them, also across a rotation and while it shows
     // an earlier one.
@@ -86,7 +84,7 @@ class SessionViewModel internal constructor(
     private var resuming = false
 
     val ui: StateFlow<SessionUiState> = combine(
-        combine(tracked, repo.strip(sessionId), repo.stats, ::Triple),
+        combine(watched, repo.strip(sessionId), repo.stats, ::Triple),
         stripChips,
         tab,
         composer,
@@ -127,7 +125,7 @@ class SessionViewModel internal constructor(
      */
     fun sendLine(): Boolean {
         if (!connected()) return false
-        val session = tracked.value.first
+        val session = current.value
         val question = session?.textQuestion()
         if (session?.pending != null && question == null) {
             errorEvents.trySend(AfkError(ERROR_PROMPT_WAITING, answerPromptHint(tab.value)))

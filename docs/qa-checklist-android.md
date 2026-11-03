@@ -303,8 +303,6 @@ These are expected. Do not file them as bugs.
   question gets no answer buttons. Open the session for the rest.
 - On a cold start, the offline banner can show "Not connected" for a moment, before the
   connection service has started connecting.
-- The list and the session screen each time "Working · …" from when they first saw the session
-  working, so they can differ.
 - Ctrl+arrow on a hardware keyboard leaves the on-screen Ctrl armed.
 - A chat error stays until the chat reconnects (leave the session for more than 5 seconds);
   there is no Retry button.

@@ -7,7 +7,6 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.Session
-import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.sessions.SessionFilter
 import io.github.amaankhan63.afk.data.sessions.SessionOrder
@@ -24,19 +23,19 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
  * What the sessions screen shows. [sessions] is filtered, searched and ordered; [counts] counts
  * every session per state chip, whatever the filter and query; [hostname] is the laptop's name
- * from the latest `hello`; [workingSince] holds, per working session id, when it was first seen
- * working; [allSessions] is every session, unfiltered, as the repository lists them;
+ * from the latest `hello`; [workingSince] holds, per working session id, when it started working
+ * ([SessionsRepository.workingSince]); [allSessions] is every session, unfiltered, as the
+ * repository lists them;
  * [pairingHost] is the host the app was paired with.
  */
 data class SessionsUiState(
@@ -56,30 +55,22 @@ data class SessionsUiState(
 @HiltViewModel
 class SessionsViewModel internal constructor(
     private val repo: SessionsRepository,
-    pairingHost: Flow<String?> = flowOf(null),
-    private val clock: () -> Instant
+    pairingHost: Flow<String?> = flowOf(null)
 ) : ViewModel() {
     @Inject constructor(repo: SessionsRepository, pairingStore: PairingStore) : this(
         repo,
         // A pairing that cannot be read leaves the banner to say "the laptop".
-        pairingStore.pairing.catch { emit(null) }.map { it?.host },
-        Instant::now
+        pairingStore.pairing.catch { emit(null) }.map { it?.host }
     )
 
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(SessionFilter())
 
-    // Both live as long as the view model, not the screen's subscription: a screen that comes
-    // back while the connection is down still names the laptop, and working sessions keep the
-    // time they started.
+    // It lives as long as the view model, not the screen's subscription: a screen that comes
+    // back while the connection is down still names the laptop.
     private val hostname: StateFlow<String?> = repo.connection
-        .filterIsInstance<ConnectionState.Connected>()
-        .map { it.hello.daemon.hostname }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    private val workingSince: StateFlow<Map<String, Instant>> = repo.sessions
-        .scan(emptyMap<String, Instant>()) { since, sessions -> since.track(sessions, clock()) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+        .mapNotNull { it.hostname() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.connection.value.hostname())
 
     // Eager, so the list never waits on the first read of the pairing.
     private val pairedHost: StateFlow<String?> =
@@ -100,7 +91,7 @@ class SessionsViewModel internal constructor(
     private var resuming = false
 
     val ui: StateFlow<SessionsUiState> = combine(
-        combine(repo.sessions, workingSince, ::Pair),
+        combine(repo.sessions, repo.workingSince, ::Pair),
         combine(query, filter, ::Pair),
         repo.stats,
         repo.connection,
@@ -114,12 +105,12 @@ class SessionsViewModel internal constructor(
         // not an empty, disconnected one for a frame.
         uiState(
             all = repo.sessions.value,
-            since = workingSince.value,
+            since = repo.workingSince.value,
             q = query.value,
             f = filter.value,
             stats = repo.stats.value,
             connection = repo.connection.value,
-            host = hostname.value,
+            host = repo.connection.value.hostname(),
             paired = pairedHost.value
         )
     )
@@ -187,13 +178,9 @@ class SessionsViewModel internal constructor(
             pairingHost = paired
         )
 
-        /**
-         * The ids of the working sessions in [sessions], each with the time this map first held
-         * it, [now] for those not working before.
-         */
-        fun Map<String, Instant>.track(sessions: List<Session>, now: Instant) = sessions
-            .filter { it.state == SessionState.working }
-            .associate { it.id to (this[it.id] ?: now) }
+        /** The laptop's name, from this connection's `hello`, if it is connected. */
+        fun ConnectionState.hostname(): String? =
+            (this as? ConnectionState.Connected)?.hello?.daemon?.hostname
 
         /** Every repository failure is an [AfkError]; anything else is reported as `internal`. */
         fun Throwable.asAfkError(): AfkError =

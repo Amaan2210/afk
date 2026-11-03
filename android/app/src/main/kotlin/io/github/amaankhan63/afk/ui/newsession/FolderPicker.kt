@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalTextStyle
@@ -71,6 +73,10 @@ fun FolderPicker(
         Box {
             Column {
                 PathField(listed = listing?.path, onSubmit = pick)
+                // The bar's room is kept, so the listing does not move when a listing starts.
+                Box(Modifier.fillMaxWidth().height(PROGRESS_HEIGHT)) {
+                    if (state.browsing) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
                 // Each listing starts at its top.
                 key(listing?.path) {
                     LazyColumn(Modifier.fillMaxWidth()) {
@@ -174,3 +180,6 @@ private fun FolderRow(
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
+
+/** The height of a [LinearProgressIndicator]. */
+private val PROGRESS_HEIGHT = 4.dp

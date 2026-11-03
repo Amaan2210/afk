@@ -10,6 +10,7 @@ import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.protocol.Strip
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.onSubscription
 class FakeSessionsRepository : SessionsRepository {
     override val connection = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     override val sessions = MutableStateFlow<List<Session>>(emptyList())
+    override val workingSince = MutableStateFlow<Map<String, Instant>>(emptyMap())
     override val stats = MutableStateFlow<Stats?>(null)
     override val daemonSettings = MutableStateFlow<DaemonSettings?>(null)
     override val notifications =

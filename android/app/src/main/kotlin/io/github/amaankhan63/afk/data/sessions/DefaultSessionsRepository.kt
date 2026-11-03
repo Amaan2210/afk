@@ -12,6 +12,7 @@ import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.protocol.Strip
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -37,14 +38,21 @@ import kotlinx.coroutines.launch
 
 /**
  * [SessionsRepository] over [manager]. One collector in [scope] folds the daemon's pushes into
- * state; each `pty` and `chat` collection holds its own subscription.
+ * state; each `pty` and `chat` collection holds its own subscription. [clock] times
+ * [workingSince].
  */
-class DefaultSessionsRepository(private val manager: ConnectionManager, scope: CoroutineScope) :
-    SessionsRepository {
+class DefaultSessionsRepository(
+    private val manager: ConnectionManager,
+    scope: CoroutineScope,
+    private val clock: () -> Instant = Instant::now
+) : SessionsRepository {
     override val connection: StateFlow<ConnectionState> = manager.state
 
     private val mutableSessions = MutableStateFlow<List<Session>>(emptyList())
     override val sessions: StateFlow<List<Session>> = mutableSessions.asStateFlow()
+
+    private val mutableWorkingSince = MutableStateFlow<Map<String, Instant>>(emptyMap())
+    override val workingSince: StateFlow<Map<String, Instant>> = mutableWorkingSince.asStateFlow()
 
     private val mutableStats = MutableStateFlow<Stats?>(null)
     override val stats: StateFlow<Stats?> = mutableStats.asStateFlow()
@@ -182,6 +190,9 @@ class DefaultSessionsRepository(private val manager: ConnectionManager, scope: C
 
     private fun reduceSessions(msg: ServerMessage) {
         byId = SessionsReducer.reduce(byId, msg)
+        // First, so a reader of the new list finds the times of its working sessions.
+        mutableWorkingSince.value =
+            SessionsReducer.workingSince(mutableWorkingSince.value, byId.values, clock())
         mutableSessions.value = SessionOrder.sorted(byId.values.toList())
     }
 
