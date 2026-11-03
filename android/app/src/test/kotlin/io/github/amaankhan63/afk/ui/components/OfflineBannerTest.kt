@@ -20,10 +20,10 @@ class OfflineBannerTest {
         )
     }
 
-    /** The first try after a start is attempt 0; the brief's wording stands for it too. */
+    /** The first try after a start is attempt 0: nothing has dropped yet, so it only connects. */
     @Test fun theFirstTryIsAttemptZero() {
         assertEquals(
-            "Reconnecting to 100.84.12.9… (attempt 0)",
+            "Connecting to 100.84.12.9…",
             bannerText(ConnectionState.Connecting(0), "100.84.12.9")
         )
     }
@@ -60,5 +60,12 @@ class OfflineBannerTest {
             "Can't reach the laptop",
             bannerText(ConnectionState.Failed(ERROR_BAD_ENDPOINT), null)
         )
+    }
+
+    /** The name from the latest `hello` wins; the paired address stands in until there is one. */
+    @Test fun theBannerNamesTheLaptopByItsHostnameFirst() {
+        assertEquals("MY-LAPTOP", bannerHost(hostname = "MY-LAPTOP", pairingHost = "100.84.12.9"))
+        assertEquals("100.84.12.9", bannerHost(hostname = null, pairingHost = "100.84.12.9"))
+        assertNull(bannerHost(hostname = null, pairingHost = null))
     }
 }

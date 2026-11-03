@@ -102,23 +102,23 @@ class SessionsViewModel internal constructor(
         repo.connection,
         combine(hostname, pairedHost, ::Pair)
     ) { (all, since), (q, f), stats, connection, (host, paired) ->
-        SessionsUiState(
-            sessions = SessionOrder.sorted(
-                all.filter(f::accepts).filter { SessionSearch.matches(it, q) }
-            ),
-            query = q,
-            filter = f,
-            counts = StateFilter.entries.associateWith { state ->
-                all.count(SessionFilter(state)::accepts)
-            },
-            stats = stats,
-            hostname = host,
-            connection = connection,
-            workingSince = since,
-            allSessions = all,
-            pairingHost = paired
+        uiState(all, since, q, f, stats, connection, host, paired)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        // What the repository holds now: a screen opening while connected draws the list at once,
+        // not an empty, disconnected one for a frame.
+        uiState(
+            all = repo.sessions.value,
+            since = workingSince.value,
+            q = query.value,
+            f = filter.value,
+            stats = repo.stats.value,
+            connection = repo.connection.value,
+            host = hostname.value,
+            paired = pairedHost.value
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SessionsUiState())
+    )
 
     fun onQuery(q: String) {
         query.value = q
@@ -152,6 +152,33 @@ class SessionsViewModel internal constructor(
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
+
+        /** The screen's state from each source it combines; [q] is the query, [f] the filter. */
+        fun uiState(
+            all: List<Session>,
+            since: Map<String, Instant>,
+            q: String,
+            f: SessionFilter,
+            stats: Stats?,
+            connection: ConnectionState,
+            host: String?,
+            paired: String?
+        ) = SessionsUiState(
+            sessions = SessionOrder.sorted(
+                all.filter(f::accepts).filter { SessionSearch.matches(it, q) }
+            ),
+            query = q,
+            filter = f,
+            counts = StateFilter.entries.associateWith { state ->
+                all.count(SessionFilter(state)::accepts)
+            },
+            stats = stats,
+            hostname = host,
+            connection = connection,
+            workingSince = since,
+            allSessions = all,
+            pairingHost = paired
+        )
 
         /**
          * The ids of the working sessions in [sessions], each with the time this map first held

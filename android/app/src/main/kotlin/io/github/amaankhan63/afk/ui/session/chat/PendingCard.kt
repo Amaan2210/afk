@@ -93,7 +93,7 @@ private fun Question(
             label = option.label,
             description = option.description,
             recommended = option.recommended,
-            selected = index in ticked,
+            checked = if (multi) index in ticked else null,
             lead = { if (multi) Checkbox(index in ticked, null) else Number(index + 1) },
             onClick = {
                 if (multi) {
@@ -119,7 +119,10 @@ private fun Question(
     }
 }
 
-/** One answer of a question, as a button; [lead] is its number or checkbox. */
+/**
+ * One answer of a question; [lead] is its number or checkbox. A button, or, when [checked] is not
+ * null, a checkbox row: the whole row ticks, and screen readers hear whether it is ticked.
+ */
 @Composable
 private fun Choice(
     label: String,
@@ -127,38 +130,66 @@ private fun Choice(
     lead: @Composable () -> Unit,
     description: String? = null,
     recommended: Boolean = false,
-    selected: Boolean = false
+    checked: Boolean? = null
+) {
+    val colors = MaterialTheme.colorScheme
+    val palette = LocalAfkPalette.current
+    val selected = checked == true
+    val color = if (selected) palette.accentSoft else colors.surfaceContainerLow
+    val border = BorderStroke(1.dp, if (selected) palette.accent else colors.outline)
+    val shape = MaterialTheme.shapes.small
+    val content = @Composable { ChoiceContent(label, lead, description, recommended) }
+    if (checked == null) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().semantics { role = Role.Button },
+            shape = shape,
+            color = color,
+            border = border,
+            content = content
+        )
+    } else {
+        // Toggleable, so the row carries the ticked state; the checkbox inside only draws it.
+        Surface(
+            checked = checked,
+            onCheckedChange = { onClick() },
+            modifier = Modifier.fillMaxWidth().semantics { role = Role.Checkbox },
+            shape = shape,
+            color = color,
+            border = border,
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun ChoiceContent(
+    label: String,
+    lead: @Composable () -> Unit,
+    description: String?,
+    recommended: Boolean
 ) {
     val colors = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
-    val palette = LocalAfkPalette.current
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button },
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) palette.accentSoft else colors.surfaceContainerLow,
-        border = BorderStroke(1.dp, if (selected) palette.accent else colors.outline)
+    Row(
+        Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            lead()
-            Column(Modifier.weight(1f)) {
-                Text(label, style = type.bodySmall)
-                description?.let {
-                    Text(it, color = colors.onSurfaceVariant, style = type.labelSmall)
-                }
+        lead()
+        Column(Modifier.weight(1f)) {
+            Text(label, style = type.bodySmall)
+            description?.let {
+                Text(it, color = colors.onSurfaceVariant, style = type.labelSmall)
             }
-            if (recommended) {
-                Text(
-                    text = "RECOMMENDED",
-                    color = palette.green,
-                    fontWeight = FontWeight.Bold,
-                    style = type.labelSmall
-                )
-            }
+        }
+        if (recommended) {
+            Text(
+                text = "RECOMMENDED",
+                color = LocalAfkPalette.current.green,
+                fontWeight = FontWeight.Bold,
+                style = type.labelSmall
+            )
         }
     }
 }

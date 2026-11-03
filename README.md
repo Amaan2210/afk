@@ -59,10 +59,10 @@ daemon listens only on your Tailscale address and `127.0.0.1`. More in
    afk service install
    ```
 
-4. Pair the phone: `afk pair` prints a QR code. Scan it in the AFK app.
-5. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
+4. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
    [GitHub Release](https://github.com/AmaanKhan63/afk/releases) and open it. When Android asks,
    allow your browser (or file manager) to install unknown apps, then install.
+5. Pair the phone: `afk pair` prints a QR code. Scan it in the AFK app.
 
 ## Usage
 

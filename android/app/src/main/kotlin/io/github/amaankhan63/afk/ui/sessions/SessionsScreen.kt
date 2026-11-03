@@ -41,6 +41,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amaankhan63.afk.data.sessions.SessionFilter
 import io.github.amaankhan63.afk.ui.components.OfflineBanner
+import io.github.amaankhan63.afk.ui.components.bannerHost
 import java.time.Instant
 import kotlinx.coroutines.delay
 
@@ -137,7 +138,7 @@ fun SessionsScreen(
             // Above the list, never over it: offline, the last known sessions stay usable.
             OfflineBanner(
                 connection = state.connection,
-                host = state.hostname ?: state.pairingHost
+                host = bannerHost(state.hostname, state.pairingHost)
             )
             LaptopStrip(
                 hostname = state.hostname,

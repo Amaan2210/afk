@@ -137,6 +137,19 @@ class SessionsViewModelTest {
         assertEquals("MY-LAPTOP", vm.ui.value.hostname)
     }
 
+    /** A screen that opens while the app is connected starts from what the repository holds. */
+    @Test fun theFirstStateIsTheRepositorysCurrentOne() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.sessions.value = listOf(workingClaude)
+
+        // Read before any screen collects: the state a new screen draws first.
+        val first = viewModel().ui.value
+
+        assertEquals(ConnectionState.Connected(HELLO), first.connection)
+        assertEquals(listOf("s_work"), first.sessions.map { it.id })
+        assertEquals("MY-LAPTOP", first.hostname)
+    }
+
     /** The banner names the paired address until the first `hello` names the laptop. */
     @Test fun carriesThePairingHost() = runTest {
         val pairingHost = MutableStateFlow<String?>(null)

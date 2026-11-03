@@ -20,6 +20,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import io.github.amaankhan63.afk.MainActivity
 import io.github.amaankhan63.afk.data.connection.ConnectionManager
 import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.failureText
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.settings.AppSettingsStore
@@ -29,6 +30,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -76,7 +79,9 @@ class AfkConnectionService : Service() {
             }
         }
         scope.launch {
-            manager.state.map(::statusText).distinctUntilChanged().collect {
+            // A pairing that cannot be read leaves a failure to say "the laptop".
+            val host = pairingStore.pairing.catch { emit(null) }.map { it?.host }
+            combine(manager.state, host, ::connectionStatusText).distinctUntilChanged().collect {
                 post(FOREGROUND_ID, connectionNotification(it))
             }
         }
@@ -136,16 +141,6 @@ class AfkConnectionService : Service() {
         false
     )
 
-    /**
-     * While this service runs a pairing exists, so a disconnected manager is about to connect: it
-     * reads "Connecting…" rather than flashing "Disconnected" at start-up and on a new pairing.
-     */
-    private fun statusText(state: ConnectionState): String = when (state) {
-        is ConnectionState.Connected -> "Connected to ${state.hello.daemon.hostname}"
-        is ConnectionState.Connecting, ConnectionState.Disconnected -> CONNECTING
-        is ConnectionState.Failed -> "Connection failed: ${state.code}"
-    }
-
     /** Shows [notification] when the user allows notifications; never throws. */
     private fun post(id: Int, notification: Notification) {
         val notifications = NotificationManagerCompat.from(this)
@@ -165,7 +160,6 @@ class AfkConnectionService : Service() {
 
     companion object {
         private const val TAG = "AfkConnectionService"
-        private const val CONNECTING = "Connecting…"
 
         /** Negative, so it never meets a session's [NotificationActions.notificationId]. */
         private const val FOREGROUND_ID = -1
@@ -197,4 +191,18 @@ class AfkConnectionService : Service() {
                     Intent.FLAG_ACTIVITY_CLEAR_TOP
             )
     }
+}
+
+private const val CONNECTING = "Connecting…"
+
+/**
+ * The connection notification's text in [state], [host] being the paired address. While the
+ * service runs a pairing exists, so a disconnected manager is about to connect: it reads
+ * "Connecting…" rather than flashing "Disconnected" at start-up and on a new pairing. A failure
+ * reads as the sessions screen's banner says it.
+ */
+internal fun connectionStatusText(state: ConnectionState, host: String?): String = when (state) {
+    is ConnectionState.Connected -> "Connected to ${state.hello.daemon.hostname}"
+    is ConnectionState.Connecting, ConnectionState.Disconnected -> CONNECTING
+    is ConnectionState.Failed -> failureText(state.code, host)
 }

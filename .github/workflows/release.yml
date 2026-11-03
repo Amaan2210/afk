@@ -66,19 +66,33 @@ jobs:
             exit 1
           fi
       # Without the keystore secret the build signs with the runner's debug key, so the APK still
-      # installs. Only the keystore's path goes into the job's environment.
+      # installs. A keystore without its passwords and alias is a mistake, not a release. Only the
+      # keystore's path goes into the job's environment, and no secret's value is ever printed.
       - name: Release keystore
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/afk.jks"
-            echo "AFK_KEYSTORE_PATH=$RUNNER_TEMP/afk.jks" >> "$GITHUB_ENV"
-          else
-            echo "No ANDROID_KEYSTORE_B64 secret: the APK is signed with the debug key."
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: the APK is signed with the runner's debug key"
+            exit 0
           fi
-      # Gradle reads the passwords and alias only when AFK_KEYSTORE_PATH is set.
-      - run: ./gradlew :app:assembleRelease
+          missing=""
+          [ -n "$ANDROID_KEYSTORE_PASSWORD" ] || missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$ANDROID_KEY_ALIAS" ] || missing="$missing ANDROID_KEY_ALIAS"
+          [ -n "$ANDROID_KEY_PASSWORD" ] || missing="$missing ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::ANDROID_KEYSTORE_B64 is set but these secrets are empty:$missing"
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/afk.jks"
+          echo "AFK_KEYSTORE_PATH=$RUNNER_TEMP/afk.jks" >> "$GITHUB_ENV"
+      # As the npm job tests before it publishes, a release never ships untested code. The build
+      # script always reads the passwords and alias, and signs with them only when
+      # AFK_KEYSTORE_PATH is set.
+      - run: ./gradlew :app:ktlintCheck :app:testDebugUnitTest :app:assembleRelease
         env:
           AFK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           AFK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

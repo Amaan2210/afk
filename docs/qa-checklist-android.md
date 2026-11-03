@@ -40,7 +40,8 @@ bug.
       "Connected to <laptop name>". Tap **Save**: the sessions list opens.
 - [ ] Pair by hand with a wrong token, then tap **Test connection**. The app says
       "Token rejected".
-- [ ] Pair by hand with port `70000`. The app says "Port must be 1–65535".
+- [ ] Pair by hand with port `70000`, then tap **Test connection**. The app says
+      "Port must be 1–65535".
 
 ## Sessions list
 
@@ -111,13 +112,17 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Long-press terminal text: a selection with Copy appears. Copy it, then paste it into
       another app: the text matches.
 - [ ] Long-press → Paste in the terminal pastes the clipboard into the session as typed text.
-- [ ] A program's own clipboard request (OSC 52) does not change the phone's clipboard.
+- [ ] A program's own clipboard request (OSC 52) does not change the phone's clipboard. In the
+      shell session on the phone, run
+      `Write-Host -NoNewline "$([char]27)]52;c;YWZrLW9zYzUy$([char]7)"`, which asks the terminal
+      to copy the text `afk-osc52`. Paste into another app: it is not `afk-osc52`.
 - [ ] Swipe sideways on the terminal. The view moves between Terminal and Chat, and a
       long-press selection still works.
 - [ ] Pinch to zoom, quickly and several times. The font grows or shrinks one step at a time and
       stops where you stop. Settings → Terminal → Font size then shows the same size.
-- [ ] Stray characters such as `^[[…` in an agent's input box are the terminal answering a
-      query from the program. If you see them, note what the program was doing and report it.
+- [ ] Use the Claude session from the phone for a few minutes: type, switch tabs, rotate. No
+      stray characters such as `^[[…` appear in Claude's input box. If they do, they are the
+      terminal answering a query from the program: note what it was doing and report it.
 
 ## Chat
 
@@ -127,6 +132,9 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Tap a tool card. It expands to show the input and the result, and **Show more** shows the
       rest of a long result. A tool with a very long name (an MCP tool) still shows part of its
       summary.
+- [ ] Long-press one of your messages, then one of Claude's. Each time, a text selection
+      appears: select part of the text, tap **Copy**, and paste it into the composer. The pasted
+      text matches what you selected.
 - [ ] When Claude asks a question, the chat shows a question card. Tap an option: Claude gets
       that answer.
 - [ ] A multi-select question shows checkbox rows and **Confirm**. Tick two, confirm: Claude
@@ -187,15 +195,15 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Settings → Laptop shows the laptop's name and "Connected · <address>".
 - [ ] Turn on **Keep laptop awake while agents work** while an agent is working. On the laptop,
       in an administrator PowerShell, `powercfg /requests` lists the daemon (`node.exe`) under
-      SYSTEM. This is what the daemon reports as `keepAwakeActive` in its stats. Turn the switch
-      off: the entry goes away.
+      SYSTEM: the laptop reports keep-awake as active. Turn the switch off: the entry goes away.
 - [ ] Turn off the phone's Wi-Fi and mobile data. The keep-awake switch greys out until the
       connection is back.
 - [ ] Settings → Terminal: the font size and **Key bar** change the terminal at once.
 - [ ] Settings → Status strip: a chip you turn off disappears from the session screen's strip.
 - [ ] Settings → About and licenses opens a screen with the version, the source link and the
       Termux licence text. **Source** opens the repository in the browser.
-- [ ] Settings → Laptop → **Unpair**, then confirm. The app returns to the pairing screen, and
+- [ ] Settings → Laptop → **Unpair**. The confirmation says the laptop still lists this phone
+      until you run `afk unpair` there. Confirm. The app returns to the pairing screen, and
       the "Connected to …" notification disappears because the service has stopped. On the
       laptop, `afk devices` still lists the phone until you run `afk unpair <deviceId>`.
 
@@ -226,6 +234,8 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       folder. The key bar keys read "Escape", "Control" and so on.
 - [ ] The **About and licenses** row and the About screen's **Source** row read as buttons.
       Switch rows read as switches, with their on or off state.
+- [ ] In the chat, a multi-select question's rows read as checkboxes, ticked or not ticked, and
+      a tool card reads as "Expanded" or "Collapsed".
 - [ ] With TalkBack on, turn off Wi-Fi. The offline banner's text is announced without moving
       focus.
 - [ ] Set the phone's font size to the largest. All text grows, and nothing important is cut
@@ -233,25 +243,31 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 
 ## Offline / reconnect
 
-- [ ] Turn off Wi-Fi and mobile data. A banner under the top bar says
+- [ ] Turn off Wi-Fi and mobile data. Within about a minute, a banner under the top bar says
       "Reconnecting to <laptop name>… (attempt n)", and n counts up. The last known list stays,
       and you can still scroll it and open sessions.
+- [ ] While still offline, send from a session's composer, then try to start a new session. Both
+      show "Not connected" instead of hanging, and the composer keeps its text.
 - [ ] Turn the network back on. The banner disappears, and the list catches up with changes made
       while offline.
 - [ ] Stop the daemon (`afk service stop`). The banner shows reconnecting attempts. Start it
-      again (`afk service start`): the banner goes away.
-- [ ] Revoke the phone on the laptop (`afk devices`, then `afk unpair <deviceId>`), then
-      reconnect. The banner says "Connection refused: unauthorized".
-- [ ] While offline, sending from a session's composer or starting a new session shows
-      "Not connected" instead of hanging. The composer keeps its text.
+      again (`afk service start`): the banner goes away. Stopping the daemon ended every
+      session, so start one again on the laptop (`afk shell`); it appears in the list.
+- [ ] Revoke the phone on the laptop (`afk devices`, then `afk unpair <deviceId>`), then make
+      the phone reconnect by turning Wi-Fi off and on. The banner says
+      "Connection refused: unauthorized".
+- [ ] Pair again: in the app, Settings → Laptop → **Unpair**, then run `afk pair` on the laptop
+      and scan the code. Until you do, the phone shows "unauthorized" (or the pairing screen,
+      once unpaired). After pairing, the list shows the laptop's sessions again.
 
 ## Release
 
 - [ ] Push a tag `vX.Y.Z` that matches `versionName` in `android/app/build.gradle.kts` and the
       service's `package.json`. The release workflow's `android` job passes its "Tag matches
       versionName" step and attaches `afk-vX.Y.Z.apk` to the GitHub Release for the tag.
-- [ ] Download that APK on the phone and install it (allow the browser to install unknown apps
-      when asked). It installs and runs.
+- [ ] Uninstall AFK first (this forgets the pairing), install the CI APK, then pair again: on the
+      phone, download that APK and open it, allowing the browser to install unknown apps when
+      asked. It installs and runs, and pairing works as above.
 - [ ] With the four repository secrets `ANDROID_KEYSTORE_B64` (the keystore file in base64),
       `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` set,
       `apksigner verify --print-certs` on the released APK shows your release certificate, not
@@ -277,17 +293,18 @@ These are expected. Do not file them as bugs.
 - A question with three or more options shows only its first two options and **Reply** in the
   notification, or its first three options when it takes no typed answer. A multi-select
   question gets no answer buttons. Open the session for the rest.
-- The offline banner reads "Reconnecting to … (attempt 0)" during the first connection after
-  the app starts, and can show "Not connected" for a moment before the connection starts.
+- On a cold start, the offline banner can show "Not connected" for a moment, before the
+  connection service has started connecting.
 - The list and the session screen each time "Working · …" from when they first saw the session
   working, so they can differ.
 - Ctrl+arrow on a hardware keyboard leaves the on-screen Ctrl armed.
 - A chat error stays until the chat reconnects (leave the session for more than 5 seconds);
   there is no Retry button.
-- Chat text cannot be selected or copied.
 - A sub-agent's thread screen has no composer. Answer its questions with text from the session
   screen.
 - Sending from the composer while a question that takes no typed answer is pending types the
   text into the terminal.
-- A release APK signed with the debug key (no keystore secrets) cannot be installed over one
-  built on another CI runner. Uninstall first, which forgets the pairing.
+- Android refuses to install an APK over the installed app when the two are signed with
+  different keys. That happens with a CI build over a local build, with debug-signed CI builds
+  from different runners (no keystore secrets), and with the first release signed with the real
+  key over a debug-signed install. Uninstall first, which forgets the pairing.

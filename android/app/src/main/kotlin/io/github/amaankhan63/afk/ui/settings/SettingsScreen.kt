@@ -119,7 +119,8 @@ private fun UnpairDialog(hostname: String?, onConfirm: () -> Unit, onDismiss: ()
         text = {
             Text(
                 "The app forgets ${hostname ?: "the laptop"} and stops connecting to it. " +
-                    "Pair again with its QR code."
+                    "Pair again with its QR code. " +
+                    "The laptop still lists this phone until you run afk unpair there."
             )
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Unpair") } },

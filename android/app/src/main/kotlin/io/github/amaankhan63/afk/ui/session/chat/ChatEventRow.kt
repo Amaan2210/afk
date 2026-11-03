@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -76,21 +77,26 @@ private fun UserBubble(text: String, modifier: Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         // At most the share of the row, and as narrow as its text within it.
         Box(Modifier.fillMaxWidth(BUBBLE_WIDTH).wrapContentWidth(Alignment.End)) {
-            Text(
-                text = text,
-                modifier = Modifier
-                    .background(LocalAfkPalette.current.accentSoft, BUBBLE_SHAPE)
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            // A long press selects the message's text, to copy it.
+            SelectionContainer {
+                Text(
+                    text = text,
+                    modifier = Modifier
+                        .background(LocalAfkPalette.current.accentSoft, BUBBLE_SHAPE)
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }
 
-/** The event's text as markdown, parsed once per text. */
+/** The event's text as markdown, parsed once per text; a long press selects it, to copy it. */
 @Composable
 private fun AssistantText(event: ChatEvent, modifier: Modifier) {
     val blocks = remember(event.id, event.text) { Markdown.parse(event.text.orEmpty()) }
-    MarkdownText(blocks, modifier.fillMaxWidth())
+    SelectionContainer(modifier.fillMaxWidth()) {
+        MarkdownText(blocks, Modifier.fillMaxWidth())
+    }
 }

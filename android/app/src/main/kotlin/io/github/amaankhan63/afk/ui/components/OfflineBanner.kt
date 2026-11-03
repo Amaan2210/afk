@@ -12,7 +12,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.amaankhan63.afk.data.connection.ConnectionState
-import io.github.amaankhan63.afk.data.connection.ERROR_BAD_ENDPOINT
+import io.github.amaankhan63.afk.data.connection.failureText
 
 /**
  * A full-width line saying why the app is not connected to [host], the laptop's name or address;
@@ -46,23 +46,27 @@ fun OfflineBanner(
 
 /**
  * What the offline banner says in [connection], naming [host] (the laptop when unknown); null while
- * connected.
+ * connected. Attempt 0 is the first try after a start, before anything has dropped.
  */
 fun bannerText(connection: ConnectionState, host: String?): String? {
     val laptop = host ?: "the laptop"
     return when (connection) {
         is ConnectionState.Connected -> null
 
-        is ConnectionState.Connecting ->
+        is ConnectionState.Connecting -> if (connection.attempt == 0) {
+            "Connecting to $laptop…"
+        } else {
             "Reconnecting to $laptop… (attempt ${connection.attempt})"
+        }
 
         ConnectionState.Disconnected -> "Not connected"
 
-        is ConnectionState.Failed ->
-            if (connection.code == ERROR_BAD_ENDPOINT) {
-                "Can't reach $laptop"
-            } else {
-                "Connection refused: ${connection.code}"
-            }
+        is ConnectionState.Failed -> failureText(connection.code, host)
     }
 }
+
+/**
+ * The laptop the banner names: its [hostname] from the latest `hello` when there is one, else the
+ * [pairingHost] the app was paired with.
+ */
+fun bannerHost(hostname: String?, pairingHost: String?): String? = hostname ?: pairingHost
