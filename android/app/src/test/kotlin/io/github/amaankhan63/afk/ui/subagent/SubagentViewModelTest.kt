@@ -1,6 +1,8 @@
 package io.github.amaankhan63.afk.ui.subagent
 
 import androidx.lifecycle.ViewModelStore
+import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ChatEvent
 import io.github.amaankhan63.afk.data.protocol.ChatKind
@@ -8,6 +10,7 @@ import io.github.amaankhan63.afk.data.protocol.SubagentInfo
 import io.github.amaankhan63.afk.data.protocol.SubagentStatus
 import io.github.amaankhan63.afk.data.sessions.ChatUpdate
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
+import io.github.amaankhan63.afk.data.sessions.HELLO
 import io.github.amaankhan63.afk.data.sessions.chatEvent
 import io.github.amaankhan63.afk.service.ForegroundTracker
 import io.github.amaankhan63.afk.ui.holding
@@ -23,7 +26,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -127,7 +132,9 @@ class SubagentViewModelTest {
     }
 
     @Test fun answerGoesToTheSession() = runTest {
-        vm.answer("q_1", listOf(1), null, null)
+        repo.connection.value = ConnectionState.Connected(HELLO)
+
+        assertTrue(vm.answer("q_1", listOf(1), null, null))
 
         assertEquals(
             listOf(FakeSessionsRepository.Answer("s_1", "q_1", listOf(1), null, null)),
@@ -135,7 +142,19 @@ class SubagentViewModelTest {
         )
     }
 
+    /** The card stays answerable: nothing went out. */
+    @Test fun answerWhileDisconnectedSendsNothing() = runTest {
+        val errors = mutableListOf<AfkError>()
+        collecting(vm.errors, errors)
+
+        assertFalse(vm.answer("q_1", listOf(1), null, null))
+
+        assertEquals(emptyList<FakeSessionsRepository.Answer>(), repo.answers)
+        assertEquals(listOf(ERROR_DISCONNECTED), errors.map { it.code })
+    }
+
     @Test fun aStaleAnswerIsReportedInWords() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
         val errors = mutableListOf<AfkError>()
         collecting(vm.errors, errors)
 

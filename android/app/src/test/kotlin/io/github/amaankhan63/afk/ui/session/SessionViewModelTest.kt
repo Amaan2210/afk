@@ -98,19 +98,44 @@ class SessionViewModelTest {
         assertEquals("", vm.ui.value.composer)
     }
 
-    @Test fun sendLineTypesWhenNoQuestionTakesText() = runTest {
+    @Test fun sendLineTypesWhenNothingIsPending() = runTest {
         repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.sessions.value = listOf(session("s_1", state = SessionState.working))
         collecting(vm.ui)
         vm.onComposer("ls")
-        assertTrue(vm.sendLine())
-        // The daemon refuses free text on a multi-select question.
-        repo.sessions.value = listOf(waiting(question(multiSelect = true)))
-        vm.onComposer("x")
+
         assertTrue(vm.sendLine())
 
-        assertEquals(listOf("ls\r", "x\r"), repo.ptyInputs.map { String(it.second) })
-        assertEquals(emptyList<FakeSessionsRepository.Answer>(), repo.answers)
+        assertEquals(listOf("ls\r"), repo.ptyInputs.map { String(it.second) })
         assertEquals("Type, then send as a line…", vm.ui.value.composerPlaceholder)
+    }
+
+    /**
+     * The daemon refuses free text on a multi-select question, and typed into the terminal the
+     * text's Enter would confirm whatever the prompt highlights; so would a permission's.
+     */
+    @Test fun sendLineHoldsTheTextWhileAPromptTakesNoText() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.sessions.value = listOf(waiting(question(multiSelect = true)))
+        val errors = mutableListOf<AfkError>()
+        collecting(vm.ui)
+        collecting(vm.errors, errors)
+        assertEquals("Answer the prompt above", vm.ui.value.composerPlaceholder)
+        vm.onComposer("x")
+
+        assertFalse(vm.sendLine())
+        vm.selectTab(SessionTab.Chat)
+        repo.sessions.value = listOf(waiting(Pending.Permission("p_1", "Bash", "rm -rf build")))
+        assertFalse(vm.sendLine())
+
+        assertEquals(emptyList<Pair<String, ByteArray>>(), repo.ptyInputs)
+        assertEquals(emptyList<FakeSessionsRepository.Answer>(), repo.answers)
+        assertEquals("x", vm.ui.value.composer)
+        assertEquals(
+            listOf("Answer the prompt above", "Answer the card above"),
+            errors.map { it.message }
+        )
+        assertEquals("Answer the card above", vm.ui.value.composerPlaceholder)
     }
 
     @Test fun sendLineWhileDisconnectedKeepsTheText() = runTest {
@@ -196,14 +221,27 @@ class SessionViewModelTest {
     }
 
     @Test fun answerGoesToTheRepository() = runTest {
-        vm.answer("q_1", listOf(1), null, null)
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        assertTrue(vm.answer("q_1", listOf(1), null, null))
         assertEquals(
             listOf(FakeSessionsRepository.Answer("s_1", "q_1", listOf(1), null, null)),
             repo.answers
         )
     }
 
+    /** The card stays answerable: nothing went out. */
+    @Test fun answerWhileDisconnectedSendsNothing() = runTest {
+        val errors = mutableListOf<AfkError>()
+        collecting(vm.errors, errors)
+
+        assertFalse(vm.answer("q_1", listOf(1), null, null))
+
+        assertEquals(emptyList<FakeSessionsRepository.Answer>(), repo.answers)
+        assertEquals(listOf(ERROR_DISCONNECTED), errors.map { it.code })
+    }
+
     @Test fun changedPromptIsReportedNotRetried() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
         val errors = mutableListOf<AfkError>()
         collecting(vm.errors, errors)
         repo.answerResult = Result.failure(AfkError("pending_changed", "q_1 changed"))
@@ -216,6 +254,7 @@ class SessionViewModelTest {
 
     /** A card tapped after its prompt went away: the daemon has no such pending any more. */
     @Test fun answerToAPromptThatIsGoneSaysItChanged() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
         val errors = mutableListOf<AfkError>()
         collecting(vm.errors, errors)
         repo.answerResult = Result.failure(AfkError("not_found", "no pending q_1 on s_1"))

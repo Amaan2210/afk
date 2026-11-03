@@ -43,7 +43,7 @@ fun ChatEventRow(
     toolExpanded: Boolean,
     onToggleTool: () -> Unit,
     onOpenThread: (String) -> Unit,
-    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
+    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Boolean,
     onFocusComposer: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {

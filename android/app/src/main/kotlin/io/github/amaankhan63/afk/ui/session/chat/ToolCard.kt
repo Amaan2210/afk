@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +33,9 @@ import io.github.amaankhan63.afk.ui.theme.LocalAfkPalette
 
 /** Characters of a tool's input or result shown before "Show more". */
 private const val SHOWN_CHARS = 4_000
+
+/** The widest a tool's name gets in its card's line, about 25 characters. */
+private val NAME_MAX_WIDTH = 160.dp
 
 /**
  * One tool call: its status, name and summary on one line. Tapping it calls [onToggle]; while
@@ -62,9 +66,12 @@ fun ToolCard(
             ) {
                 val (glyph, color) = statusGlyph(tool.status)
                 Text(glyph, color = color, style = MaterialTheme.typography.bodySmall)
-                // One line, so a long tool name (an MCP server's) cannot wrap the card.
+                // One line, so a long tool name (an MCP server's) cannot wrap the card, and no
+                // wider than NAME_MAX_WIDTH, so the summary keeps room. A weight would cap the
+                // summary too: a Row gives a short name's unused share to no one.
                 Text(
                     text = tool.name,
+                    modifier = Modifier.widthIn(max = NAME_MAX_WIDTH),
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,

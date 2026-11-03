@@ -33,22 +33,24 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
 /**
- * The Chat tab: the thread's [events], oldest first. A sub-agent's card opens its thread through
- * [onOpenThread]; a question's or permission's card answers through [onAnswer]; "Other…" focuses
- * the composer through [onFocusComposer], and is not offered without one (a sub-agent's thread).
+ * The Chat tab: the thread's [events], oldest first; nothing until the thread's first snapshot,
+ * rather than "No messages yet" for a thread that may have many. A sub-agent's card opens its
+ * thread through [onOpenThread]; a question's or permission's card answers through [onAnswer],
+ * which says whether the answer went out; "Other…" focuses the composer through
+ * [onFocusComposer], and is not offered without one (a sub-agent's thread).
  *
  * The list keeps its end in view, through new events and a keyboard shrinking it, until the reader
  * scrolls away from the end; scrolling back to the end makes it follow again.
  */
 @Composable
 fun ChatTab(
-    events: List<ChatEvent>,
+    events: List<ChatEvent>?,
     onOpenThread: (String) -> Unit,
-    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
+    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Boolean,
     onFocusComposer: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    val rows = remember(events) { events.filter(::hasRow) }
+    val rows = remember(events) { events?.filter(::hasRow) }
     val list = rememberLazyListState()
     // The ids of the tool cards opened, and whether the list keeps its end in view.
     var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
@@ -69,13 +71,15 @@ fun ChatTab(
         }
     }
     // An append, or a keyboard shrinking the list, keeps a pinned list's end in view.
-    LaunchedEffect(list, rows.size) {
+    LaunchedEffect(list, rows?.size) {
         snapshotFlow { list.layoutInfo.viewportSize.height }.collect {
-            if (pinned && rows.isNotEmpty()) list.jumpTo(rows.lastIndex)
+            if (pinned && !rows.isNullOrEmpty()) list.jumpTo(rows.lastIndex)
         }
     }
 
-    if (rows.isEmpty()) {
+    if (rows == null) {
+        Box(modifier.fillMaxSize())
+    } else if (rows.isEmpty()) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No messages yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

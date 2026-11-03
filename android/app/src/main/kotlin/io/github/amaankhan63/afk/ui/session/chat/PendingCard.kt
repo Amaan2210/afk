@@ -30,18 +30,19 @@ private const val ALWAYS = "allow_always"
 private const val DENY = "deny"
 
 /**
- * A prompt the agent waits on, answered through [onAnswer]. A question's option answers it at once,
- * or, for a question that takes several, once Confirm is tapped. A question that takes a typed
- * answer offers "Other…", which goes to the composer through [onFocusComposer], whose text then
- * answers it; there is none without a composer. A permission is allowed once, always, or denied.
+ * A prompt the agent waits on, answered through [onAnswer], which says whether the answer went
+ * out. A question's option answers it at once, or, for a question that takes several, once Confirm
+ * is tapped; once its answer went out, its options are off. A question that takes a typed answer
+ * offers "Other…", which goes to the composer through [onFocusComposer], whose text then answers
+ * it; there is none without a composer. A permission is allowed once, always, or denied.
  *
- * The card stays answerable after the prompt has moved on: the daemon refuses such an answer, and
- * the screen says so.
+ * The card stays answerable after the prompt has moved on elsewhere: the daemon refuses such an
+ * answer, and the screen says so.
  */
 @Composable
 fun PendingCard(
     pending: Pending,
-    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
+    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Boolean,
     onFocusComposer: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
@@ -65,7 +66,7 @@ fun PendingCard(
 @Composable
 private fun Permission(
     permission: Pending.Permission,
-    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit
+    onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Boolean
 ) {
     val decide = { decision: String -> onAnswer(permission.id, null, null, decision) }
     val type = MaterialTheme.typography

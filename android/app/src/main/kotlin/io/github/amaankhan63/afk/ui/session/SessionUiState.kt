@@ -35,11 +35,14 @@ data class SessionUiState(
         }
 
     /**
-     * While a question waits for a typed answer the composer answers it; otherwise, on the Chat tab
-     * of an agent session it talks to the agent, and elsewhere it types.
+     * While a question waits for a typed answer the composer answers it, and while another prompt
+     * waits it sends nothing; otherwise, on the Chat tab of an agent session it talks to the agent,
+     * and elsewhere it types.
      */
     val composerPlaceholder: String = when {
         session?.textQuestion() != null -> "Your answer…"
+
+        session?.pending != null -> answerPromptHint(tab)
 
         tab == SessionTab.Chat && session != null && session.kind != SessionKind.shell ->
             "Message ${agentName(session.kind)}…"
@@ -53,6 +56,14 @@ data class SessionUiState(
  * The daemon refuses free text on a multi-select question.
  */
 internal val Pending.Question.takesText: Boolean get() = allowsText && !multiSelect
+
+/**
+ * What the composer says while a prompt waits that its text cannot answer: a question without a
+ * typed answer, or a permission. On the Chat tab the prompt's card is above it; on the Terminal
+ * tab, the prompt itself.
+ */
+internal fun answerPromptHint(tab: SessionTab): String =
+    if (tab == SessionTab.Chat) "Answer the card above" else "Answer the prompt above"
 
 /** The session's pending question when the composer's text answers it, else null. */
 internal fun Session.textQuestion(): Pending.Question? =

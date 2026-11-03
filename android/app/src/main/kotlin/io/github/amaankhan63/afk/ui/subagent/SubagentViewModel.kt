@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ChatKind
 import io.github.amaankhan63.afk.data.protocol.SubagentInfo
@@ -56,7 +58,7 @@ class SubagentViewModel internal constructor(
 
     private val card: Flow<SubagentInfo?> = main.events
         .map { events ->
-            events.lastOrNull { it.kind == ChatKind.subagent && it.subagent?.threadId == threadId }
+            events?.lastOrNull { it.kind == ChatKind.subagent && it.subagent?.threadId == threadId }
                 ?.subagent
         }
         .distinctUntilChanged()
@@ -83,12 +85,21 @@ class SubagentViewModel internal constructor(
     /** Failures of [answer]. */
     val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
 
-    /** A prompt that changed or is gone is reported, never answered again. */
-    fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?) {
+    /**
+     * Answers prompt [pendingId] and returns true. While not connected nothing goes out: [errors]
+     * says so and this returns false. A prompt that changed or is gone is reported, never answered
+     * again.
+     */
+    fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?): Boolean {
+        if (repo.connection.value !is ConnectionState.Connected) {
+            mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+            return false
+        }
         viewModelScope.launch {
             repo.answerPending(sessionId, pendingId, choices, text, decision)
                 .onFailure { mutableErrors.tryEmit(it.asAfkError(answering = true)) }
         }
+        return true
     }
 
     /** The thread is in front: its session's notifications are not shown. */

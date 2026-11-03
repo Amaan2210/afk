@@ -110,18 +110,22 @@ class SessionViewModel internal constructor(
     /**
      * Sends the composer's text, empties the composer and returns true. While a question waits for
      * a typed answer the text answers it, on either tab: typed into the terminal it would be
-     * dropped, and its Enter would pick option 1. Otherwise the text is typed, then Enter. While
-     * not connected the text would be dropped, so it stays, [errors] says why, and this returns
-     * false.
+     * dropped, and its Enter would pick option 1. While another prompt waits (a question without a
+     * typed answer, or a permission) nothing is sent, as its Enter would confirm whatever the
+     * prompt highlights: the text stays, [errors] says to answer the prompt, and this returns
+     * false. Otherwise the text is typed, then Enter. While not connected the text would be
+     * dropped, so it stays, [errors] says why, and this returns false.
      */
     fun sendLine(): Boolean {
-        if (repo.connection.value !is ConnectionState.Connected) {
-            mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+        if (!connected()) return false
+        val session = tracked.value.first
+        val question = session?.textQuestion()
+        if (session?.pending != null && question == null) {
+            mutableErrors.tryEmit(AfkError(ERROR_PROMPT_WAITING, answerPromptHint(tab.value)))
             return false
         }
         val text = composer.value
         composer.value = ""
-        val question = tracked.value.first?.textQuestion()
         if (question != null) {
             answer(question.id, null, text, null)
         } else {
@@ -135,11 +139,17 @@ class SessionViewModel internal constructor(
         repo.ptyInput(sessionId, bytes)
     }
 
-    /** A prompt that changed or is gone is reported, never answered again: part may be typed. */
-    fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?) {
+    /**
+     * Answers prompt [pendingId] and returns true. While not connected nothing goes out: [errors]
+     * says so and this returns false. A prompt that changed or is gone is reported, never answered
+     * again: part may be typed.
+     */
+    fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?): Boolean {
+        if (!connected()) return false
         request(answering = true) {
             repo.answerPending(sessionId, pendingId, choices, text, decision)
         }
+        return true
     }
 
     fun kill() {
@@ -180,6 +190,13 @@ class SessionViewModel internal constructor(
         ForegroundTracker.release(this)
     }
 
+    /** Whether the app is connected; when it is not, [errors] says so. */
+    private fun connected(): Boolean {
+        if (repo.connection.value is ConnectionState.Connected) return true
+        mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+        return false
+    }
+
     /**
      * Runs [call]; a success goes to [onSuccess], a failure to [errors]. [answering] says the call
      * answers a prompt.
@@ -200,5 +217,8 @@ class SessionViewModel internal constructor(
         const val STOP_TIMEOUT_MS = 5_000L
         const val DEFAULT_COLS = 80
         const val DEFAULT_ROWS = 24
+
+        /** A Send held back while a prompt the composer cannot answer waits. */
+        const val ERROR_PROMPT_WAITING = "prompt_waiting"
     }
 }

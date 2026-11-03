@@ -95,6 +95,9 @@ class FakeSessionsRepository : SessionsRepository {
     /** When set, every subscription [chat] makes fails with it, as when the daemon refuses one. */
     var chatFailure: AfkError? = null
 
+    /** How many subscriptions [chat] has made, failed ones included. */
+    var chatSubscriptions = 0
+
     private val strips = mutableMapOf<String, MutableStateFlow<Strip?>>()
     private val ptys = mutableMapOf<String, MutableSharedFlow<PtyFrame>>()
     private val chats = mutableMapOf<Pair<String, String>, MutableSharedFlow<ChatUpdate>>()
@@ -131,6 +134,7 @@ class FakeSessionsRepository : SessionsRepository {
     }
 
     override fun chat(id: String, threadId: String): Flow<ChatUpdate> = flow {
+        chatSubscriptions++
         chatFailure?.let { throw it }
         emitAll(chatUpdates(id, threadId))
     }

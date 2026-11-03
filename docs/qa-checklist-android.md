@@ -141,6 +141,11 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       that answer.
 - [ ] A multi-select question shows checkbox rows and **Confirm**. Tick two, confirm: Claude
       gets both.
+- [ ] While a multi-select question is pending, type something in the composer and tap Send.
+      Nothing reaches Claude, the text stays in the composer, and the app says "Answer the card
+      above".
+- [ ] Tap an option of a question card. Its options grey out, and tapping one again does
+      nothing.
 - [ ] Tap **Other…** on a question card. The composer gets focus and says "Your answer…". Type an
       answer and send it: Claude gets it as the answer.
 - [ ] With a question that offers **Other…** pending, send an empty composer. The app shows
@@ -304,8 +309,6 @@ These are expected. Do not file them as bugs.
   there is no Retry button.
 - A sub-agent's thread screen has no composer. Answer its questions with text from the session
   screen.
-- Sending from the composer while a question that takes no typed answer is pending types the
-  text into the terminal.
 - Android refuses to install an APK over the installed app when the two are signed with
   different keys. That happens with a CI build over a local build, with debug-signed CI builds
   from different runners (no keystore secrets), and with the first release signed with the real
