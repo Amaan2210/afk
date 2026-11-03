@@ -55,10 +55,13 @@ fun ToolCard(
             ) {
                 val (glyph, color) = statusGlyph(tool.status)
                 Text(glyph, color = color, style = MaterialTheme.typography.bodySmall)
+                // One line, so a long tool name (an MCP server's) cannot wrap the card.
                 Text(
-                    tool.name,
+                    text = tool.name,
                     fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = tool.summary,

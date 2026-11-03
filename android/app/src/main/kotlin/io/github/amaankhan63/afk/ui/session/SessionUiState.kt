@@ -1,6 +1,7 @@
 package io.github.amaankhan63.afk.ui.session
 
 import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.protocol.Pending
 import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.SessionState
@@ -33,14 +34,29 @@ data class SessionUiState(
             chips.mapNotNull { StripChips.render(it, strip, stats) }
         }
 
-    /** On the Chat tab of an agent session the composer talks to the agent; elsewhere it types. */
-    val composerPlaceholder: String =
-        if (tab == SessionTab.Chat && session != null && session.kind != SessionKind.shell) {
+    /**
+     * While a question waits for a typed answer the composer answers it; otherwise, on the Chat tab
+     * of an agent session it talks to the agent, and elsewhere it types.
+     */
+    val composerPlaceholder: String = when {
+        session?.textQuestion() != null -> "Your answer…"
+
+        tab == SessionTab.Chat && session != null && session.kind != SessionKind.shell ->
             "Message ${agentName(session.kind)}…"
-        } else {
-            "Type, then send as a line…"
-        }
+
+        else -> "Type, then send as a line…"
+    }
 }
+
+/**
+ * Whether the composer's text can answer this question: it takes typed text and a single answer.
+ * The daemon refuses free text on a multi-select question.
+ */
+internal val Pending.Question.takesText: Boolean get() = allowsText && !multiSelect
+
+/** The session's pending question when the composer's text answers it, else null. */
+internal fun Session.textQuestion(): Pending.Question? =
+    (pending as? Pending.Question)?.takeIf { it.takesText }
 
 /**
  * The session's agent and state, `Claude · needs your input`; a working session's time counts

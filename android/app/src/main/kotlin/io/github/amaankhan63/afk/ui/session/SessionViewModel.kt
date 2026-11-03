@@ -105,17 +105,25 @@ class SessionViewModel internal constructor(
     }
 
     /**
-     * Types the composer's text and Enter, empties the composer and returns true. While not
-     * connected the text would be dropped, so it stays, [errors] says why, and this returns false.
+     * Sends the composer's text, empties the composer and returns true. While a question waits for
+     * a typed answer the text answers it, on either tab: typed into the terminal it would be
+     * dropped, and its Enter would pick option 1. Otherwise the text is typed, then Enter. While
+     * not connected the text would be dropped, so it stays, [errors] says why, and this returns
+     * false.
      */
     fun sendLine(): Boolean {
         if (repo.connection.value !is ConnectionState.Connected) {
             mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
             return false
         }
-        val line = composer.value + "\r"
+        val text = composer.value
         composer.value = ""
-        sendKeys(line.toByteArray(Charsets.UTF_8))
+        val question = tracked.value.first?.textQuestion()
+        if (question != null) {
+            answer(question.id, null, text, null)
+        } else {
+            sendKeys((text + "\r").toByteArray(Charsets.UTF_8))
+        }
         return true
     }
 
@@ -124,9 +132,11 @@ class SessionViewModel internal constructor(
         repo.ptyInput(sessionId, bytes)
     }
 
-    /** A prompt that changed meanwhile is reported, never answered again: part may be typed. */
+    /** A prompt that changed or is gone is reported, never answered again: part may be typed. */
     fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?) {
-        request(call = { repo.answerPending(sessionId, pendingId, choices, text, decision) })
+        request(answering = true) {
+            repo.answerPending(sessionId, pendingId, choices, text, decision)
+        }
     }
 
     fun kill() {
@@ -171,12 +181,19 @@ class SessionViewModel internal constructor(
         if (ForegroundTracker.foregroundSessionId.value == sessionId) ForegroundTracker.set(null)
     }
 
-    /** Runs [call]; a success goes to [onSuccess], a failure to [errors]. */
-    private fun <T> request(onSuccess: (T) -> Unit = {}, call: suspend () -> Result<T>) {
+    /**
+     * Runs [call]; a success goes to [onSuccess], a failure to [errors]. [answering] says the call
+     * answers a prompt.
+     */
+    private fun <T> request(
+        onSuccess: (T) -> Unit = {},
+        answering: Boolean = false,
+        call: suspend () -> Result<T>
+    ) {
         viewModelScope.launch {
             call()
                 .onSuccess(onSuccess)
-                .onFailure { mutableErrors.tryEmit(it.asAfkError()) }
+                .onFailure { mutableErrors.tryEmit(it.asAfkError(answering)) }
         }
     }
 
@@ -186,16 +203,18 @@ class SessionViewModel internal constructor(
         const val DEFAULT_COLS = 80
         const val DEFAULT_ROWS = 24
         const val PENDING_CHANGED = "pending_changed"
+        const val NOT_FOUND = "not_found"
         const val PROMPT_CHANGED = "The prompt changed; check the terminal"
 
         /**
          * Every repository failure is an [AfkError]; anything else is reported as `internal`. A
-         * prompt that changed says so in words the screen can show.
+         * prompt that changed, or one an answer found gone ([answering] and `not_found`, as when a
+         * card is tapped after its prompt moved on), says so in words the screen can show.
          */
-        fun Throwable.asAfkError(): AfkError {
+        fun Throwable.asAfkError(answering: Boolean): AfkError {
             val error = this as? AfkError ?: AfkError("internal", message ?: toString())
-            if (error.code != PENDING_CHANGED) return error
-            return AfkError(PENDING_CHANGED, PROMPT_CHANGED)
+            val stale = error.code == PENDING_CHANGED || (answering && error.code == NOT_FOUND)
+            return if (stale) AfkError(error.code, PROMPT_CHANGED) else error
         }
     }
 }

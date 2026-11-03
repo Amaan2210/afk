@@ -4,6 +4,7 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ModelInfo
+import io.github.amaankhan63.afk.data.protocol.Pending
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.protocol.Strip
@@ -50,6 +51,18 @@ class SessionViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun question(multiSelect: Boolean = false) = Pending.Question(
+        id = "q_1",
+        text = "Which pet?",
+        multiSelect = multiSelect,
+        allowsText = true,
+        options = listOf(Pending.Option("Cats"), Pending.Option("Dogs"))
+    )
+
+    /** Session s_1 waiting on [pending]. */
+    private fun waiting(pending: Pending) =
+        session("s_1", state = SessionState.needs_input).copy(pending = pending)
+
     /** Collects [flow] into [into] until the test ends, as a screen does. */
     private fun <T> TestScope.collecting(flow: Flow<T>, into: MutableList<T> = mutableListOf()) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { flow.toList(into) }
@@ -65,6 +78,39 @@ class SessionViewModelTest {
 
         assertArrayEquals("hello\r".toByteArray(), repo.lastInput)
         assertEquals("", vm.ui.value.composer)
+    }
+
+    /** Typed into the terminal, the text would be dropped and Enter would pick option 1. */
+    @Test fun sendLineAnswersAQuestionThatTakesText() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.sessions.value = listOf(waiting(question()))
+        collecting(vm.ui)
+        assertEquals("Your answer…", vm.ui.value.composerPlaceholder)
+        vm.onComposer("Use ferrets")
+
+        assertTrue(vm.sendLine())
+
+        assertEquals(
+            listOf(FakeSessionsRepository.Answer("s_1", "q_1", null, "Use ferrets", null)),
+            repo.answers
+        )
+        assertEquals(emptyList<Pair<String, ByteArray>>(), repo.ptyInputs)
+        assertEquals("", vm.ui.value.composer)
+    }
+
+    @Test fun sendLineTypesWhenNoQuestionTakesText() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        collecting(vm.ui)
+        vm.onComposer("ls")
+        assertTrue(vm.sendLine())
+        // The daemon refuses free text on a multi-select question.
+        repo.sessions.value = listOf(waiting(question(multiSelect = true)))
+        vm.onComposer("x")
+        assertTrue(vm.sendLine())
+
+        assertEquals(listOf("ls\r", "x\r"), repo.ptyInputs.map { String(it.second) })
+        assertEquals(emptyList<FakeSessionsRepository.Answer>(), repo.answers)
+        assertEquals("Type, then send as a line…", vm.ui.value.composerPlaceholder)
     }
 
     @Test fun sendLineWhileDisconnectedKeepsTheText() = runTest {
@@ -162,6 +208,17 @@ class SessionViewModelTest {
         vm.answer("q_1", null, null, "allow")
 
         assertEquals(1, repo.answers.size)
+        assertEquals("The prompt changed; check the terminal", errors.single().message)
+    }
+
+    /** A card tapped after its prompt went away: the daemon has no such pending any more. */
+    @Test fun answerToAPromptThatIsGoneSaysItChanged() = runTest {
+        val errors = mutableListOf<AfkError>()
+        collecting(vm.errors, errors)
+        repo.answerResult = Result.failure(AfkError("not_found", "no pending q_1 on s_1"))
+
+        vm.answer("q_1", listOf(0), null, null)
+
         assertEquals("The prompt changed; check the terminal", errors.single().message)
     }
 

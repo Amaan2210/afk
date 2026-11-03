@@ -43,7 +43,7 @@ fun ChatEventRow(
     onToggleTool: () -> Unit,
     onOpenThread: (String) -> Unit,
     onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
-    onFocusComposer: () -> Unit,
+    onFocusComposer: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val tool = event.tool

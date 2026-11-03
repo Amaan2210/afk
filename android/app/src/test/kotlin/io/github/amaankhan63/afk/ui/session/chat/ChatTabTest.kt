@@ -2,6 +2,7 @@ package io.github.amaankhan63.afk.ui.session.chat
 
 import io.github.amaankhan63.afk.data.protocol.ChatEvent
 import io.github.amaankhan63.afk.data.protocol.ChatKind
+import io.github.amaankhan63.afk.data.protocol.Pending
 import io.github.amaankhan63.afk.data.protocol.SubagentInfo
 import io.github.amaankhan63.afk.data.protocol.SubagentStatus
 import io.github.amaankhan63.afk.data.protocol.TurnInfo
@@ -21,24 +22,36 @@ class ChatTabTest {
         turn = phase?.let { TurnInfo(it) }
     )
 
-    @Test fun followsAnAppendWhenTheLastItemWasShown() {
-        // The new item not laid out yet, or laid out below the screen, or partly on it.
-        assertTrue(shouldFollow(previousLast = 4, last = 5, lastVisible = 4))
-        assertTrue(shouldFollow(previousLast = 4, last = 5, lastVisible = 5))
+    private val question = Pending.Question(
+        id = "q_1",
+        text = "Which pet?",
+        multiSelect = false,
+        allowsText = true,
+        options = listOf(Pending.Option("Cats"), Pending.Option("Dogs"))
+    )
+
+    @Test fun aScrollEndingAtTheBottomPins() {
+        assertTrue(nextPinned(wasPinned = false, scrollEnded = true, canScrollForward = false))
+        assertTrue(nextPinned(wasPinned = true, scrollEnded = true, canScrollForward = false))
     }
 
-    @Test fun firstEventsScrollToTheEnd() {
-        assertTrue(shouldFollow(previousLast = -1, last = 9, lastVisible = -1))
+    @Test fun aScrollEndingAboveTheBottomUnpins() {
+        assertFalse(nextPinned(wasPinned = true, scrollEnded = true, canScrollForward = true))
     }
 
-    @Test fun neverFightsAReaderWhoScrolledUp() {
-        assertFalse(shouldFollow(previousLast = 4, last = 5, lastVisible = 2))
+    /** An append or a keyboard leaves the list able to scroll on; only a reader's scroll counts. */
+    @Test fun nothingButAnEndedScrollMovesThePin() {
+        assertTrue(nextPinned(wasPinned = true, scrollEnded = false, canScrollForward = true))
+        assertFalse(nextPinned(wasPinned = false, scrollEnded = false, canScrollForward = false))
     }
 
-    @Test fun onlyAnAppendFollows() {
-        // An upsert in place, and a snapshot with fewer events.
-        assertFalse(shouldFollow(previousLast = 4, last = 4, lastVisible = 4))
-        assertFalse(shouldFollow(previousLast = 4, last = 2, lastVisible = 4))
+    @Test fun otherIsOfferedForOneTypedAnswerWithAComposer() {
+        assertTrue(offersOther(question, hasComposer = true))
+        // The daemon refuses free text on a multi-select question.
+        assertFalse(offersOther(question.copy(multiSelect = true), hasComposer = true))
+        assertFalse(offersOther(question.copy(allowsText = false), hasComposer = true))
+        // A sub-agent's thread has no composer.
+        assertFalse(offersOther(question, hasComposer = false))
     }
 
     @Test fun turnStartsHaveARowAndTurnEndsNone() {

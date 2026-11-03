@@ -144,6 +144,13 @@ class MarkdownTest {
         )
     }
 
+    /** A bare marker earlier in the line cannot reach into a code span to close itself. */
+    @Test fun codeSpansWinOverEarlierMarkers() {
+        val text = paragraph("Multiply 2*x by `a*b`")
+        assertEquals("Multiply 2*x by a*b", text.text)
+        assertEquals(listOf("a*b" to SpanStyle(fontFamily = FontFamily.Monospace)), spans(text))
+    }
+
     @Test fun blankTextHasNoBlocks() {
         assertEquals(emptyList<MdBlock>(), Markdown.parse(""))
         assertEquals(emptyList<MdBlock>(), Markdown.parse(" \n\r\n\t"))

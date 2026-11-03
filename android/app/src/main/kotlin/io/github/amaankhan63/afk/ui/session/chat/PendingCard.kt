@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.amaankhan63.afk.data.protocol.Pending
+import io.github.amaankhan63.afk.ui.session.takesText
 import io.github.amaankhan63.afk.ui.theme.LocalAfkPalette
 
 private const val TINT_ALPHA = 0.09f
@@ -42,8 +43,9 @@ private const val DENY = "deny"
 
 /**
  * A prompt the agent waits on, answered through [onAnswer]. A question's option answers it at once,
- * or, for a question that takes several, once Confirm is tapped; "Other…" goes to the composer
- * through [onFocusComposer], for a typed answer. A permission is allowed once, always, or denied.
+ * or, for a question that takes several, once Confirm is tapped. A question that takes a typed
+ * answer offers "Other…", which goes to the composer through [onFocusComposer], whose text then
+ * answers it; there is none without a composer. A permission is allowed once, always, or denied.
  *
  * The card stays answerable after the prompt has moved on: the daemon refuses such an answer, and
  * the screen says so.
@@ -52,7 +54,7 @@ private const val DENY = "deny"
 fun PendingCard(
     pending: Pending,
     onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
-    onFocusComposer: () -> Unit,
+    onFocusComposer: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val amber = LocalAfkPalette.current.amber
@@ -76,7 +78,7 @@ fun PendingCard(
 private fun Question(
     question: Pending.Question,
     onAnswer: (pendingId: String, choices: List<Int>?, text: String?, decision: String?) -> Unit,
-    onFocusComposer: () -> Unit
+    onFocusComposer: (() -> Unit)?
 ) {
     val multi = question.multiSelect
     val type = MaterialTheme.typography
@@ -99,11 +101,11 @@ private fun Question(
             }
         )
     }
-    if (question.allowsText) {
+    if (offersOther(question, hasComposer = onFocusComposer != null)) {
         Choice(
             label = "Other…",
-            lead = { if (!multi) Number(question.options.size + 1) },
-            onClick = onFocusComposer
+            lead = { Number(question.options.size + 1) },
+            onClick = { onFocusComposer?.invoke() }
         )
     }
     if (multi) {
@@ -190,3 +192,10 @@ private fun Permission(
         OutlinedButton({ decide(DENY) }, Modifier.weight(1f), colors = deny) { Text("Deny") }
     }
 }
+
+/**
+ * Whether [question]'s card offers "Other…": only where the composer's text answers it, so on a
+ * screen [hasComposer], for a question that takes typed text and a single answer.
+ */
+internal fun offersOther(question: Pending.Question, hasComposer: Boolean): Boolean =
+    hasComposer && question.takesText

@@ -12,8 +12,9 @@ import androidx.compose.ui.text.withStyle
  * The markdown subset chat messages use. Blocks, line by line: fenced code (three or more
  * backticks and an optional language; an unclosed fence runs to the end, as in CommonMark), runs of
  * `- ` or `* ` bullets, and paragraphs of the other lines, split by blank lines and keeping their
- * line breaks. Spans, within a line and not nested: `**bold**`, `*italic*`, `_italic_` (not inside
- * a word), `` `code` `` (its markers stay literal) and `[label](url)`, which shows the label.
+ * line breaks. Spans, within a line and not nested: `` `code` `` (found first: markers in it stay
+ * literal, and none outside can close into it), then `**bold**`, `*italic*`, `_italic_` (not inside
+ * a word) and `[label](url)`, which shows the label.
  * Anything else, such as a heading, a numbered or nested list or an unclosed marker, stays as
  * written.
  */
@@ -21,11 +22,12 @@ object Markdown {
     private val FENCE = Regex("""^\s*(`{3,})([^`]*)$""")
     private val BULLET = Regex("""^[-*] (.*)$""")
 
-    // One alternative per span, tried in this order at each place: code first, so markers in it
-    // stay literal. Each content runs possessively up to its closing marker, never backtracking.
+    // Code spans are found first, so no other marker can reach into one; the other spans, one
+    // alternative each, are then found between them, tried in this order at each place. Each
+    // content runs possessively up to its closing marker, never backtracking.
+    private val CODE_SPAN = Regex("""`([^`\n]++)`""")
     private val SPAN = Regex(
-        """`([^`\n]++)`""" +
-            """|\[([^\]\n]++)\]\([^)\s]*+\)""" +
+        """\[([^\]\n]++)\]\([^)\s]*+\)""" +
             """|\*\*(?!\s)([^*\n]++)(?<!\s)\*\*""" +
             """|\*(?!\s)([^*\n]++)(?<!\s)\*""" +
             """|(?<!\w)_(?!\s)([^_\n]++)(?<!\s)_(?!\w)"""
@@ -90,13 +92,23 @@ object Markdown {
         return fence.length >= length && fence.all { it == '`' }
     }
 
+    /** [text] with its spans: code spans first, then the others in the text between them. */
     private fun spans(text: String): AnnotatedString = buildAnnotatedString {
+        var at = 0
+        for (code in CODE_SPAN.findAll(text)) {
+            styled(text.substring(at, code.range.first))
+            withStyle(CODE) { append(code.groupValues[1]) }
+            at = code.range.last + 1
+        }
+        styled(text.substring(at))
+    }
+
+    private fun AnnotatedString.Builder.styled(text: String) {
         var at = 0
         for (match in SPAN.findAll(text)) {
             append(text, at, match.range.first)
-            val (code, label, bold, star, underscore) = match.destructured
+            val (label, bold, star, underscore) = match.destructured
             when {
-                code.isNotEmpty() -> withStyle(CODE) { append(code) }
                 label.isNotEmpty() -> append(label)
                 bold.isNotEmpty() -> withStyle(BOLD) { append(bold) }
                 else -> withStyle(ITALIC) { append(star.ifEmpty { underscore }) }
