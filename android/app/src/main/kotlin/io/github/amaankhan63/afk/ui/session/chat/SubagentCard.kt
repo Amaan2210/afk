@@ -71,12 +71,15 @@ fun SubagentCard(info: SubagentInfo, onClick: () -> Unit, modifier: Modifier = M
 }
 
 /** The sub-agent's state and tool count, `Sub-agent · done · 5 tool uses`. */
-internal fun subagentMeta(info: SubagentInfo): String {
+internal fun subagentMeta(info: SubagentInfo): String = "Sub-agent · ${subagentProgress(info)}"
+
+/** The sub-agent's state and tool count without the label, `done · 5 tool uses`. */
+internal fun subagentProgress(info: SubagentInfo): String {
     val status = when (info.status) {
         SubagentStatus.running -> "running"
         SubagentStatus.done -> "done"
         SubagentStatus.error -> "error"
     }
     val uses = if (info.toolUses == 1) "1 tool use" else "${info.toolUses} tool uses"
-    return "Sub-agent · $status · $uses"
+    return "$status · $uses"
 }

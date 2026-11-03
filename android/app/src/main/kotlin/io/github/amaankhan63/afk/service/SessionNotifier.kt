@@ -152,11 +152,19 @@ class SessionNotifier(
         mutable
     )
 
-    /** Opens `afk://session/<id>` in a fresh task, whose activity reads the link at creation. */
+    /**
+     * Opens `afk://session/<id>`. Without a task the app starts and reads the link at creation; an
+     * existing task is brought forward, cleared above its activity, which gets the link through
+     * `onNewIntent`.
+     */
     private fun openSession(sessionId: String): PendingIntent? {
         val link = Uri.Builder().scheme("afk").authority("session").appendPath(sessionId).build()
         val intent = Intent(Intent.ACTION_VIEW, link, context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            .addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
         return PendingIntentCompat.getActivity(
             context,
             requestCode(sessionId, "open"),

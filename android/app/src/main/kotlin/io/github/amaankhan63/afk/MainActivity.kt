@@ -1,22 +1,37 @@
 package io.github.amaankhan63.afk
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.service.AfkConnectionService
+import io.github.amaankhan63.afk.ui.navigation.AfkNavHost
+import io.github.amaankhan63.afk.ui.navigation.Routes
+import io.github.amaankhan63.afk.ui.theme.AfkTheme
+import io.github.amaankhan63.afk.ui.theme.AfkThemeId
+import io.github.amaankhan63.afk.ui.theme.ThemeMode
+import java.io.IOException
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -27,9 +42,40 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    /** The route a notification's link asked for, until the navigation opens it. */
+    private val deepLink = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { Text("AFK") }
+        // Also how the keyboard's insets reach Compose below Android 15.
+        enableEdgeToEdge()
+        // A recreated activity's navigation already holds the screen the link opened.
+        if (savedInstanceState == null) openLink(intent)
+        setContent {
+            // Graphite until Settings holds the theme (Task 14).
+            AfkTheme(AfkThemeId.Graphite, ThemeMode.System) {
+                val start by produceState<String?>(initialValue = null) {
+                    // Preferences that cannot be read hold no pairing.
+                    val pairing = try {
+                        pairingStore.pairing.first()
+                    } catch (e: IOException) {
+                        null
+                    }
+                    value = if (pairing != null) Routes.SESSIONS else Routes.PAIRING
+                }
+                val link by deepLink.collectAsStateWithLifecycle()
+                val destination = start
+                if (destination == null) {
+                    Surface(Modifier.fillMaxSize()) {}
+                } else {
+                    AfkNavHost(
+                        startDestination = destination,
+                        deepLink = link,
+                        onDeepLinkConsumed = { deepLink.value = null }
+                    )
+                }
+            }
+        }
         if (savedInstanceState == null) requestNotificationPermission()
         // Starts the connection service whenever a pairing exists, one saved in the app included.
         // Starting it again while it runs is harmless.
@@ -40,6 +86,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** A notification tapped while the app runs: its link comes here, not to [onCreate]. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openLink(intent)
+    }
+
+    /** The link [intent] carries is untrusted: only [Routes.parseDeepLink] turns it into a route. */
+    private fun openLink(intent: Intent) {
+        intent.data?.let(Routes::parseDeepLink)?.let { deepLink.value = it }
     }
 
     /** Asks for POST_NOTIFICATIONS (API 33+) once per launch, while it is not granted. */

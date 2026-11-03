@@ -3,6 +3,7 @@ package io.github.amaankhan63.afk.service
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import io.github.amaankhan63.afk.data.protocol.Pending
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.settings.NotificationPrefs
@@ -147,9 +148,14 @@ class SessionNotifierTest {
         assertEquals(PendingIntent.FLAG_IMMUTABLE, openFlags and PendingIntent.FLAG_IMMUTABLE)
     }
 
+    /** A running app keeps its task and gets the link through onNewIntent. */
     @Test fun contentIntentOpensTheSessionDeepLink() {
         val n = notifier().build(notify(event = "finished", sessionId = "s_7"))!!
-        assertEquals("afk://session/s_7", shadowOf(n.contentIntent).savedIntent.dataString)
+        val intent = shadowOf(n.contentIntent).savedIntent
+        assertEquals("afk://session/s_7", intent.dataString)
+        val reuse = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        assertEquals(reuse, intent.flags and reuse)
+        assertEquals(0, intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK)
     }
 
     @Test fun subagentShowsOnlyOpenWhenEnabled() {

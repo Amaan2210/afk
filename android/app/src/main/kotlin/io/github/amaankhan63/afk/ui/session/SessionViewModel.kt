@@ -202,19 +202,5 @@ class SessionViewModel internal constructor(
         const val STOP_TIMEOUT_MS = 5_000L
         const val DEFAULT_COLS = 80
         const val DEFAULT_ROWS = 24
-        const val PENDING_CHANGED = "pending_changed"
-        const val NOT_FOUND = "not_found"
-        const val PROMPT_CHANGED = "The prompt changed; check the terminal"
-
-        /**
-         * Every repository failure is an [AfkError]; anything else is reported as `internal`. A
-         * prompt that changed, or one an answer found gone ([answering] and `not_found`, as when a
-         * card is tapped after its prompt moved on), says so in words the screen can show.
-         */
-        fun Throwable.asAfkError(answering: Boolean): AfkError {
-            val error = this as? AfkError ?: AfkError("internal", message ?: toString())
-            val stale = error.code == PENDING_CHANGED || (answering && error.code == NOT_FOUND)
-            return if (stale) AfkError(error.code, PROMPT_CHANGED) else error
-        }
     }
 }
