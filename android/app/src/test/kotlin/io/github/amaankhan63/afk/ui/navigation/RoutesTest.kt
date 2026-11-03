@@ -33,6 +33,20 @@ class RoutesTest {
         assertNull(parse("afk://session/s_1/x"))
     }
 
+    /** Android matches a link's scheme and host case-sensitively, as the manifest's filter does. */
+    @Test fun uppercaseSchemeOrHostIsNull() {
+        assertNull(parse("afk://SESSION/x"))
+        assertNull(parse("AFK://session/x"))
+    }
+
+    @Test fun opaqueLinkIsNull() {
+        assertNull(parse("afk:session/x"))
+    }
+
+    @Test fun queryAndFragmentAreIgnored() {
+        assertEquals("session/s_1", parse("afk://session/s_1?x=1#f"))
+    }
+
     /** The id is untrusted: only a plain id may become a route. */
     @Test fun badIdIsNull() {
         listOf(

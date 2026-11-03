@@ -12,6 +12,7 @@ import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.di.StripChipsFlow
 import io.github.amaankhan63.afk.service.ForegroundTracker
+import io.github.amaankhan63.afk.ui.navigation.Routes
 import io.github.amaankhan63.afk.ui.session.chat.ChatEvents
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalBridge
 import java.time.Instant
@@ -47,7 +48,9 @@ class SessionViewModel internal constructor(
         @StripChipsFlow stripChips: @JvmSuppressWildcards Flow<List<StripChip>>
     ) : this(
         repo,
-        checkNotNull(savedStateHandle.get<String>(ID_KEY)) { "The session route has no $ID_KEY" },
+        checkNotNull(savedStateHandle.get<String>(Routes.ARG_ID)) {
+            "The session route has no ${Routes.ARG_ID}"
+        },
         stripChips
     )
 
@@ -198,7 +201,6 @@ class SessionViewModel internal constructor(
     }
 
     private companion object {
-        const val ID_KEY = "id"
         const val STOP_TIMEOUT_MS = 5_000L
         const val DEFAULT_COLS = 80
         const val DEFAULT_ROWS = 24

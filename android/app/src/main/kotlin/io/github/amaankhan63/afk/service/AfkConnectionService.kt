@@ -129,7 +129,7 @@ class AfkConnectionService : Service() {
     private fun openApp(): PendingIntent? = PendingIntentCompat.getActivity(
         this,
         0,
-        Intent(this, MainActivity::class.java),
+        openAppIntent(this),
         0,
         false
     )
@@ -183,5 +183,16 @@ class AfkConnectionService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, AfkConnectionService::class.java))
         }
+
+        /**
+         * Opens the app from the connection notification. A running app is brought forward with
+         * its screens as they are; a plain intent would start a second activity on top of it.
+         */
+        internal fun openAppIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
     }
 }

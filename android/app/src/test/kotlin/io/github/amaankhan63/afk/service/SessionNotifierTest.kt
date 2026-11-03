@@ -153,7 +153,9 @@ class SessionNotifierTest {
         val n = notifier().build(notify(event = "finished", sessionId = "s_7"))!!
         val intent = shadowOf(n.contentIntent).savedIntent
         assertEquals("afk://session/s_7", intent.dataString)
-        val reuse = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val reuse = Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP or
+            Intent.FLAG_ACTIVITY_CLEAR_TOP
         assertEquals(reuse, intent.flags and reuse)
         assertEquals(0, intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK)
     }

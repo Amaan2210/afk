@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -51,6 +52,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // A recreated activity's navigation already holds the screen the link opened.
         if (savedInstanceState == null) openLink(intent)
+        // The navigation reads its own deep-link extras from the launch intent when its graph is
+        // set, and any app can start this activity with them: they could open any screen, even
+        // one without its arguments. The app reads only the intent's link, so the extras go.
+        intent.replaceExtras(Bundle())
         setContent {
             // Graphite until Settings holds the theme (Task 14).
             AfkTheme(AfkThemeId.Graphite, ThemeMode.System) {
@@ -66,7 +71,7 @@ class MainActivity : ComponentActivity() {
                 val link by deepLink.collectAsStateWithLifecycle()
                 val destination = start
                 if (destination == null) {
-                    Surface(Modifier.fillMaxSize()) {}
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
                 } else {
                     AfkNavHost(
                         startDestination = destination,
