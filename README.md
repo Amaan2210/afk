@@ -230,6 +230,9 @@ Settings → Apps → Special app access → Battery optimisation → All apps �
 - [Contributing](CONTRIBUTING.md)
 - [Service implementation plan](docs/superpowers/plans/2026-10-30-afk-service-plan.md)
 - [Android implementation plan](docs/superpowers/plans/2026-10-30-afk-android-plan.md)
+- [Android QA checklist](docs/qa-checklist-android.md)
+- [Android follow-ups and known limitations](docs/android-follow-ups.md)
+- [Android design decisions](docs/android-decisions.md)
 
 ## License
 
