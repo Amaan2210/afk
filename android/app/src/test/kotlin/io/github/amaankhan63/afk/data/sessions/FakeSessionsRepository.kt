@@ -5,10 +5,12 @@ import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.DaemonSettings
 import io.github.amaankhan63.afk.data.protocol.DaemonSettingsPatch
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
+import io.github.amaankhan63.afk.data.protocol.ServerMessage.FsDirs
 import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.protocol.Strip
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +74,17 @@ class FakeSessionsRepository : SessionsRepository {
     var listDirsResult: Result<ServerMessage.FsDirs> =
         Result.success(ServerMessage.FsDirs(id = "r1", dirs = emptyList(), recent = emptyList()))
     var settingsResult: Result<DaemonSettings> = Result.success(DaemonSettings())
+
+    /**
+     * When true, each [listDirs] waits for its reply in [dirsReply] instead of answering
+     * [listDirsResult], so a test can answer listings late and out of order.
+     */
+    var holdListDirs = false
+    private val heldDirs = mutableMapOf<String?, CompletableDeferred<Result<FsDirs>>>()
+
+    /** The reply the held [listDirs] of [path] waits for; complete it to answer. */
+    fun dirsReply(path: String?): CompletableDeferred<Result<FsDirs>> =
+        heldDirs.getOrPut(path) { CompletableDeferred() }
 
     /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
     var ptyFailure: AfkError? = null
@@ -166,7 +179,7 @@ class FakeSessionsRepository : SessionsRepository {
 
     override suspend fun listDirs(path: String?): Result<ServerMessage.FsDirs> {
         listedDirs += path
-        return listDirsResult
+        return if (holdListDirs) dirsReply(path).await() else listDirsResult
     }
 
     override suspend fun setDaemonSettings(patch: DaemonSettingsPatch): Result<DaemonSettings> {

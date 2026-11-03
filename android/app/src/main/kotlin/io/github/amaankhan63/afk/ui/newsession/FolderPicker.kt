@@ -91,6 +91,7 @@ fun FolderPicker(
                         items(listing?.dirs.orEmpty()) { dir ->
                             FolderRow(dir.name, onUse = { pick(dir.path) }) { onBrowse(dir.path) }
                         }
+                        if (listing?.dirs?.isEmpty() == true) item { NoSubFolders() }
                     }
                 }
             }
@@ -121,6 +122,20 @@ private fun PathField(listed: String?, onSubmit: (String) -> Unit) {
         keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { submit() }),
         singleLine = true
+    )
+}
+
+/** What an empty folder shows: the path field, which holds its path, chooses it. */
+@Composable
+private fun NoSubFolders() {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = "No sub-folders here — tap ✓ to use this folder",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
 

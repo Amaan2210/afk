@@ -11,14 +11,17 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -55,6 +58,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 
 private val AGENTS = listOf(SessionKind.claude, SessionKind.codex, SessionKind.shell)
+private val CHECK_SIZE = FilterChipDefaults.IconSize
 
 /**
  * Starts a session on the laptop: a folder chosen in [FolderPicker], an agent, its flags and an
@@ -178,10 +182,16 @@ private fun NewSessionForm(
             Label("Flags")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 chips.forEach { chip ->
+                    val selected = chip.id in state.flags
                     FilterChip(
-                        selected = chip.id in state.flags,
+                        selected = selected,
                         onClick = { onToggleFlag(chip.id) },
-                        label = { Text(chip.label, fontFamily = FontFamily.Monospace) }
+                        label = { Text(chip.label, fontFamily = FontFamily.Monospace) },
+                        leadingIcon = if (selected) {
+                            { Icon(Icons.Default.Check, null, Modifier.size(CHECK_SIZE)) }
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -192,6 +202,8 @@ private fun NewSessionForm(
                 onValueChange = onModel,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Model") },
+                // A model's id is not a word to correct.
+                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
                 singleLine = true
             )
         }

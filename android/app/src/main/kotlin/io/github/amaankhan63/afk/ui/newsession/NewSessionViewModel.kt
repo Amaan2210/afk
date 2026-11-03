@@ -86,26 +86,33 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
             repo.createSession(form.cwd, form.kind, args, name = null, prompt = prompt)
                 .onSuccess(onCreated)
                 .onFailure { e ->
-                    state.update { it.copy(starting = false, error = e.shownMessage()) }
+                    val message = e.shownMessage(creating = true)
+                    state.update { it.copy(starting = false, error = message) }
                 }
         }
     }
 
     private companion object {
         const val NOT_CONNECTED = "Not connected"
+        const val NO_REPLY = "No reply — the session may have started; check the list"
 
-        fun defaultFlags(kind: SessionKind): Set<String> =
-            if (kind == SessionKind.claude) setOf("skip") else emptySet()
+        fun defaultFlags(kind: SessionKind): Set<String> = when (kind) {
+            SessionKind.claude -> setOf("skip")
+            SessionKind.codex -> setOf("yolo")
+            SessionKind.shell -> emptySet()
+        }
 
         /**
          * A failure in the screen's words. The daemon's own messages, such as why it refuses a
          * folder, are already readable; a request it did not get or did not answer is
-         * "Not connected".
+         * "Not connected". The daemon creates a session even when its reply is lost, so an
+         * unanswered create ([creating]) says to check the list before starting it again.
          */
-        fun Throwable.shownMessage(): String {
+        fun Throwable.shownMessage(creating: Boolean = false): String {
             val error = asAfkError(answering = false)
-            return when (error.code) {
-                ERROR_DISCONNECTED, ERROR_TIMEOUT -> NOT_CONNECTED
+            return when {
+                creating && error.code == ERROR_TIMEOUT -> NO_REPLY
+                error.code == ERROR_DISCONNECTED || error.code == ERROR_TIMEOUT -> NOT_CONNECTED
                 else -> error.message ?: error.code
             }
         }

@@ -128,9 +128,12 @@ class NewSessionViewModelTest {
         assertEquals(setOf("skip", "continue"), vm.ui.value.flags)
 
         vm.setKind(SessionKind.codex)
-        assertEquals(emptySet<String>(), vm.ui.value.flags)
-        vm.toggleFlag("yolo")
         assertEquals(setOf("yolo"), vm.ui.value.flags)
+        vm.toggleFlag("model")
+        assertEquals(setOf("yolo", "model"), vm.ui.value.flags)
+
+        vm.setKind(SessionKind.shell)
+        assertEquals(emptySet<String>(), vm.ui.value.flags)
 
         vm.setKind(SessionKind.claude)
         assertEquals(SessionKind.claude, vm.ui.value.kind)
@@ -152,15 +155,77 @@ class NewSessionViewModelTest {
         assertFalse(vm.ui.value.starting)
         assertEquals("Not connected", vm.ui.value.error)
 
-        repo.createResult = Result.failure(AfkError("timeout", "the daemon did not answer in time"))
-        vm.start { created += it }
-        assertEquals("Not connected", vm.ui.value.error)
-
         repo.createResult = Result.failure(AfkError("bad_request", "cwd D:\\gone does not exist"))
         vm.start { created += it }
         assertEquals("cwd D:\\gone does not exist", vm.ui.value.error)
         assertTrue(vm.ui.value.canStart)
-        assertEquals(3, repo.created.size)
+        assertEquals(2, repo.created.size)
         assertTrue(created.isEmpty())
     }
+
+    @Test fun createTimeoutSaysTheSessionMayHaveStarted() {
+        vm.pick("D:\\Repos\\app")
+        repo.createResult = Result.failure(AfkError("timeout", "the daemon did not answer in time"))
+
+        vm.start {}
+
+        assertEquals(
+            "No reply — the session may have started; check the list",
+            vm.ui.value.error
+        )
+        assertFalse(vm.ui.value.starting)
+        assertTrue(vm.ui.value.canStart)
+
+        // Only a create can have happened anyway: an unanswered listing is "Not connected".
+        repo.listDirsResult = Result.failure(AfkError("timeout", "the daemon did not answer"))
+        vm.browse(null)
+        assertEquals("Not connected", vm.ui.value.error)
+    }
+
+    @Test fun aNewerBrowseDropsTheOlderReply() {
+        repo.holdListDirs = true
+        vm.browse("D:\\a")
+        vm.browse("D:\\b")
+
+        repo.dirsReply("D:\\b").complete(Result.success(listing("D:\\b")))
+        repo.dirsReply("D:\\a").complete(Result.success(listing("D:\\a")))
+
+        assertEquals(listOf("D:\\a", "D:\\b"), repo.listedDirs)
+        assertEquals(listing("D:\\b"), vm.ui.value.browse)
+        assertEquals(listOf("D:\\b\\recent"), vm.ui.value.recent)
+    }
+
+    @Test fun pickDropsTheListingInFlight() {
+        repo.holdListDirs = true
+        vm.browse("D:\\a")
+
+        vm.pick("D:\\Repos\\app")
+        repo.dirsReply("D:\\a").complete(Result.success(listing("D:\\a")))
+
+        assertNull(vm.ui.value.browse)
+        assertEquals(emptyList<String>(), vm.ui.value.recent)
+        assertEquals("D:\\Repos\\app", vm.ui.value.cwd)
+    }
+
+    @Test fun blankPromptIsNoneAndAPromptGoesAsTyped() {
+        vm.pick("D:\\Repos\\app")
+        vm.setPrompt("   ")
+        vm.start {}
+
+        val typed = NewSessionViewModel(repo)
+        typed.pick("D:\\Repos\\app")
+        typed.setPrompt(" Run  tests\n")
+        typed.start {}
+
+        assertEquals(listOf(null, " Run  tests\n"), repo.created.map { it.prompt })
+    }
+
+    /** A listing of [path] with one sub-folder and one recent folder, both under [path]. */
+    private fun listing(path: String) = ServerMessage.FsDirs(
+        id = "r_$path",
+        path = path,
+        parent = "D:\\",
+        dirs = listOf(DirEntry("sub", "$path\\sub")),
+        recent = listOf("$path\\recent")
+    )
 }
