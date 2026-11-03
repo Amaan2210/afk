@@ -8,8 +8,12 @@ import io.github.amaankhan63.afk.data.sessions.ERROR_TIMEOUT
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.HELLO
 import io.github.amaankhan63.afk.data.sessions.chatEvent
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -18,6 +22,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class) // advanceTimeBy, runCurrent, UnconfinedTestDispatcher
@@ -101,6 +106,28 @@ class ChatEventsTest {
 
         assertEquals(1, repo.chatSubscriptions)
         assertEquals(refused, chat.error.value)
+    }
+
+    /** Only the daemon's errors are shown: anything else is a bug, and is not swallowed. */
+    @Test fun aFailureThatIsNotTheDaemonsIsRethrown() = runTest {
+        val bug = IllegalStateException("a bug")
+        repo.chatFailure = bug
+        var thrown: Throwable? = null
+        val scope = CoroutineScope(
+            SupervisorJob() +
+                UnconfinedTestDispatcher(testScheduler) +
+                CoroutineExceptionHandler { _, e -> thrown = e }
+        )
+        val chat = ChatEvents(repo, "s_1", scope = scope)
+
+        showing(chat)
+
+        // The same failure, maybe as a copy coroutines made to show where it crossed.
+        assertTrue(thrown is IllegalStateException)
+        assertEquals(bug.message, thrown?.message)
+        assertNull(chat.error.value)
+        assertEquals(1, repo.chatSubscriptions)
+        scope.cancel()
     }
 
     @Test fun readsItsOwnThread() = runTest {

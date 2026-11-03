@@ -1,15 +1,18 @@
 package io.github.amaankhan63.afk.service
 
+import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.HELLO
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -28,9 +31,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowBroadcastPendingResult
 import org.robolectric.shadows.ShadowToast
 
-/** Drives [NotificationActionHandler], which holds all of the receiver's logic. */
+/**
+ * Drives [NotificationActionHandler], which holds the receiver's logic, and the receiver itself
+ * once, as Android delivers an action.
+ */
 @OptIn(ExperimentalCoroutinesApi::class) // setMain, resetMain, UnconfinedTestDispatcher
 @RunWith(RobolectricTestRunner::class)
 class NotificationActionReceiverTest {
@@ -69,6 +77,30 @@ class NotificationActionReceiverTest {
 
     private fun assertNotificationCancelled() {
         assertNull(shadowOf(manager).getNotification(shownId))
+    }
+
+    /**
+     * Android's delivery: the receiver hands the intent to the handler in the background and
+     * finishes the broadcast when it is done. A reply with nothing typed has nothing to send, so
+     * the app's own graph serves, connected or not.
+     */
+    @Test fun theReceiverHandlesTheActionAndFinishes() {
+        val intent = Intent(context, NotificationActionReceiver::class.java)
+            .setAction(NotificationActions.ACTION_REPLY)
+            .putExtra(NotificationActions.EXTRA_SESSION, "s_1")
+
+        context.sendBroadcast(intent)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        val receiver = shadowOf(context as Application).registeredReceivers
+            .map { it.broadcastReceiver }
+            .filterIsInstance<NotificationActionReceiver>()
+            .single()
+        assertTrue(shadowOf(receiver).wentAsync())
+        val result = shadowOf(receiver).originalPendingResult
+        Shadow.extract<ShadowBroadcastPendingResult>(result).future.get(5, TimeUnit.SECONDS)
+        assertNotificationCancelled()
+        assertNull(ShadowToast.getTextOfLatestToast())
     }
 
     @Test fun choiceSendsPendingAnswerWithIndex() = runTest {

@@ -1,5 +1,6 @@
 package io.github.amaankhan63.afk.ui.session
 
+import androidx.lifecycle.ViewModelStore
 import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
@@ -12,6 +13,7 @@ import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.HELLO
 import io.github.amaankhan63.afk.data.sessions.session
 import io.github.amaankhan63.afk.service.ForegroundTracker
+import io.github.amaankhan63.afk.ui.holding
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +81,16 @@ class SessionViewModelTest {
 
         assertArrayEquals("hello\r".toByteArray(), repo.lastInput)
         assertEquals("", vm.ui.value.composer)
+    }
+
+    /** Nothing typed sends Enter alone, as the Enter key would. */
+    @Test fun sendLineWithNothingTypedSendsEnter() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        collecting(vm.ui)
+
+        assertTrue(vm.sendLine())
+
+        assertArrayEquals("\r".toByteArray(), repo.lastInput)
     }
 
     /** Typed into the terminal, the text would be dropped and Enter would pick option 1. */
@@ -210,6 +222,36 @@ class SessionViewModelTest {
         assertEquals("s_1", ForegroundTracker.foregroundSessionId.value)
         ForegroundTracker.release(thread)
         assertNull(ForegroundTracker.foregroundSessionId.value)
+    }
+
+    /** Before the view has laid out, the terminal asks the laptop for 80 × 24. */
+    @Test fun attachBeforeLayoutAsksForTheDefaultGrid() {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+
+        vm.attachTerminal()
+
+        assertEquals(listOf(Triple("s_1", 80, 24)), repo.ptySubscriptions)
+        vm.detachTerminal()
+    }
+
+    /** Leaving the screen for good ends the terminal's subscription and its claim to the front. */
+    @Test fun clearingDetachesTheTerminalAndReleasesTheForeground() {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        val store = ViewModelStore()
+        val held = store.holding { SessionViewModel(repo, "s_1") }
+        held.attachTerminal()
+        held.onResumed()
+        assertEquals("s_1", ForegroundTracker.foregroundSessionId.value)
+
+        store.clear()
+
+        assertNull(ForegroundTracker.foregroundSessionId.value)
+        // Nothing subscribes again on a reconnect, and a new grid goes nowhere.
+        repo.connection.value = ConnectionState.Connecting(1)
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        held.bridge.onSizeChanged(100, 30)
+        assertEquals(listOf(Triple("s_1", 80, 24)), repo.ptySubscriptions)
+        assertEquals(emptyList<Triple<String, Int, Int>>(), repo.ptyResizes)
     }
 
     @Test fun selectedTabIsShown() = runTest {

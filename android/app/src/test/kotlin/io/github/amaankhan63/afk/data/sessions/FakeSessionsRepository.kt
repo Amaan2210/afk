@@ -100,8 +100,11 @@ class FakeSessionsRepository : SessionsRepository {
     /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
     var ptyFailure: AfkError? = null
 
-    /** When set, every subscription [chat] makes fails with it, as when the daemon refuses one. */
-    var chatFailure: AfkError? = null
+    /**
+     * When set, every subscription [chat] makes fails with it: an [AfkError] as when the daemon
+     * refuses one, anything else as a bug would.
+     */
+    var chatFailure: Throwable? = null
 
     /** How many subscriptions [chat] has made, failed ones included. */
     var chatSubscriptions = 0
