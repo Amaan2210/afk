@@ -15,8 +15,8 @@ import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.settings.NotificationPrefs
 
 /**
- * Turns the daemon's `notify` messages into notifications, one per session (see
- * [NotificationActions.notificationId]), with the actions the event allows.
+ * Turns the daemon's `notify` messages into notifications, one per session and one more for its
+ * sub-agents (see [NotificationActions.notificationId]), with the actions the event allows.
  */
 class SessionNotifier(
     private val context: Context,
@@ -186,7 +186,7 @@ class SessionNotifier(
 
         private const val EVENT_NEEDS_INPUT = "needs_input"
         private const val EVENT_FINISHED = "finished"
-        private const val EVENT_SUBAGENT_FINISHED = "subagent_finished"
+        internal const val EVENT_SUBAGENT_FINISHED = "subagent_finished"
 
         /** Android shows at most three action buttons; a notification carries no more. */
         private const val MAX_ACTIONS = 3

@@ -77,12 +77,13 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       card.
 - [ ] Answer a question with **Reply** and some text. Claude gets the text as its answer.
 - [ ] A permission prompt shows **Allow**, **Deny** and **Open**. **Allow** lets Claude go on.
-- [ ] Answer the same question on the laptop first, then tap a notification button. The phone
-      says "Already answered".
+- [ ] Answer a question on the laptop while its notification shows on the phone. The
+      notification goes away. Same when you answer it in the app.
 - [ ] When Claude finishes a turn, a "Finished" notification arrives with an inline **Reply**.
       Type a prompt there: it is sent to the session, followed by Enter, and Claude starts
       working.
-- [ ] When a sub-agent finishes, a notification arrives on the "Sub-agents" channel.
+- [ ] When a sub-agent finishes, a notification arrives on the "Sub-agents" channel. If a
+      question of the same session is waiting, its notification stays too.
 - [ ] No notification arrives for the session you have open on screen. Open a session, make it
       finish: no notification. Go back to the list, make it finish again: the notification
       arrives.

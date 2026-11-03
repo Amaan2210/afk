@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import io.github.amaankhan63.afk.data.InMemoryDataStore
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -59,6 +60,17 @@ class PairingStoreTest {
         store.save(pairing)
         store.clear()
         assertNull(store.pairing.first())
+    }
+
+    /** For readers in the background, which would crash on the failure. */
+    @Test fun pairingOrNoneReadsAFailureAsNoPairing() = runTest {
+        val dataStore = InMemoryDataStore()
+        val store = PairingStore(dataStore)
+        store.save(pairing)
+        dataStore.readFailures = 1
+
+        assertNull(store.pairingOrNone.first())
+        assertEquals(pairing, store.pairingOrNone.first())
     }
 
     @Test fun clearKeepsOtherSettings() = runTest {

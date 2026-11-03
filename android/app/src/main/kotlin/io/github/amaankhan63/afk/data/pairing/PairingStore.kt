@@ -5,8 +5,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -24,6 +26,14 @@ class PairingStore @Inject constructor(private val dataStore: DataStore<Preferen
             }
         }
         .distinctUntilChanged()
+
+    /**
+     * [pairing], with preferences that cannot be read counted as no pairing, which then ends the
+     * flow. For readers that start the connection in the background, where a failure would crash
+     * the app: the connection service, the boot receiver, the activity starting the service.
+     */
+    val pairingOrNone: Flow<PairingPayload?> =
+        pairing.catch { if (it is IOException) emit(null) else throw it }
 
     suspend fun save(p: PairingPayload) {
         dataStore.edit {

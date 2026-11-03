@@ -42,8 +42,8 @@ class ConnectionNotification(private val context: Context) {
         false
     )
 
-    /** Shows [notification] when the user allows notifications; never throws. */
-    fun post(id: Int, notification: Notification) {
+    /** Shows [notification] as [id] under [tag] if the user allows notifications; never throws. */
+    fun post(id: Int, notification: Notification, tag: String? = null) {
         val notifications = NotificationManagerCompat.from(context)
         if (!notifications.areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -53,7 +53,7 @@ class ConnectionNotification(private val context: Context) {
             return
         }
         try {
-            notifications.notify(id, notification)
+            notifications.notify(tag, id, notification)
         } catch (e: SecurityException) {
             Log.w(TAG, "notification refused", e)
         }

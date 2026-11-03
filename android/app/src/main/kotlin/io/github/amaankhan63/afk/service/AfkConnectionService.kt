@@ -8,11 +8,16 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.amaankhan63.afk.data.connection.ConnectionManager
+import io.github.amaankhan63.afk.data.pairing.PairingPayload
 import io.github.amaankhan63.afk.data.pairing.PairingStore
+import io.github.amaankhan63.afk.data.protocol.Pending
+import io.github.amaankhan63.afk.data.protocol.Session
+import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.settings.AppSettingsStore
 import io.github.amaankhan63.afk.service.ConnectionNotification.Companion.CONNECTING
@@ -23,6 +28,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -60,20 +66,16 @@ class AfkConnectionService : Service() {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             repo.notifications.collect { n ->
                 notifier.build(n)?.let {
-                    notifications.post(NotificationActions.notificationId(n.sessionId), it)
+                    val id = NotificationActions.notificationId(n.sessionId)
+                    notifications.post(id, it, NotificationActions.notificationTag(n))
                 }
             }
         }
         scope.launch {
-            pairingStore.pairing.collect { pairing ->
-                manager.stop()
-                if (pairing == null) {
-                    stopSelf()
-                } else {
-                    manager.start(pairing.endpoint(), pairing.token)
-                }
-            }
+            val shown = NotificationManagerCompat.from(this@AfkConnectionService)
+            cancelAnsweredPrompts(repo.sessions, shown::cancel)
         }
+        scope.launch { followPairing(pairingStore.pairingOrNone, manager, ::stopSelf) }
         scope.launch {
             // A pairing that cannot be read leaves a failure to say "the laptop".
             val host = pairingStore.pairing.catch { emit(null) }.map { it?.host }
@@ -134,3 +136,48 @@ class AfkConnectionService : Service() {
         }
     }
 }
+
+/**
+ * Connects [manager] to each pairing [pairings] holds, the latest replacing the one before, and
+ * calls [onUnpaired] once there is none: the app was unpaired, or its preferences cannot be read.
+ */
+internal suspend fun followPairing(
+    pairings: Flow<PairingPayload?>,
+    manager: ConnectionManager,
+    onUnpaired: () -> Unit
+) {
+    pairings.collect { pairing ->
+        manager.stop()
+        if (pairing == null) onUnpaired() else manager.start(pairing.endpoint(), pairing.token)
+    }
+}
+
+/**
+ * Cancels, through [cancel], the notification of each session whose prompt [sessions] no longer
+ * shows waiting: answered in the app or on the laptop, replaced by another, or gone with its
+ * session. Its buttons would only say "Already answered". A sub-agent's notification stays.
+ */
+internal suspend fun cancelAnsweredPrompts(
+    sessions: Flow<List<Session>>,
+    cancel: (notificationId: Int) -> Unit
+) {
+    // The prompt each waiting session shows, by session; null for one sent without details.
+    var waiting = emptyMap<String, String?>()
+    sessions.collect { list ->
+        val now = list
+            .filter { it.pending != null || it.state == SessionState.needs_input }
+            .associate { it.id to it.pending?.id }
+        for ((sessionId, promptId) in waiting) {
+            if (sessionId !in now || now[sessionId] != promptId) {
+                cancel(NotificationActions.notificationId(sessionId))
+            }
+        }
+        waiting = now
+    }
+}
+
+private val Pending.id: String
+    get() = when (this) {
+        is Pending.Question -> id
+        is Pending.Permission -> id
+    }

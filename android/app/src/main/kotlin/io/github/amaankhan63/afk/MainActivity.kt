@@ -115,10 +115,10 @@ class MainActivity : ComponentActivity() {
         }
         if (savedInstanceState == null) requestNotificationPermission()
         // Starts the connection service whenever a pairing exists, one saved in the app included.
-        // Starting it again while it runs is harmless.
+        // Starting it again while it runs is harmless; preferences that cannot be read hold none.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                pairingStore.pairing.filterNotNull().collect {
+                pairingStore.pairingOrNone.filterNotNull().collect {
                     AfkConnectionService.start(applicationContext)
                 }
             }
