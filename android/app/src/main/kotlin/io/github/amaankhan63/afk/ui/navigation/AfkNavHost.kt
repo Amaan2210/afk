@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import io.github.amaankhan63.afk.ui.newsession.NewSessionScreen
 import io.github.amaankhan63.afk.ui.pairing.PairingScreen
 import io.github.amaankhan63.afk.ui.session.SessionScreen
 import io.github.amaankhan63.afk.ui.sessions.SessionsScreen
@@ -52,10 +53,14 @@ fun AfkNavHost(
                 onSettings = { navController.forward(Routes.SETTINGS) }
             )
         }
-        // Tasks 13 and 14 replace these two.
         composable(Routes.NEW) {
-            PlaceholderScreen("New session", onBack = navController.back())
+            // The new session takes the form's place.
+            NewSessionScreen(
+                onCreated = { navController.open(Routes.session(it)) },
+                onClose = navController.back()
+            )
         }
+        // Task 14 replaces this one.
         composable(Routes.SETTINGS) {
             PlaceholderScreen("Settings", onBack = navController.back())
         }
@@ -109,7 +114,7 @@ fun AfkNavHost(
 /** Opens [route] over the screen in front, single-top (see [AfkNavHost]). */
 private fun NavHostController.forward(route: String) = navigate(route) { launchSingleTop = true }
 
-/** Opens session [route] over the session list, from a link. */
+/** Opens session [route] over the session list, from a link or the new-session form. */
 private fun NavHostController.open(route: String) = navigate(route) {
     popUpTo(Routes.SESSIONS)
     launchSingleTop = true
