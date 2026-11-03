@@ -99,10 +99,9 @@ fun AfkNavHost(
         when (deepLinkAction(top?.destination?.route, topId, route)) {
             DeepLinkAction.Ignore -> Unit
 
-            DeepLinkAction.PopTo ->
+            // Back to the session when it is under the screen in front, else open it.
+            DeepLinkAction.PopTo, DeepLinkAction.Navigate ->
                 if (!navController.popBackStack(route, inclusive = false)) navController.open(route)
-
-            DeepLinkAction.Navigate -> navController.open(route)
         }
     }
 }
