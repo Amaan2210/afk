@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -62,6 +63,8 @@ fun NewSessionScreen(onCreated: (String) -> Unit, onClose: () -> Unit) {
             snackbar.showSnackbar(it)
         }
     }
+    val open by rememberUpdatedState(onCreated)
+    LaunchedEffect(viewModel) { viewModel.created.collect { open(it) } }
     // The picker opens on the drives, also after a folder was picked.
     LaunchedEffect(picking) {
         if (picking && viewModel.ui.value.browse == null) viewModel.browse(null)
@@ -97,7 +100,7 @@ fun NewSessionScreen(onCreated: (String) -> Unit, onClose: () -> Unit) {
                 modifier = Modifier.weight(1f)
             )
             Button(
-                onClick = { viewModel.start(onCreated) },
+                onClick = viewModel::start,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 enabled = state.canStart
             ) {

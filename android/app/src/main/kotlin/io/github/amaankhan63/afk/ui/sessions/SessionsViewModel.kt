@@ -16,18 +16,18 @@ import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.sessions.StateFilter
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -85,15 +85,19 @@ class SessionsViewModel internal constructor(
     private val pairedHost: StateFlow<String?> =
         pairingHost.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
+    // Buffered for the one screen that collects them, also across a rotation and while it shows
+    // an earlier one.
+    private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
+    private val resumedIds = Channel<String>(Channel.BUFFERED)
 
-    /** Failures of [kill], [rename] and [resume]. */
-    val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
+    /** Failures of [kill], [rename] and [resume], each shown once. */
+    val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
 
-    private val mutableResumed = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    /** The id of each session a [resume] started, for the screen to open. */
+    val resumed: Flow<String> = resumedIds.receiveAsFlow()
 
-    /** The id of each session a [resume] started. */
-    val resumed: SharedFlow<String> = mutableResumed.asSharedFlow()
+    // A resume under way: a second tap meanwhile would start a second session.
+    private var resuming = false
 
     val ui: StateFlow<SessionsUiState> = combine(
         combine(repo.sessions, workingSince, ::Pair),
@@ -137,18 +141,21 @@ class SessionsViewModel internal constructor(
         request { repo.renameSession(id, name) }
     }
 
+    /** Resumes ended session [id] as a new one, whose id goes to [resumed]; once at a time. */
     fun resume(id: String) {
-        request(onSuccess = { mutableResumed.tryEmit(it) }) { repo.resumeSession(id) }
+        if (resuming) return
+        resuming = true
+        request(onSuccess = { resumedIds.trySend(it) }) { repo.resumeSession(id) }
+            .invokeOnCompletion { resuming = false }
     }
 
     /** Runs [call]; a success goes to [onSuccess], a failure to [errors]. */
-    private fun <T> request(onSuccess: (T) -> Unit = {}, call: suspend () -> Result<T>) {
+    private fun <T> request(onSuccess: (T) -> Unit = {}, call: suspend () -> Result<T>): Job =
         viewModelScope.launch {
             call()
                 .onSuccess(onSuccess)
-                .onFailure { mutableErrors.tryEmit(it.asAfkError()) }
+                .onFailure { errorEvents.trySend(it.asAfkError()) }
         }
-    }
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

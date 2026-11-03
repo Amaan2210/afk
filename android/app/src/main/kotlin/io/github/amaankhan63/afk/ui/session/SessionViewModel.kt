@@ -17,15 +17,15 @@ import io.github.amaankhan63.afk.ui.session.chat.ChatEvents
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalBridge
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -71,10 +71,19 @@ class SessionViewModel internal constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null to null)
 
-    private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
+    // Buffered for the one screen that collects them, also across a rotation and while it shows
+    // an earlier one.
+    private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
+    private val resumedIds = Channel<String>(Channel.BUFFERED)
 
-    /** Failures of [sendLine], [answer], [kill], [rename] and [resume]. */
-    val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
+    /** Failures of [sendLine], [answer], [kill], [rename] and [resume], each shown once. */
+    val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
+
+    /** The id of the session a [resume] started, for the screen to open. */
+    val resumed: Flow<String> = resumedIds.receiveAsFlow()
+
+    // A resume under way: a second tap meanwhile would start a second session.
+    private var resuming = false
 
     val ui: StateFlow<SessionUiState> = combine(
         combine(tracked, repo.strip(sessionId), repo.stats, ::Triple),
@@ -121,7 +130,7 @@ class SessionViewModel internal constructor(
         val session = tracked.value.first
         val question = session?.textQuestion()
         if (session?.pending != null && question == null) {
-            mutableErrors.tryEmit(AfkError(ERROR_PROMPT_WAITING, answerPromptHint(tab.value)))
+            errorEvents.trySend(AfkError(ERROR_PROMPT_WAITING, answerPromptHint(tab.value)))
             return false
         }
         val text = composer.value
@@ -161,9 +170,12 @@ class SessionViewModel internal constructor(
         request(call = { repo.renameSession(sessionId, name) })
     }
 
-    /** Resumes the ended session as a new one, whose id goes to [onNew]. */
-    fun resume(onNew: (String) -> Unit) {
-        request(onSuccess = onNew, call = { repo.resumeSession(sessionId) })
+    /** Resumes the ended session as a new one, whose id goes to [resumed]; once at a time. */
+    fun resume() {
+        if (resuming) return
+        resuming = true
+        request(onSuccess = { resumedIds.trySend(it) }, call = { repo.resumeSession(sessionId) })
+            .invokeOnCompletion { resuming = false }
     }
 
     /** Shows the terminal at the grid its view last laid out, 80 × 24 before it has; also a retry. */
@@ -193,7 +205,7 @@ class SessionViewModel internal constructor(
     /** Whether the app is connected; when it is not, [errors] says so. */
     private fun connected(): Boolean {
         if (repo.connection.value is ConnectionState.Connected) return true
-        mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+        errorEvents.trySend(AfkError(ERROR_DISCONNECTED, "Not connected"))
         return false
     }
 
@@ -205,12 +217,10 @@ class SessionViewModel internal constructor(
         onSuccess: (T) -> Unit = {},
         answering: Boolean = false,
         call: suspend () -> Result<T>
-    ) {
-        viewModelScope.launch {
-            call()
-                .onSuccess(onSuccess)
-                .onFailure { mutableErrors.tryEmit(it.asAfkError(answering)) }
-        }
+    ): Job = viewModelScope.launch {
+        call()
+            .onSuccess(onSuccess)
+            .onFailure { errorEvents.trySend(it.asAfkError(answering)) }
     }
 
     private companion object {

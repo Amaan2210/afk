@@ -28,15 +28,15 @@ import io.github.amaankhan63.afk.ui.theme.AfkThemeId
 import io.github.amaankhan63.afk.ui.theme.ThemeMode
 import java.io.IOException
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,10 +63,16 @@ class SettingsViewModel internal constructor(
 
     private val version = versionOf(context)
     private val keepAwakeBusy = MutableStateFlow(false)
-    private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
 
-    /** Settings that could not be saved, keep-awake changes the daemon refused, a failed unpair. */
-    val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
+    // Buffered for the one screen that collects them, also across a rotation and while it shows
+    // an earlier one.
+    private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
+
+    /**
+     * Settings that could not be saved, keep-awake changes the daemon refused, a failed unpair;
+     * each shown once.
+     */
+    val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
 
     private val mutableSaveFailures = MutableStateFlow(0)
 
@@ -120,7 +126,7 @@ class SettingsViewModel internal constructor(
         if (!keepAwakeBusy.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
             repo.setDaemonSettings(DaemonSettingsPatch(keepAwake = on))
-                .onFailure { mutableErrors.tryEmit(it.shown()) }
+                .onFailure { errorEvents.trySend(it.shown()) }
             keepAwakeBusy.value = false
         }
     }
@@ -137,7 +143,7 @@ class SettingsViewModel internal constructor(
                 pairingStore.clear()
             } catch (e: IOException) {
                 unpairing = false
-                mutableErrors.tryEmit(AfkError(ERROR_NOT_SAVED, NOT_UNPAIRED))
+                errorEvents.trySend(AfkError(ERROR_NOT_SAVED, NOT_UNPAIRED))
                 return@launch
             }
             stopService(context)
@@ -152,7 +158,7 @@ class SettingsViewModel internal constructor(
                 store.update(transform)
             } catch (e: IOException) {
                 mutableSaveFailures.update { it + 1 }
-                mutableErrors.tryEmit(AfkError(ERROR_NOT_SAVED, NOT_SAVED))
+                errorEvents.trySend(AfkError(ERROR_NOT_SAVED, NOT_SAVED))
             }
         }
     }

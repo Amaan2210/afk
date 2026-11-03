@@ -89,6 +89,12 @@ class FakeSessionsRepository : SessionsRepository {
     /** When set, each [setDaemonSettings] waits for this reply instead of [settingsResult]. */
     var settingsReply: CompletableDeferred<Result<DaemonSettings>>? = null
 
+    /** When set, each [createSession] waits for this reply instead of [createResult]. */
+    var createReply: CompletableDeferred<Result<String>>? = null
+
+    /** When set, each [resumeSession] waits for this reply instead of [resumeResult]. */
+    var resumeReply: CompletableDeferred<Result<String>>? = null
+
     /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
     var ptyFailure: AfkError? = null
 
@@ -155,7 +161,7 @@ class FakeSessionsRepository : SessionsRepository {
         prompt: String?
     ): Result<String> {
         created += Create(cwd, kind, args, name, prompt)
-        return createResult
+        return createReply?.await() ?: createResult
     }
 
     override suspend fun killSession(id: String): Result<Unit> {
@@ -165,7 +171,7 @@ class FakeSessionsRepository : SessionsRepository {
 
     override suspend fun resumeSession(id: String): Result<String> {
         resumed += id
-        return resumeResult
+        return resumeReply?.await() ?: resumeResult
     }
 
     override suspend fun renameSession(id: String, name: String): Result<Unit> {

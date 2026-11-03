@@ -11,6 +11,7 @@ import io.github.amaankhan63.afk.data.sessions.SessionFilter
 import io.github.amaankhan63.afk.data.sessions.StateFilter
 import io.github.amaankhan63.afk.data.sessions.session
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -211,6 +212,48 @@ class SessionsViewModelTest {
         assertEquals(listOf("s_ended"), repo.resumed)
         assertEquals(listOf("s_new"), resumed)
         assertEquals(emptyList<AfkError>(), errors)
+    }
+
+    /** A second tap while the first resume waits for its reply would start a second session. */
+    @Test fun aResumeUnderWayIgnoresAnother() = runTest {
+        val vm = shownViewModel()
+        val resumed = mutableListOf<String>()
+        collecting(vm.resumed, resumed)
+        val reply = CompletableDeferred<Result<String>>()
+        repo.resumeReply = reply
+
+        vm.resume("s_ended")
+        vm.resume("s_ended")
+        assertEquals(listOf("s_ended"), repo.resumed)
+
+        reply.complete(Result.success("s_new"))
+        assertEquals(listOf("s_new"), resumed)
+
+        // Over, whatever its outcome: the list can resume again.
+        repo.resumeReply = null
+        vm.resume("s_ended")
+        assertEquals(listOf("s_ended", "s_ended"), repo.resumed)
+    }
+
+    /**
+     * The screen may be away (a rotation) or busy showing an earlier failure: what happens
+     * meanwhile waits for it, none of it dropped.
+     */
+    @Test fun eventsWaitForTheScreen() = runTest {
+        val vm = viewModel()
+        repo.killResult = Result.failure(AfkError("not_found", "no session s_gone"))
+        repo.renameResult = Result.failure(AfkError("bad_request", "name taken"))
+        vm.kill("s_gone")
+        vm.rename("s_1", "api")
+        vm.resume("s_ended")
+
+        val errors = mutableListOf<AfkError>()
+        val resumed = mutableListOf<String>()
+        collecting(vm.errors, errors)
+        collecting(vm.resumed, resumed)
+
+        assertEquals(listOf("not_found", "bad_request"), errors.map { it.code })
+        assertEquals(listOf("s_resumed"), resumed)
     }
 
     @Test fun failedResumeOpensNothing() = runTest {

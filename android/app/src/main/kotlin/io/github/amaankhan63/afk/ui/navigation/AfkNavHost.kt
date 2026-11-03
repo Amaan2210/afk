@@ -86,9 +86,7 @@ fun AfkNavHost(
                     onBack = navController.back(),
                     onOpenThread = { navController.forward(Routes.thread(id, it)) },
                     // The resumed session takes the ended one's place.
-                    onOpenSession = {
-                        navController.navigate(Routes.session(it)) { popUpTo(Routes.SESSIONS) }
-                    }
+                    onOpenSession = { navController.open(Routes.session(it)) }
                 )
             }
         }
@@ -128,7 +126,7 @@ fun AfkNavHost(
 /** Opens [route] over the screen in front, single-top (see [AfkNavHost]). */
 private fun NavHostController.forward(route: String) = navigate(route) { launchSingleTop = true }
 
-/** Opens session [route] over the session list, from a link or the new-session form. */
+/** Opens session [route] over the session list: from a link, the new-session form or a resume. */
 private fun NavHostController.open(route: String) = navigate(route) {
     popUpTo(Routes.SESSIONS)
     launchSingleTop = true

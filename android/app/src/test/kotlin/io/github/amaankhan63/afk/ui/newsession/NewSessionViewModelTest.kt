@@ -6,10 +6,15 @@ import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository.Create
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -39,18 +44,31 @@ class NewSessionViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    @Test fun startSendsCreateWithArgsAndPrompt() {
+    /** The ids [vm] hands the screen from now on, until the test ends. */
+    private fun TestScope.createdIds(): List<String> {
         val created = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.created.toList(created)
+        }
+        return created
+    }
 
-        vm.start { created += it }
+    @Test fun startSendsCreateWithArgsAndPrompt() = runTest {
+        val created = createdIds()
+        val reply = CompletableDeferred<Result<String>>()
+        repo.createReply = reply
+
+        vm.start()
         assertTrue("no folder yet", repo.created.isEmpty())
 
         vm.pick("D:\\Repos\\app")
         vm.setPrompt("Run tests")
         assertTrue(vm.ui.value.canStart)
-        vm.start { created += it }
-        // Still starting while the screen moves on: a second tap creates nothing.
-        vm.start { created += it }
+        vm.start()
+        // Still starting: a second tap creates nothing.
+        assertTrue(vm.ui.value.starting)
+        vm.start()
+        reply.complete(Result.success("s_new"))
 
         assertEquals(
             listOf(
@@ -65,8 +83,18 @@ class NewSessionViewModelTest {
             repo.created
         )
         assertEquals(listOf("s_new"), created)
-        assertTrue(vm.ui.value.starting)
-        assertFalse(vm.ui.value.canStart)
+        // Over: the screen opens the session, and nothing is left waiting.
+        assertFalse(vm.ui.value.starting)
+    }
+
+    /** A rotation while the session starts: its id waits for the screen that comes back. */
+    @Test fun theCreatedIdWaitsForTheScreen() = runTest {
+        vm.pick("D:\\Repos\\app")
+        vm.start()
+
+        val created = createdIds()
+
+        assertEquals(listOf("s_new"), created)
     }
 
     @Test fun shellIgnoresPrompt() {
@@ -78,7 +106,7 @@ class NewSessionViewModelTest {
         vm.setKind(SessionKind.shell)
         vm.toggleFlag("skip")
 
-        vm.start {}
+        vm.start()
 
         assertEquals(
             listOf(Create("D:\\Repos\\app", SessionKind.shell, emptyList(), null, null)),
@@ -145,18 +173,18 @@ class NewSessionViewModelTest {
         assertEquals(emptySet<String>(), vm.ui.value.flags)
     }
 
-    @Test fun startFailureClearsStartingAndSetsError() {
-        val created = mutableListOf<String>()
+    @Test fun startFailureClearsStartingAndSetsError() = runTest {
+        val created = createdIds()
         vm.pick("D:\\Repos\\app")
         repo.createResult = Result.failure(AfkError("disconnected", "not connected to the daemon"))
 
-        vm.start { created += it }
+        vm.start()
 
         assertFalse(vm.ui.value.starting)
         assertEquals("Not connected", vm.ui.value.error)
 
         repo.createResult = Result.failure(AfkError("bad_request", "cwd D:\\gone does not exist"))
-        vm.start { created += it }
+        vm.start()
         assertEquals("cwd D:\\gone does not exist", vm.ui.value.error)
         assertTrue(vm.ui.value.canStart)
         assertEquals(2, repo.created.size)
@@ -167,7 +195,7 @@ class NewSessionViewModelTest {
         vm.pick("D:\\Repos\\app")
         repo.createResult = Result.failure(AfkError("timeout", "the daemon did not answer in time"))
 
-        vm.start {}
+        vm.start()
 
         assertEquals(
             "No reply — the session may have started; check the list",
@@ -210,12 +238,12 @@ class NewSessionViewModelTest {
     @Test fun blankPromptIsNoneAndAPromptGoesAsTyped() {
         vm.pick("D:\\Repos\\app")
         vm.setPrompt("   ")
-        vm.start {}
+        vm.start()
 
         val typed = NewSessionViewModel(repo)
         typed.pick("D:\\Repos\\app")
         typed.setPrompt(" Run  tests\n")
-        typed.start {}
+        typed.start()
 
         assertEquals(listOf(null, " Run  tests\n"), repo.created.map { it.prompt })
     }

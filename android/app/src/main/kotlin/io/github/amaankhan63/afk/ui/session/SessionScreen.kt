@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -82,9 +83,11 @@ fun SessionScreen(
 
     // After process death the field gets its text back but the view model starts empty.
     LaunchedEffect(viewModel) { viewModel.onComposer(composer) }
+    val openSession by rememberUpdatedState(onOpenSession)
     LaunchedEffect(viewModel) {
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }
     }
+    LaunchedEffect(viewModel) { viewModel.resumed.collect { openSession(it) } }
     LaunchedEffect(Unit) {
         while (true) {
             delay(CLOCK_TICK_MS)
@@ -126,7 +129,7 @@ fun SessionScreen(
                 onBack = onBack,
                 onRename = viewModel::rename,
                 onKill = viewModel::kill,
-                onResume = { viewModel.resume(onOpenSession) },
+                onResume = viewModel::resume,
                 onCopied = { scope.launch { snackbar.showSnackbar("Copied") } }
             )
         },

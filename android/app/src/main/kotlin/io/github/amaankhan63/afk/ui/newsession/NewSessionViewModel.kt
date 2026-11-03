@@ -10,9 +10,12 @@ import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.ui.session.asAfkError
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,6 +28,12 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
     private val state = MutableStateFlow(NewSessionUiState())
 
     val ui: StateFlow<NewSessionUiState> = state.asStateFlow()
+
+    // Buffered for the screen, also across a rotation.
+    private val createdIds = Channel<String>(Channel.BUFFERED)
+
+    /** The id of the session [start] created, for the screen to open. */
+    val created: Flow<String> = createdIds.receiveAsFlow()
 
     // The latest listing asked for: a newer one replaces it, so an older reply cannot land last.
     private var browsing: Job? = null
@@ -70,11 +79,10 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
     }
 
     /**
-     * Starts the session and hands its id to [onCreated]. Does nothing until a folder is chosen or
-     * while a start is under way, which lasts past a success: the screen is leaving. A blank
-     * prompt is none.
+     * Starts the session; its id goes to [created]. Does nothing until a folder is chosen or while
+     * a start is under way. A blank prompt is none.
      */
-    fun start(onCreated: (String) -> Unit) {
+    fun start() {
         val form = state.value
         if (!form.canStart) return
         state.update { it.copy(starting = true) }
@@ -84,11 +92,12 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
         val prompt = if (shell) null else form.prompt.ifBlank { null }
         viewModelScope.launch {
             repo.createSession(form.cwd, form.kind, args, name = null, prompt = prompt)
-                .onSuccess(onCreated)
+                .onSuccess { createdIds.send(it) }
                 .onFailure { e ->
                     val message = e.shownMessage(creating = true)
-                    state.update { it.copy(starting = false, error = message) }
+                    state.update { it.copy(error = message) }
                 }
+            state.update { it.copy(starting = false) }
         }
     }
 

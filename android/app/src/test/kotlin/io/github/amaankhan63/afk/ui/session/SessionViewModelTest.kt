@@ -13,6 +13,7 @@ import io.github.amaankhan63.afk.data.sessions.HELLO
 import io.github.amaankhan63.afk.data.sessions.session
 import io.github.amaankhan63.afk.service.ForegroundTracker
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -266,13 +267,54 @@ class SessionViewModelTest {
 
     @Test fun killRenameAndResumeTargetTheSession() = runTest {
         val opened = mutableListOf<String>()
+        collecting(vm.resumed, opened)
         vm.kill()
         vm.rename("api")
-        vm.resume { opened += it }
+        vm.resume()
 
         assertEquals(listOf("s_1"), repo.killed)
         assertEquals(listOf("s_1" to "api"), repo.renamed)
         assertEquals(listOf("s_1"), repo.resumed)
+        assertEquals(listOf("s_resumed"), opened)
+    }
+
+    /** A second tap while the first resume waits for its reply would start a second session. */
+    @Test fun aResumeUnderWayIgnoresAnother() = runTest {
+        val opened = mutableListOf<String>()
+        collecting(vm.resumed, opened)
+        val reply = CompletableDeferred<Result<String>>()
+        repo.resumeReply = reply
+
+        vm.resume()
+        vm.resume()
+        assertEquals(listOf("s_1"), repo.resumed)
+
+        reply.complete(Result.success("s_resumed"))
+        assertEquals(listOf("s_resumed"), opened)
+
+        // Over, whatever its outcome: another resume goes out.
+        repo.resumeReply = null
+        vm.resume()
+        assertEquals(listOf("s_1", "s_1"), repo.resumed)
+    }
+
+    /**
+     * The screen may be away (a rotation) or busy showing an earlier failure: what happens
+     * meanwhile waits for it, none of it dropped.
+     */
+    @Test fun eventsWaitForTheScreen() = runTest {
+        repo.killResult = Result.failure(AfkError("not_found", "no session s_1"))
+        repo.renameResult = Result.failure(AfkError("bad_request", "name taken"))
+        vm.kill()
+        vm.rename("api")
+        vm.resume()
+
+        val errors = mutableListOf<AfkError>()
+        val opened = mutableListOf<String>()
+        collecting(vm.errors, errors)
+        collecting(vm.resumed, opened)
+
+        assertEquals(listOf("not_found", "bad_request"), errors.map { it.code })
         assertEquals(listOf("s_resumed"), opened)
     }
 

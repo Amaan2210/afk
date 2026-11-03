@@ -16,14 +16,13 @@ import io.github.amaankhan63.afk.ui.session.asAfkError
 import io.github.amaankhan63.afk.ui.session.chat.ChatEvents
 import io.github.amaankhan63.afk.ui.session.chat.subagentProgress
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -80,10 +79,12 @@ class SubagentViewModel internal constructor(
         .map { it?.let(::subagentProgress) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
-    private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
+    // Buffered for the one screen that collects them, also across a rotation and while it shows
+    // an earlier one.
+    private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
 
-    /** Failures of [answer]. */
-    val errors: SharedFlow<AfkError> = mutableErrors.asSharedFlow()
+    /** Failures of [answer], each shown once. */
+    val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
 
     /**
      * Answers prompt [pendingId] and returns true. While not connected nothing goes out: [errors]
@@ -92,12 +93,12 @@ class SubagentViewModel internal constructor(
      */
     fun answer(pendingId: String, choices: List<Int>?, text: String?, decision: String?): Boolean {
         if (repo.connection.value !is ConnectionState.Connected) {
-            mutableErrors.tryEmit(AfkError(ERROR_DISCONNECTED, "Not connected"))
+            errorEvents.trySend(AfkError(ERROR_DISCONNECTED, "Not connected"))
             return false
         }
         viewModelScope.launch {
             repo.answerPending(sessionId, pendingId, choices, text, decision)
-                .onFailure { mutableErrors.tryEmit(it.asAfkError(answering = true)) }
+                .onFailure { errorEvents.trySend(it.asAfkError(answering = true)) }
         }
         return true
     }
