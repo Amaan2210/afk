@@ -116,6 +116,8 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       shell session on the phone, run
       `Write-Host -NoNewline "$([char]27)]52;c;YWZrLW9zYzUy$([char]7)"`, which asks the terminal
       to copy the text `afk-osc52`. Paste into another app: it is not `afk-osc52`.
+      If the daemon does not relay the sequence, nothing reaches the phone and this check
+      passes without proving anything; write that down instead of ticking it.
 - [ ] Swipe sideways on the terminal. The view moves between Terminal and Chat, and a
       long-press selection still works.
 - [ ] Pinch to zoom, quickly and several times. The font grows or shrinks one step at a time and
