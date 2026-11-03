@@ -1,6 +1,5 @@
 package io.github.amaankhan63.afk.ui.session
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,18 +32,18 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.amaankhan63.afk.data.settings.MAX_TERMINAL_FONT_SP
+import io.github.amaankhan63.afk.data.settings.MIN_TERMINAL_FONT_SP
 import io.github.amaankhan63.afk.ui.session.chat.ChatTab
 import io.github.amaankhan63.afk.ui.session.chat.ChatUnavailable
 import io.github.amaankhan63.afk.ui.session.terminal.TerminalTab
-import io.github.amaankhan63.afk.ui.theme.AfkThemeId
+import io.github.amaankhan63.afk.ui.settings.AppSettingsViewModel
+import io.github.amaankhan63.afk.ui.theme.LocalAfkDark
+import io.github.amaankhan63.afk.ui.theme.LocalAfkThemeId
 import io.github.amaankhan63.afk.ui.theme.Palettes
 import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-/** The terminal's font size and the key bar's visibility, until Settings holds them (Task 14). */
-private const val DEFAULT_FONT_SP = 12
-private const val KEY_BAR = true
 
 /** How often a working session's time is brought up to date. */
 private const val CLOCK_TICK_MS = 30_000L
@@ -66,20 +64,23 @@ fun SessionScreen(
     onOpenSession: (String) -> Unit = {}
 ) {
     val viewModel: SessionViewModel = hiltViewModel(key = sessionId)
+    val appSettings: AppSettingsViewModel = hiltViewModel()
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val settings by appSettings.settings.collectAsStateWithLifecycle()
     val failure by viewModel.bridge.failure.collectAsStateWithLifecycle()
     // The field's text lives here, not in the round trip through the view model's flows: a
     // recomposition before that trip ends would put stale text back under the keyboard.
     var composer by rememberSaveable { mutableStateOf(viewModel.ui.value.composer) }
-    var fontSizeSp by rememberSaveable { mutableIntStateOf(DEFAULT_FONT_SP) }
     val keyBarState = remember { KeyBarState() }
     val composerFocus = remember { FocusRequester() }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var now by remember { mutableStateOf(Instant.now()) }
     val pager = rememberPagerState(initialPage = state.tab.ordinal) { SessionTab.entries.size }
-    // Graphite until Settings holds the theme and Always dark terminal (Task 14).
-    val terminalColors = Palettes.terminal(AfkThemeId.Graphite, dark = isSystemInDarkTheme())
+    val terminalColors = Palettes.terminal(
+        LocalAfkThemeId.current,
+        dark = settings.alwaysDarkTerminal || LocalAfkDark.current
+    )
 
     // After process death the field gets its text back but the view model starts empty.
     LaunchedEffect(viewModel) { viewModel.onComposer(composer) }
@@ -142,9 +143,14 @@ fun SessionScreen(
                     SessionTab.Terminal -> TerminalTab(
                         bridge = viewModel.bridge,
                         colors = terminalColors,
-                        fontSizeSp = fontSizeSp,
-                        onFontSizeChange = { fontSizeSp = it },
-                        keyBar = KEY_BAR,
+                        fontSizeSp = settings.terminalFontSp,
+                        // Saved, so Settings and the next session open at the pinched size.
+                        onFontSizeChange = {
+                            appSettings.setFontSize(
+                                it.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP)
+                            )
+                        },
+                        keyBar = settings.keyBar,
                         keyBarState = keyBarState,
                         onBytes = viewModel::sendKeys,
                         onToggleKeyboard = { viewModel.bridge.toggleKeyboard?.invoke() },

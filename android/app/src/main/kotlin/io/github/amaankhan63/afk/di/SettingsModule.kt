@@ -4,11 +4,12 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import io.github.amaankhan63.afk.ui.session.DEFAULT_STRIP_CHIPS
+import io.github.amaankhan63.afk.data.settings.AppSettingsStore
 import io.github.amaankhan63.afk.ui.session.StripChip
 import javax.inject.Qualifier
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** The status strip's chips as Settings picks them, in order. */
 @Qualifier
@@ -18,8 +19,8 @@ annotation class StripChipsFlow
 @Module
 @InstallIn(SingletonComponent::class)
 object SettingsModule {
-    /** The defaults, until the app's settings store (Task 14) provides the user's choice. */
     @Provides
     @StripChipsFlow
-    fun provideStripChips(): Flow<List<StripChip>> = flowOf(DEFAULT_STRIP_CHIPS)
+    fun provideStripChips(store: AppSettingsStore): Flow<List<StripChip>> =
+        store.settings.map { it.stripChips }.distinctUntilChanged()
 }

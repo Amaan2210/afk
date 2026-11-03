@@ -22,7 +22,7 @@ import io.github.amaankhan63.afk.data.connection.ConnectionManager
 import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
-import io.github.amaankhan63.afk.data.settings.NotificationPrefs
+import io.github.amaankhan63.afk.data.settings.AppSettingsStore
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -46,6 +46,8 @@ class AfkConnectionService : Service() {
 
     @Inject lateinit var pairingStore: PairingStore
 
+    @Inject lateinit var settingsStore: AppSettingsStore
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override fun onCreate() {
@@ -55,8 +57,8 @@ class AfkConnectionService : Service() {
             stopSelf()
             return
         }
-        // Defaults until the app's settings store (Task 14) provides the user's choices.
-        val notifier = SessionNotifier(this) { NotificationPrefs() }
+        // Read for each notification, so a switch in Settings counts from the next one.
+        val notifier = SessionNotifier(this) { settingsStore.settings.value.notifications }
         // Undispatched, so it listens before the connection starts: `notify` is not replayed.
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             repo.notifications.collect { n ->

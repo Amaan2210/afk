@@ -15,6 +15,7 @@ import io.github.amaankhan63.afk.ui.newsession.NewSessionScreen
 import io.github.amaankhan63.afk.ui.pairing.PairingScreen
 import io.github.amaankhan63.afk.ui.session.SessionScreen
 import io.github.amaankhan63.afk.ui.sessions.SessionsScreen
+import io.github.amaankhan63.afk.ui.settings.SettingsScreen
 import io.github.amaankhan63.afk.ui.subagent.SubagentScreen
 
 /**
@@ -60,9 +61,17 @@ fun AfkNavHost(
                 onClose = navController.back()
             )
         }
-        // Task 14 replaces this one.
         composable(Routes.SETTINGS) {
-            PlaceholderScreen("Settings", onBack = navController.back())
+            SettingsScreen(
+                onBack = navController.back(),
+                // Unpaired, the app starts over at pairing: no screen stays to go back to.
+                onUnpaired = {
+                    navController.navigate(Routes.PAIRING) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
         }
         composable(Routes.SESSION, arguments = listOf(stringArgument(Routes.ARG_ID))) { entry ->
             val id = entry.argument(Routes.ARG_ID)

@@ -1,12 +1,10 @@
 package io.github.amaankhan63.afk.ui.pairing
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.amaankhan63.afk.data.InMemoryDataStore
 import io.github.amaankhan63.afk.data.connection.ConnectionManager
 import io.github.amaankhan63.afk.data.connection.ConnectionManagerFactory
 import io.github.amaankhan63.afk.data.connection.ConnectionState
@@ -20,7 +18,6 @@ import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -304,14 +301,4 @@ private class FakeConnectionFactory : ConnectionManagerFactory {
         scopes += scope
         return FakeConnectionManager().also { managers += it }
     }
-}
-
-/** A [DataStore] in memory, so the ViewModel's [PairingStore] needs no file. */
-private class InMemoryDataStore : DataStore<Preferences> {
-    private val prefs = MutableStateFlow(emptyPreferences())
-    override val data: Flow<Preferences> = prefs
-
-    override suspend fun updateData(
-        transform: suspend (t: Preferences) -> Preferences
-    ): Preferences = transform(prefs.value).also { prefs.value = it }
 }

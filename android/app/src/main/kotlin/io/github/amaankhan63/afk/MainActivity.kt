@@ -22,12 +22,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.amaankhan63.afk.data.pairing.PairingStore
+import io.github.amaankhan63.afk.data.settings.AppSettingsStore
 import io.github.amaankhan63.afk.service.AfkConnectionService
 import io.github.amaankhan63.afk.ui.navigation.AfkNavHost
 import io.github.amaankhan63.afk.ui.navigation.Routes
 import io.github.amaankhan63.afk.ui.theme.AfkTheme
-import io.github.amaankhan63.afk.ui.theme.AfkThemeId
-import io.github.amaankhan63.afk.ui.theme.ThemeMode
 import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +37,8 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var pairingStore: PairingStore
+
+    @Inject lateinit var settingsStore: AppSettingsStore
 
     // A denial is accepted as it is: sessions still work, only their notifications stay hidden.
     private val notificationPermission =
@@ -57,8 +58,8 @@ class MainActivity : ComponentActivity() {
         // one without its arguments. The app reads only the intent's link, so the extras go.
         intent.replaceExtras(Bundle())
         setContent {
-            // Graphite until Settings holds the theme (Task 14).
-            AfkTheme(AfkThemeId.Graphite, ThemeMode.System) {
+            val settings by settingsStore.settings.collectAsStateWithLifecycle()
+            AfkTheme(settings.theme, settings.mode) {
                 val start by produceState<String?>(initialValue = null) {
                     // Preferences that cannot be read hold no pairing.
                     val pairing = try {

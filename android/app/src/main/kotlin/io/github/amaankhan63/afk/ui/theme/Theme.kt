@@ -18,6 +18,13 @@ import androidx.compose.ui.platform.LocalContext
 val LocalAfkPalette: ProvidableCompositionLocal<AfkPalette> =
     staticCompositionLocalOf { Palettes.palette(AfkThemeId.Graphite, dark = true) }
 
+/** The theme [AfkTheme] shows: Dynamic only where Android supports it, else Graphite. */
+val LocalAfkThemeId: ProvidableCompositionLocal<AfkThemeId> =
+    staticCompositionLocalOf { AfkThemeId.Graphite }
+
+/** Whether [AfkTheme] is dark, by its mode or, for System, by the system's. */
+val LocalAfkDark: ProvidableCompositionLocal<Boolean> = staticCompositionLocalOf { true }
+
 @Composable
 fun AfkTheme(id: AfkThemeId, mode: ThemeMode, content: @Composable () -> Unit) {
     val dark =
@@ -38,7 +45,11 @@ fun AfkTheme(id: AfkThemeId, mode: ThemeMode, content: @Composable () -> Unit) {
             palette.toColorScheme(dark)
         }
     val phosphor = resolved == AfkThemeId.Phosphor
-    CompositionLocalProvider(LocalAfkPalette provides palette) {
+    CompositionLocalProvider(
+        LocalAfkPalette provides palette,
+        LocalAfkThemeId provides resolved,
+        LocalAfkDark provides dark
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = if (phosphor) PhosphorTypography else AfkTypography,

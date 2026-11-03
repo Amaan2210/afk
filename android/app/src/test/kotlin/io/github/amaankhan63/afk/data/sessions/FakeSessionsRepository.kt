@@ -86,6 +86,9 @@ class FakeSessionsRepository : SessionsRepository {
     fun dirsReply(path: String?): CompletableDeferred<Result<FsDirs>> =
         heldDirs.getOrPut(path) { CompletableDeferred() }
 
+    /** When set, each [setDaemonSettings] waits for this reply instead of [settingsResult]. */
+    var settingsReply: CompletableDeferred<Result<DaemonSettings>>? = null
+
     /** When set, every subscription [pty] makes fails with it, as when the daemon refuses one. */
     var ptyFailure: AfkError? = null
 
@@ -184,6 +187,6 @@ class FakeSessionsRepository : SessionsRepository {
 
     override suspend fun setDaemonSettings(patch: DaemonSettingsPatch): Result<DaemonSettings> {
         settingsPatches += patch
-        return settingsResult
+        return settingsReply?.await() ?: settingsResult
     }
 }
