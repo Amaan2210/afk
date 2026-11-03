@@ -8,6 +8,7 @@ object Routes {
     const val SESSIONS = "sessions"
     const val NEW = "new"
     const val SETTINGS = "settings"
+    const val ABOUT = "about"
 
     /** The session screen's and the thread screen's arguments. */
     const val ARG_ID = "id"

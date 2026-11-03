@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's window; Compose draws everything on it. values-night holds the dark one. -->
+    <style name="Theme.Afk" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/afk_window_light</item>
+    </style>
+
+    <!-- The launch screen: the icon's glyph on the icon's background, then Theme.Afk. -->
+    <style name="Theme.Afk.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Afk</item>
+    </style>
+</resources>

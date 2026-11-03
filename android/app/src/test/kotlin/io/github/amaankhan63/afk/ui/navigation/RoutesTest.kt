@@ -60,6 +60,10 @@ class RoutesTest {
         ).forEach { assertNull(it, parse(it)) }
     }
 
+    @Test fun aboutHasItsOwnRoute() {
+        assertEquals("about", Routes.ABOUT)
+    }
+
     @Test fun routesFillTheirPatterns() {
         assertEquals("session/s_1", Routes.session("s_1"))
         assertEquals("session/s_1/thread/agent-a1", Routes.thread("s_1", "agent-a1"))

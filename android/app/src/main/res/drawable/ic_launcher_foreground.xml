@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher icon's glyph, from assets/icon.svg at the repository root (its 1024 x 1024 drawing).
+  The 108 dp layer is a 1536 viewport: the drawing's 1024 units land on the central 72 dp the mask
+  shows, so every coordinate is the SVG's plus 256. Its farthest point, the phone's outer corner, is
+  31.3 dp from the centre, inside the 33 dp radius of the safe zone.
+
+  The SVG's gradient runs corner to corner across each shape's own box (objectBoundingBox). Each path
+  carries the linear gradient that gives the same colour at every point. The home line's box has no
+  height, so it takes the phone's gradient.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1536"
+    android:viewportHeight="1536">
+    <!-- Chevron. -->
+    <path
+        android:pathData="M556,586 L816,768 L556,950"
+        android:strokeWidth="120"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="556"
+                android:startY="586"
+                android:endX="900.32"
+                android:endY="831.95"
+                android:startColor="#FFB9A6FF"
+                android:endColor="#FF8EF0D6" />
+        </aapt:attr>
+    </path>
+    <!-- Arc. -->
+    <path
+        android:pathData="M776,656 Q946,526 1056,696"
+        android:strokeWidth="46"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="776"
+                android:startY="599.67"
+                android:endX="835.27"
+                android:endY="771.94"
+                android:startColor="#FFB9A6FF"
+                android:endColor="#FF8EF0D6" />
+        </aapt:attr>
+    </path>
+    <!-- Phone: the SVG's rect, x 660 y 480, 200 x 300, corner radius 44. -->
+    <path
+        android:pathData="M960,736 H1072 A44,44 0 0,1 1116,780 V992 A44,44 0 0,1 1072,1036 H960 A44,44 0 0,1 916,992 V780 A44,44 0 0,1 960,736 Z"
+        android:strokeWidth="46">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="916"
+                android:startY="736"
+                android:endX="1192.92"
+                android:endY="920.62"
+                android:startColor="#FFB9A6FF"
+                android:endColor="#FF8EF0D6" />
+        </aapt:attr>
+    </path>
+    <!-- The phone's home line. -->
+    <path
+        android:pathData="M988,984 H1044"
+        android:strokeWidth="24"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="916"
+                android:startY="736"
+                android:endX="1192.92"
+                android:endY="920.62"
+                android:startColor="#FFB9A6FF"
+                android:endColor="#FF8EF0D6" />
+        </aapt:attr>
+    </path>
+</vector>

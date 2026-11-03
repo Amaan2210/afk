@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -57,6 +58,9 @@ class MainActivity : ComponentActivity() {
     private val deepLink = MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super.onCreate, as the library requires: it ends the launch screen and swaps the
+        // splash theme for Theme.Afk.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         // Also how the keyboard's insets reach Compose below Android 15.
         enableEdgeToEdge()

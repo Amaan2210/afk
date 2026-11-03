@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind the app's content, light and dark: it shows before the first frame. -->
+    <color name="afk_window_light">#F2F3F6</color>
+    <color name="afk_window_dark">#0B0D12</color>
+</resources>

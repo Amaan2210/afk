@@ -15,6 +15,7 @@ import io.github.amaankhan63.afk.ui.newsession.NewSessionScreen
 import io.github.amaankhan63.afk.ui.pairing.PairingScreen
 import io.github.amaankhan63.afk.ui.session.SessionScreen
 import io.github.amaankhan63.afk.ui.sessions.SessionsScreen
+import io.github.amaankhan63.afk.ui.settings.AboutScreen
 import io.github.amaankhan63.afk.ui.settings.SettingsScreen
 import io.github.amaankhan63.afk.ui.subagent.SubagentScreen
 
@@ -70,8 +71,12 @@ fun AfkNavHost(
                         popUpTo(navController.graph.id) { inclusive = true }
                         launchSingleTop = true
                     }
-                }
+                },
+                onAbout = { navController.forward(Routes.ABOUT) }
             )
+        }
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = navController.back())
         }
         composable(Routes.SESSION, arguments = listOf(stringArgument(Routes.ARG_ID))) { entry ->
             val id = entry.argument(Routes.ARG_ID)

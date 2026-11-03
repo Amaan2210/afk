@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The themed icon (Android 13+): ic_launcher_foreground's paths in white, which the launcher tints. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1536"
+    android:viewportHeight="1536">
+    <path
+        android:pathData="M556,586 L816,768 L556,950"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="120"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M776,656 Q946,526 1056,696"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="46"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M960,736 H1072 A44,44 0 0,1 1116,780 V992 A44,44 0 0,1 1072,1036 H960 A44,44 0 0,1 916,992 V780 A44,44 0 0,1 960,736 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="46" />
+    <path
+        android:pathData="M988,984 H1044"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="24"
+        android:strokeLineCap="round" />
+</vector>

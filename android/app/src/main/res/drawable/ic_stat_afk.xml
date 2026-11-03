@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The status-bar glyph: the icon's chevron and arc, white on transparent (Android draws a
+  notification's small icon from its alpha alone). The strokes are the mockup's status-bar weights,
+  140 and 70. The two shapes span 605 x 504 of the SVG's units; a 726 viewport fits them in the
+  20 dp inside a 2 dp margin, centred, so every coordinate is the SVG's minus (169.5, 149).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="726"
+    android:viewportHeight="726">
+    <path
+        android:pathData="M130.5,181 L390.5,363 L130.5,545"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="140"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M350.5,251 Q520.5,121 630.5,291"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="70"
+        android:strokeLineCap="round" />
+</vector>

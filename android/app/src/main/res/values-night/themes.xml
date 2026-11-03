@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme.Afk at night: a dark window, so no white shows before the first frame. -->
+    <style name="Theme.Afk" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/afk_window_dark</item>
+    </style>
+</resources>

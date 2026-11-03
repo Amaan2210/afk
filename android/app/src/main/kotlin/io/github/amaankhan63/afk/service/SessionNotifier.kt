@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.app.RemoteInput
 import io.github.amaankhan63.afk.MainActivity
+import io.github.amaankhan63.afk.R
 import io.github.amaankhan63.afk.data.protocol.Pending
 import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.settings.NotificationPrefs
@@ -177,8 +178,11 @@ class SessionNotifier(
     private fun requestCode(sessionId: String, slot: String): Int = "$sessionId:$slot".hashCode()
 
     companion object {
-        /** A platform glyph until the app has its own monochrome icon. */
-        const val SMALL_ICON = android.R.drawable.stat_notify_chat
+        /**
+         * The app's status-bar glyph, white on transparent. Not const: the R class's ids are not
+         * compile-time constants.
+         */
+        val SMALL_ICON = R.drawable.ic_stat_afk
 
         private const val EVENT_NEEDS_INPUT = "needs_input"
         private const val EVENT_FINISHED = "finished"
