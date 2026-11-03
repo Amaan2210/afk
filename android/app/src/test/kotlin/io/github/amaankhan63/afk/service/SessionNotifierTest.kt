@@ -22,7 +22,7 @@ import org.robolectric.Shadows.shadowOf
 class SessionNotifierTest {
     private val context: Context = RuntimeEnvironment.getApplication()
 
-    @After fun tearDown() = ForegroundTracker.set(null)
+    @After fun tearDown() = ForegroundTracker.release(this)
 
     private fun notifier(prefs: NotificationPrefs = NotificationPrefs()) =
         SessionNotifier(context) { prefs }
@@ -97,9 +97,9 @@ class SessionNotifierTest {
         assertNull(notifier().build(notify(event = "subagent_finished")))
 
     @Test fun suppressedWhenSessionInForeground() {
-        ForegroundTracker.set("s_1")
+        ForegroundTracker.claim(this, "s_1")
         assertNull(notifier().build(notify(sessionId = "s_1")))
-        ForegroundTracker.set(null)
+        ForegroundTracker.release(this)
     }
 
     @Test fun idIsStablePerSession() = assertEquals(

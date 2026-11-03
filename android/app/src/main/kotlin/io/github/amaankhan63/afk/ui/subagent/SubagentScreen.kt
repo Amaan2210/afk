@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amaankhan63.afk.ui.session.chat.ChatTab
 import io.github.amaankhan63.afk.ui.session.chat.ChatUnavailable
@@ -33,7 +34,8 @@ import io.github.amaankhan63.afk.ui.session.chat.ChatUnavailable
  * [sessionId] and [threadId] key it. A nested sub-agent's card opens its thread through
  * [onOpenThread].
  *
- * There is no composer: a question's typed answer is given from the session screen.
+ * There is no composer: a question's typed answer is given from the session screen. While the
+ * screen is resumed the session's notifications are held back, as on the session's screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +54,10 @@ fun SubagentScreen(
 
     LaunchedEffect(viewModel) {
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }
+    }
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResumed()
+        onPauseOrDispose { viewModel.onPaused() }
     }
 
     Scaffold(

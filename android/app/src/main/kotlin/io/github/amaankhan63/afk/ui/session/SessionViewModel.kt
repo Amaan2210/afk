@@ -167,21 +167,17 @@ class SessionViewModel internal constructor(
 
     /** The screen is in front: the session's notifications are not shown. */
     fun onResumed() {
-        ForegroundTracker.set(sessionId)
+        ForegroundTracker.claim(this, sessionId)
     }
 
+    /** Leaves in front a screen that came to the front meanwhile, such as a sub-agent's thread. */
     fun onPaused() {
-        leaveForeground()
+        ForegroundTracker.release(this)
     }
 
     override fun onCleared() {
         bridge.detach()
-        leaveForeground()
-    }
-
-    /** Leaves alone a session that came to the front meanwhile, such as one a resume opened. */
-    private fun leaveForeground() {
-        if (ForegroundTracker.foregroundSessionId.value == sessionId) ForegroundTracker.set(null)
+        ForegroundTracker.release(this)
     }
 
     /**

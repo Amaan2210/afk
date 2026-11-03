@@ -1,5 +1,6 @@
 package io.github.amaankhan63.afk.ui.subagent
 
+import androidx.lifecycle.ViewModelStore
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ChatEvent
 import io.github.amaankhan63.afk.data.protocol.ChatKind
@@ -8,6 +9,8 @@ import io.github.amaankhan63.afk.data.protocol.SubagentStatus
 import io.github.amaankhan63.afk.data.sessions.ChatUpdate
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.chatEvent
+import io.github.amaankhan63.afk.service.ForegroundTracker
+import io.github.amaankhan63.afk.ui.holding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +37,10 @@ class SubagentViewModelTest {
         vm = SubagentViewModel(repo, "s_1", "agent-b")
     }
 
-    @After fun tearDown() = Dispatchers.resetMain()
+    @After fun tearDown() {
+        vm.onPaused()
+        Dispatchers.resetMain()
+    }
 
     /** The main thread's card for sub-agent [threadId]. */
     private fun card(
@@ -99,6 +105,25 @@ class SubagentViewModelTest {
             .tryEmit(ChatUpdate.Snapshot(listOf(chatEvent("sub-1", threadId = "agent-b"))))
 
         assertEquals(listOf(chatEvent("sub-1", threadId = "agent-b")), vm.chat.events.value)
+    }
+
+    /** The thread's session gets no notifications while the thread is on screen. */
+    @Test fun setsForegroundTrackerWhileActive() {
+        vm.onResumed()
+        assertEquals("s_1", ForegroundTracker.foregroundSessionId.value)
+
+        vm.onPaused()
+        assertNull(ForegroundTracker.foregroundSessionId.value)
+    }
+
+    @Test fun clearingReleasesTheForeground() {
+        val store = ViewModelStore()
+        val held = store.holding { SubagentViewModel(repo, "s_1", "agent-b") }
+        held.onResumed()
+
+        store.clear()
+
+        assertNull(ForegroundTracker.foregroundSessionId.value)
     }
 
     @Test fun answerGoesToTheSession() = runTest {

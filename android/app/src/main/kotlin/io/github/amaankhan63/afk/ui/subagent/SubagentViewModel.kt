@@ -8,6 +8,7 @@ import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.ChatKind
 import io.github.amaankhan63.afk.data.protocol.SubagentInfo
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
+import io.github.amaankhan63.afk.service.ForegroundTracker
 import io.github.amaankhan63.afk.ui.navigation.Routes
 import io.github.amaankhan63.afk.ui.session.asAfkError
 import io.github.amaankhan63.afk.ui.session.chat.ChatEvents
@@ -88,6 +89,19 @@ class SubagentViewModel internal constructor(
             repo.answerPending(sessionId, pendingId, choices, text, decision)
                 .onFailure { mutableErrors.tryEmit(it.asAfkError(answering = true)) }
         }
+    }
+
+    /** The thread is in front: its session's notifications are not shown. */
+    fun onResumed() {
+        ForegroundTracker.claim(this, sessionId)
+    }
+
+    fun onPaused() {
+        ForegroundTracker.release(this)
+    }
+
+    override fun onCleared() {
+        ForegroundTracker.release(this)
     }
 
     private companion object {

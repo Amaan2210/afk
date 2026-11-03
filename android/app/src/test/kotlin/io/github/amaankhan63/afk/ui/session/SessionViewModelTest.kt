@@ -47,7 +47,7 @@ class SessionViewModelTest {
     }
 
     @After fun tearDown() {
-        ForegroundTracker.set(null)
+        vm.onPaused()
         Dispatchers.resetMain()
     }
 
@@ -176,14 +176,17 @@ class SessionViewModelTest {
         assertNull(ForegroundTracker.foregroundSessionId.value)
     }
 
-    @Test fun pausingLeavesAnotherSessionInFront() {
+    @Test fun pausingLeavesAnotherScreenInFront() {
+        val thread = Any()
         vm.onResumed()
-        // The session a resume opened came to the front before this screen paused.
-        ForegroundTracker.set("s_2")
+        // A sub-agent's thread came to the front before this screen paused.
+        ForegroundTracker.claim(thread, "s_1")
 
         vm.onPaused()
 
-        assertEquals("s_2", ForegroundTracker.foregroundSessionId.value)
+        assertEquals("s_1", ForegroundTracker.foregroundSessionId.value)
+        ForegroundTracker.release(thread)
+        assertNull(ForegroundTracker.foregroundSessionId.value)
     }
 
     @Test fun selectedTabIsShown() = runTest {
