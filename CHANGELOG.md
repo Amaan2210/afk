@@ -6,8 +6,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
-The scope of 0.1.0, the first release: the service (daemon and CLI). The Android app is a
-separate, later change.
+The scope of 0.1.0, the first release: the service (daemon and CLI) and the Android app.
 
 ### Added
 
@@ -31,6 +30,16 @@ separate, later change.
   runs the daemon from logon as a Windows scheduled task.
 - README, architecture notes, and a release workflow that publishes the `afkdev` package to npm
   with provenance on a `v*` tag.
+- Android app (`android/`): pairs with the daemon by QR code over Tailscale and shows the session
+  list with filters and search, a live terminal (vendored Termux emulator with a key bar and pinch
+  zoom), a chat view where questions and permission prompts are answered in place, a sub-agent
+  thread screen, new sessions with a folder picker and launch flags, settings (laptop, themes and
+  modes, status strip, notifications, terminal), an offline banner and an About screen with the
+  bundled licences.
+- A foreground service on the phone keeps the connection alive, starts on boot when paired, and
+  posts notifications for questions, finished turns and sub-agents with up to three actions.
+- CI for the app on JDK 21, a phone QA checklist, and an `android` release job that attaches
+  `afk-<tag>.apk` to the GitHub release, signed with a keystore from secrets when present.
 
 ### Known limitations
 
@@ -47,3 +56,5 @@ separate, later change.
 - Reattaching at a different window size can redraw imperfectly until the session next paints.
 - Node.js 24.15.0 crashes intermittently in the test suite (a libuv bug); develop on 22.23.x or
   24.22 and newer.
+- Android app limitations are listed in `docs/android-follow-ups.md` and in the QA checklist's
+  Known limitations.
