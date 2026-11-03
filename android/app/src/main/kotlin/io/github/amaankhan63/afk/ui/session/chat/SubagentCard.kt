@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,10 +35,14 @@ fun SubagentCard(info: SubagentInfo, onClick: () -> Unit, modifier: Modifier = M
     Surface(
         onClick = onClick,
         // Over the card's border, and inside its corners, so the accent replaces the left edge.
-        modifier = modifier.fillMaxWidth().clip(shape).drawWithContent {
-            drawContent()
-            drawRect(accent, size = Size(ACCENT_EDGE.toPx(), size.height))
-        },
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .drawWithContent {
+                drawContent()
+                drawRect(accent, size = Size(ACCENT_EDGE.toPx(), size.height))
+            }
+            .semantics { role = Role.Button },
         shape = shape,
         color = colors.surfaceContainerLow,
         border = BorderStroke(1.dp, colors.outline)

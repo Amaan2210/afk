@@ -1,7 +1,7 @@
 name: release
 
-# A tag `vX.Y.Z` publishes the afkdev npm package. The Android plan adds a job that builds the
-# APK and attaches it to the GitHub Release for the same tag.
+# A tag `vX.Y.Z` publishes the afkdev npm package, and builds the Android APK and attaches it to
+# the GitHub Release for the same tag.
 on:
   push:
     tags: ["v*"]
@@ -41,3 +41,53 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and attach the APK
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Quoted, or YAML reads a number. Robolectric's runtime jars need 21, as in android.yml.
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      # A tag that does not name the app's version is a mistake, not a release.
+      - name: Tag matches versionName
+        run: |
+          version="v$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match versionName $version"
+            exit 1
+          fi
+      # Without the keystore secret the build signs with the runner's debug key, so the APK still
+      # installs. Only the keystore's path goes into the job's environment.
+      - name: Release keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/afk.jks"
+            echo "AFK_KEYSTORE_PATH=$RUNNER_TEMP/afk.jks" >> "$GITHUB_ENV"
+          else
+            echo "No ANDROID_KEYSTORE_B64 secret: the APK is signed with the debug key."
+          fi
+      # Gradle reads the passwords and alias only when AFK_KEYSTORE_PATH is set.
+      - run: ./gradlew :app:assembleRelease
+        env:
+          AFK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          AFK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AFK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Name the APK after the tag
+        run: mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/afk-$GITHUB_REF_NAME.apk"
+      # `uses:` steps ignore the run working-directory, so the path starts at the repo root.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/afk-${{ github.ref_name }}.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true

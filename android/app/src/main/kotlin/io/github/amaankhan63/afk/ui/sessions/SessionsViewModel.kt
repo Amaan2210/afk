@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionState
@@ -15,14 +16,17 @@ import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.sessions.StateFilter
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
@@ -32,7 +36,8 @@ import kotlinx.coroutines.launch
  * What the sessions screen shows. [sessions] is filtered, searched and ordered; [counts] counts
  * every session per state chip, whatever the filter and query; [hostname] is the laptop's name
  * from the latest `hello`; [workingSince] holds, per working session id, when it was first seen
- * working; [allSessions] is every session, unfiltered, as the repository lists them.
+ * working; [allSessions] is every session, unfiltered, as the repository lists them;
+ * [pairingHost] is the host the app was paired with.
  */
 data class SessionsUiState(
     val sessions: List<Session> = emptyList(),
@@ -43,16 +48,23 @@ data class SessionsUiState(
     val hostname: String? = null,
     val connection: ConnectionState = ConnectionState.Disconnected,
     val workingSince: Map<String, Instant> = emptyMap(),
-    val allSessions: List<Session> = emptyList()
+    val allSessions: List<Session> = emptyList(),
+    val pairingHost: String? = null
 )
 
 /** The sessions list as the screen filters and searches it, and the actions of its cards. */
 @HiltViewModel
 class SessionsViewModel internal constructor(
     private val repo: SessionsRepository,
+    pairingHost: Flow<String?> = flowOf(null),
     private val clock: () -> Instant
 ) : ViewModel() {
-    @Inject constructor(repo: SessionsRepository) : this(repo, Instant::now)
+    @Inject constructor(repo: SessionsRepository, pairingStore: PairingStore) : this(
+        repo,
+        // A pairing that cannot be read leaves the banner to say "the laptop".
+        pairingStore.pairing.catch { emit(null) }.map { it?.host },
+        Instant::now
+    )
 
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(SessionFilter())
@@ -69,6 +81,10 @@ class SessionsViewModel internal constructor(
         .scan(emptyMap<String, Instant>()) { since, sessions -> since.track(sessions, clock()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
+    // Eager, so the list never waits on the first read of the pairing.
+    private val pairedHost: StateFlow<String?> =
+        pairingHost.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val mutableErrors = MutableSharedFlow<AfkError>(extraBufferCapacity = 1)
 
     /** Failures of [kill], [rename] and [resume]. */
@@ -84,8 +100,8 @@ class SessionsViewModel internal constructor(
         combine(query, filter, ::Pair),
         repo.stats,
         repo.connection,
-        hostname
-    ) { (all, since), (q, f), stats, connection, host ->
+        combine(hostname, pairedHost, ::Pair)
+    ) { (all, since), (q, f), stats, connection, (host, paired) ->
         SessionsUiState(
             sessions = SessionOrder.sorted(
                 all.filter(f::accepts).filter { SessionSearch.matches(it, q) }
@@ -99,7 +115,8 @@ class SessionsViewModel internal constructor(
             hostname = host,
             connection = connection,
             workingSince = since,
-            allSessions = all
+            allSessions = all,
+            pairingHost = paired
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SessionsUiState())
 

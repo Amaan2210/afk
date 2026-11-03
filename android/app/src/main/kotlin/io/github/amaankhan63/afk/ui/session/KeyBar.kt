@@ -14,7 +14,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -123,7 +125,10 @@ private fun Key(key: KeyBarKey, armed: Boolean, modifier: Modifier, onClick: () 
     val colors = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
-        modifier = modifier.semantics { contentDescription = description(key, armed) },
+        modifier = modifier.semantics {
+            contentDescription = description(key, armed)
+            role = Role.Button
+        },
         shape = KEY_SHAPE,
         color = if (armed) colors.primaryContainer else colors.surfaceContainerLow,
         border = BorderStroke(1.dp, if (armed) colors.primary else colors.outline)

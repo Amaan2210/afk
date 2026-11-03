@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +57,7 @@ fun SessionCard(
             .testTag("session-${session.id}")
             .clip(shape)
             .combinedClickable(
+                role = Role.Button,
                 onLongClickLabel = "Session actions",
                 onLongClick = onLongClick,
                 onClick = onClick
@@ -73,7 +75,8 @@ fun SessionCard(
             Modifier.padding(start = AGENT_EDGE + 12.dp, end = 12.dp, top = 11.dp, bottom = 10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StateDot(session.state)
+                // The label under the name says the state; screen readers need not hear it twice.
+                StateDot(session.state, describe = false)
                 Text(
                     text = session.name,
                     modifier = Modifier.weight(1f).padding(horizontal = 6.dp),

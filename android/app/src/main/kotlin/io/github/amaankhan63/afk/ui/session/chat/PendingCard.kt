@@ -25,6 +25,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -131,7 +134,7 @@ private fun Choice(
     val palette = LocalAfkPalette.current
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button },
         shape = MaterialTheme.shapes.small,
         color = if (selected) palette.accentSoft else colors.surfaceContainerLow,
         border = BorderStroke(1.dp, if (selected) palette.accent else colors.outline)

@@ -5,7 +5,8 @@ TypeScript daemon and CLI (`afkdev`, binary `afk`) runs on your Windows laptop a
 Claude Code and Codex terminal sessions, and a native Android app connects to it over Tailscale so
 you can watch, answer and steer those sessions from your phone.
 
-**Status: the service (daemon and CLI) is built; the Android app is not yet.** Some behaviours
+**Status: the service and the Android app are both built; the app is tested by hand with the
+checklist in [docs/qa-checklist-android.md](docs/qa-checklist-android.md).** Some behaviours
 still need a check by a person on a real terminal or phone; they are listed under
 [Pending user verification](docs/notes/attach-verification.md#pending-user-verification).
 
@@ -59,9 +60,9 @@ daemon listens only on your Tailscale address and `127.0.0.1`. More in
    ```
 
 4. Pair the phone: `afk pair` prints a QR code. Scan it in the AFK app.
-5. Install the app: download the APK from
-   [GitHub Releases](https://github.com/AmaanKhan63/afk/releases) (the Android app is not released
-   yet).
+5. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
+   [GitHub Release](https://github.com/AmaanKhan63/afk/releases) and open it. When Android asks,
+   allow your browser (or file manager) to install unknown apps, then install.
 
 ## Usage
 
@@ -132,6 +133,60 @@ Do not put a `claude.cmd` earlier on `PATH` instead: sessions look up the real `
 and would find the shim. Inside AFK sessions this function is replaced by the session's own, so
 nothing loops.
 
+## Android app
+
+### Pairing
+
+Run `afk pair` on the laptop. In the app, tap **Scan QR code** and scan the code it prints; or
+type the host, port and token it prints. Tap **Test connection**, and once the app says
+"Connected to" your laptop's name, tap **Save**. The token is shown once: to pair again, run
+`afk pair` again. **Unpair** in the app's Settings forgets the laptop on the phone; to revoke the
+phone's token on the laptop as well, find it with `afk devices` and run `afk unpair <deviceId>`.
+
+### What it does
+
+- **Sessions:** every session on the laptop, updated live, with the sessions that need you first.
+  Search by name, folder or branch, and filter by state or agent. The strip at the top shows the
+  laptop's name, RAM and CPU. Long-press a session to rename, kill or resume it. While the
+  connection is down, a banner says so and the last known list stays usable.
+- **Terminal:** the session's real terminal, the same screen as the laptop window, with a key bar
+  (Esc, Tab, Ctrl, arrows, keyboard), pinch to zoom, and long-press to copy and paste.
+- **Chat:** the agent's conversation as messages, tool calls and sub-agents. Tap a sub-agent to
+  open its thread. A status strip shows the model, context, cost and more.
+- **Questions:** when an agent asks a question or for permission, a card in the chat shows the
+  choices. Tap one to answer, or **Other…** to type an answer.
+- **New session:** pick a folder on the laptop, the agent (Claude, Codex or a plain shell), its
+  flags and an optional first prompt.
+- **Settings:** the laptop's connection, keeping the laptop awake while agents work, unpairing,
+  which notifications to get, the terminal's font size and key bar, the theme, the status strip's
+  chips, and the licences.
+
+### Notifications
+
+The app keeps one connection to the laptop in a foreground service, shown as a "Connected to"
+notification, and starts it again when the phone restarts. It notifies you when a session needs
+your input (with the question's first choices, or Allow and Deny, as buttons), when an agent
+finishes its turn (with an inline Reply that sends your next prompt), and when a sub-agent
+finishes. The session you have open does not notify. Each kind can be turned off in Settings.
+For notifications to arrive while the phone sleeps, exempt the app from battery optimisation:
+see [Battery](#battery).
+
+### Themes
+
+Graphite, Ember, Aurora and Phosphor, each light or dark or following the phone, plus Dynamic
+(colours from your wallpaper, Android 12 and later). **Always dark terminal** keeps the terminal
+dark in light mode.
+
+### Screenshots
+
+Captured on a phone in Aurora, dark mode.
+
+![Sessions list](docs/screenshots/sessions.png)
+![Terminal](docs/screenshots/terminal.png)
+![Chat](docs/screenshots/chat.png)
+![A question in the chat](docs/screenshots/question.png)
+![Settings](docs/screenshots/settings.png)
+
 ## Limitations
 
 - The daemon is Windows-only for now: it depends on ConPTY, a Windows keep-awake request and a
@@ -159,8 +214,12 @@ nothing loops.
 
 ## Battery
 
-_Placeholder: battery guidance for the Android app (foreground service, exclusion from battery
-optimisation) will be added with the app._
+The app's foreground service keeps the connection open, but Android's battery optimisation can
+still stop it while the phone dozes, and some phone makers stop background apps sooner. Exempt
+AFK from battery optimisation; the app does not ask for this itself. On most phones the setting
+is under Settings → Apps → AFK → App battery usage → **Unrestricted**; on older Android versions,
+Settings → Apps → Special app access → Battery optimisation → All apps → AFK →
+**Don't optimise**. The exact path varies by phone maker.
 
 ## Documentation
 

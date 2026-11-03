@@ -7,6 +7,10 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+// The release keystore the release workflow decodes from its secrets; blank counts as unset.
+val releaseKeystore = providers.environmentVariable("AFK_KEYSTORE_PATH").orNull
+    ?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "io.github.amaankhan63.afk"
     compileSdk = 37
@@ -20,8 +24,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = releaseKeystore?.let(::file)
+            storePassword = providers.environmentVariable("AFK_KEYSTORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("AFK_KEY_ALIAS").orNull
+            keyPassword = providers.environmentVariable("AFK_KEY_PASSWORD").orNull
+        }
+    }
+
     buildTypes {
         release {
+            // Without the release keystore the APK is signed with the debug key, so it installs.
+            signingConfig = if (releaseKeystore != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

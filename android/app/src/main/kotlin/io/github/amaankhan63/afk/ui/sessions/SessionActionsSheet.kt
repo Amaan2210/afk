@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.amaankhan63.afk.data.protocol.Session
 import io.github.amaankhan63.afk.data.protocol.SessionState
@@ -109,7 +110,7 @@ private fun ActionsMenu(
 private fun Action(label: String, color: Color = Color.Unspecified, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(label, color = color) },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }

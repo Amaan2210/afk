@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -141,7 +142,7 @@ private fun AboutContent(
         SettingsGroup("Project") {
             SettingRow(
                 title = "Source",
-                modifier = Modifier.clickable(onClick = onSource),
+                modifier = Modifier.clickable(role = Role.Button, onClick = onSource),
                 note = SOURCE_URL.removePrefix("https://")
             ) {
                 Icon(

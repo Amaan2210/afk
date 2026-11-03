@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -167,7 +168,7 @@ private fun FolderRow(
                 overflow = TextOverflow.Ellipsis
             )
         },
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
         leadingContent = icon?.let { { Icon(it, contentDescription = null) } },
         trailingContent = onUse?.let { { TextButton(onClick = it) { Text("Use") } } },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)

@@ -115,7 +115,8 @@ private fun Title(session: Session, workingSince: Instant?, now: Instant) {
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StateDot(session.state)
+            // The subtitle says the state; screen readers need not hear it twice.
+            StateDot(session.state, describe = false)
             Text(
                 text = sessionSubtitle(session, workingSince, now),
                 style = MaterialTheme.typography.labelMedium,

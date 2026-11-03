@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -134,6 +135,18 @@ class SessionsViewModelTest {
         advanceTimeBy(6_000)
         collecting(vm.ui)
         assertEquals("MY-LAPTOP", vm.ui.value.hostname)
+    }
+
+    /** The banner names the paired address until the first `hello` names the laptop. */
+    @Test fun carriesThePairingHost() = runTest {
+        val pairingHost = MutableStateFlow<String?>(null)
+        val vm = SessionsViewModel(repo, pairingHost) { now }
+        collecting(vm.ui)
+        assertNull(vm.ui.value.pairingHost)
+
+        pairingHost.value = "100.84.12.9"
+        assertEquals("100.84.12.9", vm.ui.value.pairingHost)
+        assertNull(vm.ui.value.hostname)
     }
 
     @Test fun workingSinceCountsFromTheFirstWorkingObservation() = runTest {

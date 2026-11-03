@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 
 /** The app's [version], and its open-source licenses behind [onLicenses]. */
 @Composable
@@ -24,7 +25,7 @@ internal fun AboutSection(version: String, onLicenses: () -> Unit) {
         RowDivider()
         SettingRow(
             title = "About and licenses",
-            modifier = Modifier.clickable(onClick = onLicenses)
+            modifier = Modifier.clickable(role = Role.Button, onClick = onLicenses)
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
