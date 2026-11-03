@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The app's window; Compose draws everything on it. values-night holds the dark one. -->
-    <style name="Theme.Afk" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Afk" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/afk_window_light</item>
     </style>
 

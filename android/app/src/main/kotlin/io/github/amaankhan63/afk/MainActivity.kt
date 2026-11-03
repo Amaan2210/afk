@@ -16,7 +16,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -57,10 +59,14 @@ class MainActivity : ComponentActivity() {
     /** The route a notification's link asked for, until the navigation opens it. */
     private val deepLink = MutableStateFlow<String?>(null)
 
+    /** Whether the start destination is known; the splash stays until it is. */
+    private var startReady by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate, as the library requires: it ends the launch screen and swaps the
-        // splash theme for Theme.Afk.
-        installSplashScreen()
+        // splash theme for Theme.Afk. The splash stays until the first screen is known, rather
+        // than giving way to a blank frame.
+        installSplashScreen().setKeepOnScreenCondition { !startReady }
         super.onCreate(savedInstanceState)
         // Also how the keyboard's insets reach Compose below Android 15.
         enableEdgeToEdge()
@@ -92,6 +98,7 @@ class MainActivity : ComponentActivity() {
                         null
                     }
                     value = if (pairing != null) Routes.SESSIONS else Routes.PAIRING
+                    startReady = true
                 }
                 val link by deepLink.collectAsStateWithLifecycle()
                 val destination = start

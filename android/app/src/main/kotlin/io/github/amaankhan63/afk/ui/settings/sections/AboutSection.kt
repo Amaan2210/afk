@@ -22,7 +22,10 @@ internal fun AboutSection(version: String, onLicenses: () -> Unit) {
             )
         }
         RowDivider()
-        SettingRow(title = "Licenses", modifier = Modifier.clickable(onClick = onLicenses)) {
+        SettingRow(
+            title = "About and licenses",
+            modifier = Modifier.clickable(onClick = onLicenses)
+        ) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
