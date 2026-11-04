@@ -71,7 +71,7 @@ class ChatEventsTest {
 
     /**
      * The Chat page stays composed, so no new collector comes after a timeout: the subscription is
-     * made again once connected, and the error clears when the thread arrives.
+     * made again once connected, after a wait, and the error clears when the thread arrives.
      */
     @Test fun anUnansweredSubscriptionIsMadeAgainOnceConnected() = runTest {
         val timeout = AfkError(ERROR_TIMEOUT, "the daemon did not answer in time")
@@ -86,12 +86,34 @@ class ChatEventsTest {
         repo.chatFailure = null
         repo.connection.value = ConnectionState.Connected(HELLO)
         runCurrent()
+        // Not at once: the daemon may still be busy with the first subscription.
+        assertEquals(1, repo.chatSubscriptions)
+        advanceTimeBy(10_000)
+        runCurrent()
         assertEquals(2, repo.chatSubscriptions)
         assertEquals(timeout, chat.error.value)
 
         receive(ChatUpdate.Snapshot(listOf(chatEvent("e1"))))
         assertEquals(listOf(chatEvent("e1")), chat.events.value)
         assertNull(chat.error.value)
+    }
+
+    /** While the daemon stays silent, each retry waits longer: 10, 20, 40, then 60 seconds. */
+    @Test fun eachUnansweredSubscriptionWaitsLongerUpToAMinute() = runTest {
+        repo.chatFailure = AfkError(ERROR_TIMEOUT, "the daemon did not answer in time")
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        val chat = ChatEvents(repo, "s_1", scope = backgroundScope)
+        showing(chat)
+
+        val subscriptionsAfter = mutableListOf<Int>()
+        for (seconds in listOf(10, 10, 10, 40, 60, 60)) {
+            advanceTimeBy(seconds * 1_000L)
+            runCurrent()
+            subscriptionsAfter += repo.chatSubscriptions
+        }
+
+        // Seen at 10, 20, 30, 70, 130 and 190 s: retries at 10, 30, 70, 130 and 190 s.
+        assertEquals(listOf(2, 2, 3, 4, 5, 6), subscriptionsAfter)
     }
 
     /** A refusal is the daemon's answer: it is not asked again when the connection comes back. */

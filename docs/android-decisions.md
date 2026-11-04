@@ -83,7 +83,8 @@ could reasonably go the other way, the cost of switching is noted.
   emulator's (another client may have resized the PTY).
 - **The chat stream lives in a `ChatEvents` helper** shared while subscribed, with the list
   nullable until the first snapshot so the empty state never flashes. A subscribe timeout
-  retries once the connection is `Connected`; a daemon refusal does not retry.
+  retries after a wait that doubles from 10 seconds to a minute, and then once the connection is
+  `Connected`; a daemon refusal does not retry.
 
 ## Terminal
 

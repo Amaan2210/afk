@@ -307,8 +307,8 @@ These are expected. Do not file them as bugs.
   connection service has started connecting.
 - Ctrl+arrow on a hardware keyboard leaves the on-screen Ctrl armed.
 - A chat error after the daemon refuses the stream stays until the chat reconnects (leave the
-  session for more than 5 seconds); a chat that timed out retries by itself about every ten
-  seconds while the laptop stays silent. There is no Retry button.
+  session for more than 5 seconds); a chat that timed out retries by itself after 10 seconds,
+  then 20, 40 and 60 while the laptop stays silent. There is no Retry button.
 - A sub-agent's thread screen has no composer. Answer its questions with text from the session
   screen.
 - Android refuses to install an APK over the installed app when the two are signed with
