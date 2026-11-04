@@ -15,8 +15,10 @@ bug.
 - [ ] With the phone connected over USB, run `.\gradlew :app:connectedDebugAndroidTest` from
       `android/`. All the instrumented sessions-screen tests pass. Do this first: it installs
       the debug build and removes the app when it ends.
-- [ ] Build the release APK: from `android/`, run `.\gradlew :app:assembleRelease`. Without
-      `AFK_KEYSTORE_PATH` set it is signed with the debug key. Install it with
+- [ ] Build the release APK: from `android/`, run `.\gradlew :app:assembleRelease`, best with the
+      signing variables of `docs/releasing.md` step 4 set, so the build carries the release key
+      and the first release later installs over it. Without `AFK_KEYSTORE_PATH` set it is signed
+      with the debug key. Install it with
       `adb install -r app\build\outputs\apk\release\app-release.apk`. Run the rest of this
       checklist on the release build, not the debug one: R8 shrinking problems (serialization,
       OkHttp, Hilt) only show up at run time.
@@ -278,9 +280,11 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Push a tag `vX.Y.Z` that matches `versionName` in `android/app/build.gradle.kts` and the
       service's `package.json`. The release workflow's `android` job passes its "Tag matches
       versionName" step and attaches `afk-vX.Y.Z.apk` to the GitHub Release for the tag.
-- [ ] Uninstall AFK first (this forgets the pairing), install the CI APK, then pair again: on the
-      phone, download that APK and open it, allowing the browser to install unknown apps when
-      asked. It installs and runs, and pairing works as above.
+- [ ] Install the CI APK: on the phone, download that APK and open it, allowing the browser to
+      install unknown apps when asked. Over a QA build signed with the same release key it
+      installs in place and the pairing survives; over a debug-signed build, uninstall AFK
+      first (this forgets the pairing) and pair again. It installs and runs, and pairing works
+      as above.
 - [ ] With the four repository secrets `ANDROID_KEYSTORE_B64` (the keystore file in base64),
       `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` set,
       `apksigner verify --print-certs` on the released APK shows your release certificate, not
