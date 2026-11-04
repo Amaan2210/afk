@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -47,11 +48,15 @@ import io.github.amaankhan63.afk.ui.settings.sections.TerminalSection
 fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Unit = {}) {
     val viewModel: SettingsViewModel = hiltViewModel()
     val state by viewModel.ui.collectAsStateWithLifecycle()
-    val saveFailures by viewModel.saveFailures.collectAsStateWithLifecycle()
+    val fontSaveFailures by viewModel.fontSaveFailures.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var confirmUnpair by rememberSaveable { mutableStateOf(false) }
+    val leave by rememberUpdatedState(onUnpaired)
     LaunchedEffect(viewModel) {
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.unpaired.collect { leave() }
     }
     Scaffold(
         topBar = {
@@ -92,7 +97,7 @@ fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Un
             TerminalSection(
                 fontSizeSp = settings.terminalFontSp,
                 keyBar = settings.keyBar,
-                saveFailures = saveFailures,
+                fontSaveFailures = fontSaveFailures,
                 onFontSize = viewModel::setFontSize,
                 onKeyBar = viewModel::setKeyBar
             )
@@ -104,7 +109,7 @@ fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Un
             hostname = state.hostname,
             onConfirm = {
                 confirmUnpair = false
-                viewModel.unpair(onUnpaired)
+                viewModel.unpair()
             },
             onDismiss = { confirmUnpair = false }
         )

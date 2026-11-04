@@ -74,10 +74,15 @@ class SettingsViewModel internal constructor(
      */
     val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
 
-    private val mutableSaveFailures = MutableStateFlow(0)
+    private val unpairedEvents = Channel<Unit>(Channel.BUFFERED)
 
-    /** How many settings could not be saved; the screen drops edits it shows but did not save. */
-    val saveFailures: StateFlow<Int> = mutableSaveFailures.asStateFlow()
+    /** The laptop was forgotten and the connection service stopped: the screen leaves. */
+    val unpaired: Flow<Unit> = unpairedEvents.receiveAsFlow()
+
+    private val mutableFontSaveFailures = MutableStateFlow(0)
+
+    /** Font sizes that could not be saved, counted; the slider drops a size it did not save. */
+    val fontSaveFailures: StateFlow<Int> = mutableFontSaveFailures.asStateFlow()
 
     // Unpairing lasts past a success: the screen is leaving.
     private var unpairing = false
@@ -113,8 +118,9 @@ class SettingsViewModel internal constructor(
     fun setNotif(change: (NotificationPrefs) -> NotificationPrefs) =
         save { it.copy(notifications = change(it.notifications)) }
 
-    fun setFontSize(sp: Int) =
-        save { it.copy(terminalFontSp = sp.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP)) }
+    fun setFontSize(sp: Int) = save(onFailure = { mutableFontSaveFailures.update { it + 1 } }) {
+        it.copy(terminalFontSp = sp.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP))
+    }
 
     fun setKeyBar(on: Boolean) = save { it.copy(keyBar = on) }
 
@@ -132,10 +138,10 @@ class SettingsViewModel internal constructor(
     }
 
     /**
-     * Forgets the laptop: clears the pairing, stops the connection service, then calls [onDone].
-     * Ignored while an unpair is under way.
+     * Forgets the laptop: clears the pairing, stops the connection service, then sends
+     * [unpaired]. Ignored while an unpair is under way.
      */
-    fun unpair(onDone: () -> Unit) {
+    fun unpair() {
         if (unpairing) return
         unpairing = true
         viewModelScope.launch {
@@ -147,17 +153,20 @@ class SettingsViewModel internal constructor(
                 return@launch
             }
             stopService(context)
-            onDone()
+            unpairedEvents.trySend(Unit)
         }
     }
 
-    /** Saves [transform] of the settings as saved, so changes made in quick succession all hold. */
-    private fun save(transform: (AppSettings) -> AppSettings) {
+    /**
+     * Saves [transform] of the settings as saved, so changes made in quick succession all hold.
+     * When they cannot be saved, [onFailure] runs and then the failure is reported.
+     */
+    private fun save(onFailure: () -> Unit = {}, transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch {
             try {
                 store.update(transform)
             } catch (e: IOException) {
-                mutableSaveFailures.update { it + 1 }
+                onFailure()
                 errorEvents.trySend(AfkError(ERROR_NOT_SAVED, NOT_SAVED))
             }
         }

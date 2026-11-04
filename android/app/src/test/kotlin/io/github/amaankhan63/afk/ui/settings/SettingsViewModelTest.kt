@@ -105,11 +105,19 @@ class SettingsViewModelTest {
         assertEquals(true, vm.ui.value.keepAwake)
     }
 
+    /** Records "done" each time [vm] says the laptop was forgotten, as the screen listens. */
+    private fun TestScope.recordingUnpaired(vm: SettingsViewModel) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.unpaired.collect { events += "done" }
+        }
+    }
+
     @Test fun unpairClearsStoreAndStopsService() = runTest {
         pairingStore.save(pairing)
         val vm = viewModel()
+        recordingUnpaired(vm)
 
-        vm.unpair { events += "done" }
+        vm.unpair()
 
         assertNull(pairingStore.pairing.first())
         assertEquals(listOf("stop after clear", "done"), events)
@@ -119,21 +127,22 @@ class SettingsViewModelTest {
         pairingStore.save(pairing)
         val vm = viewModel()
         val errors = errorsOf(vm)
+        recordingUnpaired(vm)
         dataStore.failWrites = true
 
-        vm.unpair { events += "done" }
+        vm.unpair()
 
         assertEquals(listOf("Could not unpair; try again"), errors.map { it.message })
         assertEquals(emptyList<String>(), events)
         assertEquals(pairing, pairingStore.pairing.first())
 
         dataStore.failWrites = false
-        vm.unpair { events += "done" }
+        vm.unpair()
         assertEquals(listOf("stop after clear", "done"), events)
     }
 
-    /** The slider drops a size it could not save when [SettingsViewModel.saveFailures] moves. */
-    @Test fun settingThatCannotBeSavedIsReportedAndCounted() = runTest {
+    /** The slider drops an unsaved size when [SettingsViewModel.fontSaveFailures] moves. */
+    @Test fun aFontSizeThatCannotBeSavedIsReportedAndCounted() = runTest {
         val vm = viewModel()
         val errors = errorsOf(vm)
         dataStore.failWrites = true
@@ -141,7 +150,19 @@ class SettingsViewModelTest {
         vm.setFontSize(15)
 
         assertEquals(listOf("The setting could not be saved"), errors.map { it.message })
-        assertEquals(1, vm.saveFailures.value)
+        assertEquals(1, vm.fontSaveFailures.value)
+    }
+
+    /** Another setting that cannot be saved is reported, but does not move the slider. */
+    @Test fun anotherSettingThatCannotBeSavedLeavesTheFontCountAlone() = runTest {
+        val vm = viewModel()
+        val errors = errorsOf(vm)
+        dataStore.failWrites = true
+
+        vm.setKeyBar(true)
+
+        assertEquals(listOf("The setting could not be saved"), errors.map { it.message })
+        assertEquals(0, vm.fontSaveFailures.value)
     }
 
     @Test fun laptopComesFromHelloElseFromThePairing() = runTest {
