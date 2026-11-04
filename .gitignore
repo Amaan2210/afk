@@ -19,3 +19,7 @@ Thumbs.db
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Signing keys: never committed, wherever they are put
+*.jks
+*.keystore
