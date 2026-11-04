@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -71,10 +72,9 @@ class AfkConnectionService : Service() {
                 }
             }
         }
-        scope.launch {
-            val shown = NotificationManagerCompat.from(this@AfkConnectionService)
-            cancelAnsweredPrompts(repo.sessions, shown::cancel)
-        }
+        val shown = NotificationManagerCompat.from(this)
+        scope.launch { cancelAnsweredPrompts(repo.sessions, shown::cancel) }
+        scope.launch { cancelOnScreen(ForegroundTracker.foregroundSessionId, shown::cancel) }
         scope.launch { followPairing(pairingStore.pairingOrNone, manager, ::stopSelf) }
         scope.launch {
             // A pairing that cannot be read leaves a failure to say "the laptop".
@@ -173,6 +173,24 @@ internal suspend fun cancelAnsweredPrompts(
             }
         }
         waiting = now
+    }
+}
+
+/**
+ * Cancels, through [cancel], both notifications of a session as its screen comes to the front
+ * ([foreground], see [ForegroundTracker]): the user is looking at the session, so a question or an
+ * end it was told of is old news, and the Open button of a notification does not remove it by
+ * itself. The session's own notification has no tag; the one for its sub-agents has
+ * [NotificationActions.SUBAGENT_TAG].
+ */
+internal suspend fun cancelOnScreen(
+    foreground: Flow<String?>,
+    cancel: (tag: String?, notificationId: Int) -> Unit
+) {
+    foreground.filterNotNull().collect { sessionId ->
+        val id = NotificationActions.notificationId(sessionId)
+        cancel(null, id)
+        cancel(NotificationActions.SUBAGENT_TAG, id)
     }
 }
 

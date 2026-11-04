@@ -56,7 +56,9 @@ could reasonably go the other way, the cost of switching is noted.
 - **The foreground tracker is owner-based.** The session screen and its sub-agent thread screen
   both claim the same session id; the most recent live claim wins and out-of-order release is
   safe (predictive back can pause the session screen after the thread resumed). The notifier
-  suppresses notifications for the current claim.
+  suppresses notifications for the current claim, and the service cancels both of a session's
+  notifications whenever its screen comes to the front: Open buttons do not auto-cancel, and
+  nothing else ever removed a sub-agent notification.
 - **The notification icon is the white launcher glyph** (`ic_stat_afk`); the launcher icon is a
   vector adaptive icon with a monochrome layer, no PNG mipmaps. A Robolectric test inflates every
   icon because release lint does not fail on a malformed vector path.

@@ -87,6 +87,9 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] No notification arrives for the session you have open on screen. Open a session, make it
       finish: no notification. Go back to the list, make it finish again: the notification
       arrives.
+- [ ] Tap **Open** on a notification. The session opens and the notification goes away, and so
+      does a sub-agent notification for the same session if one is showing. Opening the session
+      from the list clears them the same way.
 - [ ] Settings → Notifications: turn off **Finished**. Finished notifications stop, and the
       other kinds still arrive. Turn it back on.
 - [ ] Restart the phone. Without opening the app, the "Connected to …" notification comes back

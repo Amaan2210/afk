@@ -18,7 +18,9 @@ import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.FakeConnectionManager
 import io.github.amaankhan63.afk.data.sessions.FakeSessionsRepository
 import io.github.amaankhan63.afk.data.sessions.session
+import io.github.amaankhan63.afk.data.settings.NotificationPrefs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -124,16 +126,41 @@ class AfkConnectionServiceTest {
         assertEquals(listOf(NotificationActions.notificationId("s_2")), cancelled)
     }
 
-    /** With Sub-agents on, a sub-agent's end shows beside the session's question, not over it. */
+    /** Opening a session's screen takes its notifications with it: the user is looking at it. */
+    @Test fun aSessionComingToTheFrontTakesItsNotificationsWithIt() = runTest {
+        val foreground = MutableStateFlow<String?>(null)
+        val cancelled = mutableListOf<Pair<String?, Int>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            cancelOnScreen(foreground) { tag, id -> cancelled += tag to id }
+        }
+        assertEquals(emptyList<Pair<String?, Int>>(), cancelled)
+
+        foreground.value = "s_1"
+
+        val id = NotificationActions.notificationId("s_1")
+        val both = listOf(null to id, NotificationActions.SUBAGENT_TAG to id)
+        assertEquals(both, cancelled)
+
+        // Leaving cancels nothing; coming back cancels what arrived meanwhile.
+        cancelled.clear()
+        foreground.value = null
+        assertEquals(emptyList<Pair<String?, Int>>(), cancelled)
+        foreground.value = "s_1"
+        assertEquals(both, cancelled)
+    }
+
+    /**
+     * With Sub-agents on, a sub-agent's end shows beside the session's question, not over it. The
+     * notifications are built as the service builds them, so the tag comes from the notifier.
+     */
     @Test fun aSubAgentsEndKeepsTheQuestionsNotification() {
         shadowOf(context as Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         NotificationChannels.ensure(context)
         val posted = ConnectionNotification(context)
+        val notifier = SessionNotifier(context) { NotificationPrefs(subagents = true) }
         fun post(event: String) {
             val n = ServerMessage.Notify(event, "s_1", "app", "app: $event", "body")
-            val notification = NotificationCompat.Builder(context, NotificationChannels.FINISHED)
-                .setContentTitle(n.title)
-                .build()
+            val notification = checkNotNull(notifier.build(n)) { "no notification for $event" }
             val id = NotificationActions.notificationId(n.sessionId)
             posted.post(id, notification, NotificationActions.notificationTag(n))
         }
