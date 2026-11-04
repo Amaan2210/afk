@@ -47,14 +47,15 @@ backticks.
    The `npm` job needs `NPM_TOKEN` as well: an npm granular access token allowed to publish
    `afkdev`.
 
-4. **Check the signature locally** if you want to. In a fresh shell that you close afterwards,
-   from `android/`:
+4. **Check the signature locally** if you want to. In a fresh PowerShell window that you close
+   afterwards, from `android/`. `Read-Host` asks for the password on the spot, so it never goes
+   into the shell's history file:
 
    ```powershell
    $env:AFK_KEYSTORE_PATH = "$env:USERPROFILE\afk-release.jks"
    $env:AFK_KEY_ALIAS = "afk"
-   $env:AFK_KEYSTORE_PASSWORD = "<keystore password>"
-   $env:AFK_KEY_PASSWORD = "<key password>"
+   $env:AFK_KEYSTORE_PASSWORD = Read-Host "Keystore password"
+   $env:AFK_KEY_PASSWORD = $env:AFK_KEYSTORE_PASSWORD
    .\gradlew :app:assembleRelease
    & "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0\apksigner.bat" verify --print-certs `
      app\build\outputs\apk\release\app-release.apk
@@ -63,7 +64,9 @@ backticks.
    The last line of the output names your certificate, `CN=AFK, O=AmaanKhan63`, not
    `CN=Android Debug`. Without the four variables the same command signs with the debug key, as
    CI does when the secrets are missing; the release job then prints a warning, and that APK will
-   not install over a build signed with the real key.
+   not install over a build signed with the real key. The APK this step leaves behind carries the
+   release key, so it is the right build to install for the QA pass: the first release then
+   installs over it without losing the pairing.
 
 ## Every release
 
