@@ -234,8 +234,11 @@ class SessionViewModelTest {
         vm.detachTerminal()
     }
 
-    /** Leaving the screen for good ends the terminal's subscription and its claim to the front. */
-    @Test fun clearingDetachesTheTerminalAndReleasesTheForeground() {
+    /**
+     * Leaving the screen for good ends the terminal's subscription (clearing cancels the scope it
+     * runs in; [TerminalBridgeTest] covers detach itself) and its claim to the front.
+     */
+    @Test fun clearingEndsTheTerminalAndReleasesTheForeground() {
         repo.connection.value = ConnectionState.Connected(HELLO)
         val store = ViewModelStore()
         val held = store.holding { SessionViewModel(repo, "s_1") }

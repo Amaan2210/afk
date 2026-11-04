@@ -1,7 +1,8 @@
 package io.github.amaankhan63.afk.data.protocol
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -63,11 +64,13 @@ class MessagesTest {
         assertTrue(s.contains(""""protocol":1"""))
     }
 
+    /** The kinds of answer not given are left out, not sent as null. */
     @Test
-    fun pendingAnswerOmitsNulls() {
+    fun pendingAnswerCarriesOnlyTheAnswerGiven() {
         val s = AfkJson.encodeClient(
             ClientMessage.PendingAnswer("r1", "s_1", "q1", choiceIndices = listOf(0))
         )
-        assertFalse(s.contains("null"))
+        val keys = Json.parseToJsonElement(s).jsonObject.keys
+        assertEquals(setOf("type", "id", "sessionId", "pendingId", "choiceIndices"), keys)
     }
 }
