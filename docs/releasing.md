@@ -13,6 +13,10 @@ identity for everyone who installed it. If it is lost, every user has to uninsta
 which forgets their pairing. Keep the keystore outside the repository, back it up somewhere
 private, and never commit it. The repository secrets are the only copy CI sees.
 
+The commands below are PowerShell. From a cmd window, type `powershell` first. The keytool line
+also works in cmd on one line, with `%USERPROFILE%` in place of `$env:USERPROFILE` and no
+backticks.
+
 1. **Create the keystore** with `keytool` from the Android Studio JDK. It asks for a keystore
    password; pick one in a password manager first. At the key password prompt press Enter: the
    keystore is PKCS12, the JDK default, and a PKCS12 key cannot have a password of its own, so
