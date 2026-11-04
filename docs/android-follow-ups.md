@@ -9,8 +9,9 @@ they need.
 
 - **Release signing.** Without the `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
   `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets, the release job signs with the runner's
-  throwaway debug key, so one release APK will not install over another. Add the secrets before
-  the first real tag. The job refuses a tag that does not match `versionName` (`0.1.0`).
+  throwaway debug key, so one release APK will not install over another. Create the keystore and
+  add the secrets before the first real tag, as `docs/releasing.md` describes. The job refuses a
+  tag that does not match `versionName` (`0.1.0`).
 - **Phone QA.** `docs/qa-checklist-android.md` is the hand-over; the five README screenshots
   (`docs/screenshots/*.png`, Aurora dark) are captured during it.
 
