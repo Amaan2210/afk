@@ -1,11 +1,11 @@
 # Android app: follow-ups, deferred items and known limitations
 
-State as of `main` after the Android plan landed (2026-11-03). Everything here was found by the
-per-task reviews, the final whole-branch review or its re-review and was judged not worth another
-fix round before phone QA: none of it is user-visible in normal use. Items are grouped by what
-they need.
+State as of `main` on 2026-11-04. Everything here was found by the per-task reviews, the final
+whole-branch review or its re-review. The items judged not worth a fix round before phone QA were
+worked through afterwards, one at a time: what was fixed, what was kept and why, and what only a
+phone can judge. Items are grouped by what they need.
 
-## Needs a decision
+## Needs your action
 
 - **Release signing.** Without the `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
   `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets, the release job signs with the runner's
@@ -15,42 +15,48 @@ they need.
 - **Phone QA.** `docs/qa-checklist-android.md` is the hand-over; the five README screenshots
   (`docs/screenshots/*.png`, Aurora dark) are captured during it.
 
-## Follow-ups in code
+## Fixed after the final review
 
-1. **Chat retry cadence.** After a subscribe timeout, `ChatEvents` waits for the connection to be
-   `Connected` and retries; while connected that is immediate, so the chat re-subscribes about
-   every ten seconds for as long as the daemon stays silent and the page is shown. Bounded by the
-   request timeout, but not tied to a reconnect as the KDoc says. Consider waiting for a real
-   reconnect, or a backoff.
-2. **Unpair still hands the screen a callback.** `SettingsViewModel.unpair(onDone)` is the pattern
-   the fix wave removed from resume and create; a rotation during unpair calls the old screen's
-   lambda. Emit an event instead.
-3. **"Open" action buttons do not dismiss their notification.** Only a tap on the body does. This
-   now also applies to the separate sub-agent notification, which nothing cancels.
-4. **Answering a question can cancel an older "finished" notification** for the same session if
-   it is still in the tray (the cancel keys on the session, not the prompt). Acceptable today; a
-   per-prompt tag would fix it.
-5. **Send is held while a permission prompt waits.** Correct (Enter would confirm whatever the
-   prompt highlights), but a pending the daemon never clears would leave the composer refusing to
-   send. The key bar and the cards still work.
-6. **No current-loop guard in `DefaultConnectionManager`.** `stop()` writes Disconnected and the
-   cancelled loop's `finally` writes it again; a replacing `start()` passes through Connecting by
-   design. Cosmetic.
-7. **Frame decoding on the default dispatcher.** `flowOn(Default)` is unmeasured; an undecodable
-   snapshot leaves the terminal blank until re-attach (needs a daemon bug first).
-8. **The font slider resets on any failed settings save**, not only a failed font save
-   (`TerminalSection` keys on the shared failure counter). Rare, cosmetic.
-9. **Test wording nits** and the `ServerMessage.Error` name shadowing `kotlin.Error`; a
-   refactor-only note on the connection manager's request map.
-10. **Four files are over 200 lines:** `DefaultSessionsRepository`, `SessionViewModel`,
-    `SessionScreen`, `SettingsViewModel`. Mechanical splits.
-11. **Two tests are weaker than their names:** the "detaches" half of
-    `clearingDetachesTheTerminalAndReleasesTheForeground` passes without the detach because
-    cancelling the scope stops the terminal anyway; `aSubAgentsEndKeepsTheQuestionsNotification`
-    builds its notifications by hand rather than through `SessionNotifier`.
-12. **Judge in QA:** terminal contrast of some palette tokens; the offline banner's live region
-    announcing every reconnect attempt (backoff up to a minute); a very fast second tap on Start
-    while the app is already moving to the new session.
+1. **Third-party licences.** The About screen credits every bundled library, from a Kotlin list,
+   with the Apache License 2.0 text shown once.
+2. **Chat retry cadence.** After a subscribe timeout the chat waits 10 seconds, then 20, 40 and
+   60, and only then for the connection; before, while connected, it asked a silent daemon again
+   every timeout.
+3. **Unpair reports through an event**, not a callback the screen handed in, so a rotation during
+   the unpair cannot call into the old screen.
+4. **Open buttons and sub-agent notifications.** A session coming to the front cancels both of its
+   notifications, so Open removes the notification it was on, and the sub-agent notification goes
+   when the session is opened. This also removes the case where answering a question could cancel
+   an older "finished" notification: such a notification only outlives a question while the
+   session is on screen, which now clears it first.
+5. **The font slider resets only when a font size could not be saved**, not on any failed save.
+6. **Two tests say what they prove:** the clearing test no longer claims to test detach (the
+   bridge tests do), and the pending-answer test checks the exact JSON keys, not the absence of
+   the word "null". The sub-agent tag test builds its notifications through the notifier.
+
+## Kept as is
+
+- **Send stays held while a permission prompt waits.** Enter would confirm whatever the prompt
+  highlights. A pending the daemon never clears would leave the composer refusing to send, but
+  that needs a daemon bug first, and the key bar and the cards still work.
+- **No current-loop guard in `DefaultConnectionManager`.** `stop()` writes Disconnected and the
+  cancelled loop's `finally` writes it again, but a `StateFlow` drops a value equal to the current
+  one, so no collector sees two. A replacing `start()` passes through Connecting by design.
+- **Frame decoding on the default dispatcher** is unmeasured but costs nothing to keep; an
+  undecodable snapshot leaving the terminal blank until re-attach needs a daemon bug first.
+- **`ServerMessage.Error` shadows `kotlin.Error`.** It is only ever written qualified; renaming a
+  protocol model for a name clash that never bites is churn.
+- **Files over 200 lines** (`DefaultSessionsRepository` 324, `SessionViewModel` 232,
+  `SettingsViewModel` 219, `AboutScreen` 211, `SessionScreen` 208). The bar was a review
+  heuristic, not a project rule, and no split improves cohesion: the repository's subscription
+  ref-counting, relay and session reduction are one mechanism, and the view models are one
+  screen's state each. Worth a mechanical commit only if the files keep growing.
+
+## Judge in QA
+
+- Terminal contrast of some palette tokens.
+- The offline banner's live region announcing every reconnect attempt (backoff up to a minute).
+- A very fast second tap on Start while the app is already moving to the new session.
 
 ## Known limitations
 
@@ -66,7 +72,7 @@ Documented in the checklist so they are not filed as bugs:
 - A momentary "Not connected" banner on a cold start, before the service starts connecting.
 - Ctrl+arrow on a hardware keyboard leaves the on-screen Ctrl armed.
 - A chat error after the daemon refuses the stream stays until the chat reconnects; a timed-out
-  chat retries by itself. There is no Retry button.
+  chat retries by itself, waiting longer each time. There is no Retry button.
 - A sub-agent's thread screen has no composer; free-text answers to its questions are typed from
   the session screen.
 - Any APK signed with a different key refuses to install over the existing app (a CI build over a

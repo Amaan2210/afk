@@ -17,7 +17,11 @@ could reasonably go the other way, the cost of switching is noted.
   handshake rejections (`unauthorized`, `protocol_mismatch`) end the connection as `Failed`; they
   also fail every pending request with a typed error.
 - **A frame that fails to decode is dropped and surfaced as a decode-failure event;** the socket
-  stays open. No `android.util.Log` in connection classes, which keeps JVM tests clean.
+  stays open. No `android.util.Log` in connection classes, which keeps JVM tests clean. Frames
+  are decoded on the default dispatcher, unmeasured; it costs nothing to keep.
+- **The connect loop has no current-loop guard.** `stop()` writes Disconnected and the cancelled
+  loop's `finally` writes it again, but a `StateFlow` drops a value equal to its current one, so
+  collectors see one. A replacing `start()` passes through Connecting on purpose.
 - **One OkHttp client with a 30-second ping** detects dead connections; the connection factory
   takes a coroutine scope so each pairing test connection owns and cancels its collectors.
 - **Pairing payloads are validated where entered:** a port outside 1..65535 and a blank host or
@@ -105,7 +109,9 @@ could reasonably go the other way, the cost of switching is noted.
   inline markers stay literal, code spans are split before other inline formatting.
 - **While a free-text question is pending, Send answers it on both tabs;** the agent is blocked,
   terminal text is ignored and Enter would confirm the first option. While a choices-only
-  question or a permission is pending, Send does nothing and shows a hint.
+  question or a permission is pending, Send does nothing and shows a hint. That hold is kept even
+  though a pending the daemon never cleared would leave the composer refusing to send: that needs
+  a daemon bug first, and the key bar and the cards still work.
 - **"Other…" only focuses the composer** and is hidden for multi-select questions and on the
   thread screen (no composer there). Answered single-select cards disable their options.
 - **Auto-follow uses a pinned flag that only user drags change;** new rows jump rather than
@@ -161,6 +167,9 @@ could reasonably go the other way, the cost of switching is noted.
 - **Tests fake at the interface boundaries** and run on the JVM; the terminal bridge, icons and
   receivers run under Robolectric; the single Compose UI test is compiled in CI and run on a phone
   during QA. Fixtures use the hostname MY-LAPTOP.
+- **No file-length rule.** The reviews flagged files over 200 lines as a heuristic; the five that
+  are over it (the sessions repository, two view models, two screens) each hold one mechanism or
+  one screen's state, and a split for the number alone would scatter them.
 - **The release job tests before it builds**, checks the tag against `versionName`, signs with the
   keystore from secrets when present and the debug key otherwise, and attaches `afk-<tag>.apk` to
   the GitHub release.
