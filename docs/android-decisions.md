@@ -142,6 +142,12 @@ could reasonably go the other way, the cost of switching is noted.
   says the laptop still lists the phone until `afk unpair` runs there.
 - **The About screen loads the licence texts from assets off the main thread** and credits both
   vendored directories in one notice; the Settings row is "About and licenses".
+- **Every other bundled library is credited from a Kotlin list, not an asset manifest:** name,
+  owner and a source link per library, so a unit test can check the entries. All of them are
+  under the Apache License 2.0, so its text is packaged once (`licenses/APACHE-2.0.txt`) and
+  shown once, under the library rows. Test and debug-only dependencies do not ship and are not
+  listed. Okio and ZXing core are listed although they arrive transitively, because they are in
+  the APK.
 
 ## Build, tests and CI
 

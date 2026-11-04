@@ -47,22 +47,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Termux's notice and the Apache License 2.0 it is released under, as packaged in assets. */
+/** Termux's notice, and the Apache License 2.0 that it and every bundled library are under. */
 internal const val TERMUX_NOTICE = "licenses/NOTICE.txt"
-internal const val TERMUX_LICENSE = "licenses/TERMUX-LICENSE.txt"
+internal const val APACHE_LICENSE = "licenses/APACHE-2.0.txt"
 
 private const val SOURCE_URL = "https://github.com/AmaanKhan63/afk"
+private const val APACHE = "Apache License 2.0"
+private const val UNREADABLE = "The license text could not be read."
 
-/** The notice, then the license, as the About screen shows them. Off the main thread: it blocks. */
-internal fun readTermuxLicenses(assets: AssetManager): String =
-    listOf(TERMUX_NOTICE, TERMUX_LICENSE).joinToString("\n\n") { path ->
-        assets.open(path).bufferedReader().use { it.readText() }
-    }
+/** The two licence texts the About screen shows, as packaged in assets. */
+internal data class LicenseTexts(val termuxNotice: String, val apacheLicense: String)
+
+/** Reads both texts. Off the main thread: it blocks. */
+internal fun readLicenseTexts(assets: AssetManager): LicenseTexts {
+    fun read(path: String) = assets.open(path).bufferedReader().use { it.readText() }
+    return LicenseTexts(termuxNotice = read(TERMUX_NOTICE), apacheLicense = read(APACHE_LICENSE))
+}
 
 /**
- * About: the app's name and version, a link to its source, and its licenses: AFK's own (MIT) and
- * the Apache License 2.0 of the Termux terminal emulator it includes, whose notice and license
- * text it shows in full.
+ * About: the app's name and version, a link to its source, and its licenses: AFK's own (MIT),
+ * the Termux terminal emulator it includes, with Termux's notice, every other bundled library
+ * with its owner and a link to its source, and the Apache License 2.0 they are all under, in
+ * full.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,13 +77,13 @@ fun AboutScreen(onBack: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    // Null while it is read.
-    val termux by produceState<String?>(initialValue = null) {
+    // Null while they are read.
+    val texts by produceState<LicenseTexts?>(initialValue = null) {
         value = withContext(Dispatchers.IO) {
             try {
-                readTermuxLicenses(assets)
+                readLicenseTexts(assets)
             } catch (e: IOException) {
-                "The license text could not be read."
+                LicenseTexts(termuxNotice = UNREADABLE, apacheLicense = UNREADABLE)
             }
         }
     }
@@ -96,11 +102,11 @@ fun AboutScreen(onBack: () -> Unit) {
     ) { padding ->
         AboutContent(
             version = BuildConfig.VERSION_NAME,
-            termux = termux,
-            onSource = {
+            texts = texts,
+            onOpen = { url ->
                 // Throws when no app on the phone opens web links.
                 try {
-                    uriHandler.openUri(SOURCE_URL)
+                    uriHandler.openUri(url)
                 } catch (e: IllegalArgumentException) {
                     scope.launch { snackbar.showSnackbar("No app here opens web links") }
                 }
@@ -113,8 +119,8 @@ fun AboutScreen(onBack: () -> Unit) {
 @Composable
 private fun AboutContent(
     version: String,
-    termux: String?,
-    onSource: () -> Unit,
+    texts: LicenseTexts?,
+    onOpen: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
@@ -140,24 +146,48 @@ private fun AboutContent(
             )
         }
         SettingsGroup("Project") {
-            SettingRow(
+            LinkRow(
                 title = "Source",
-                modifier = Modifier.clickable(role = Role.Button, onClick = onSource),
-                note = SOURCE_URL.removePrefix("https://")
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = colors.onSurfaceVariant
-                )
-            }
+                note = SOURCE_URL.removePrefix("https://"),
+                onClick = { onOpen(SOURCE_URL) }
+            )
         }
         SettingsGroup("Licenses") {
             SettingRow(title = "AFK", note = "MIT")
             RowDivider()
-            SettingRow(title = "Terminal emulator", note = "Termux (Apache License 2.0)")
-            if (termux != null) LicenseText(termux)
+            SettingRow(title = "Terminal emulator", note = "Termux ($APACHE)")
+            if (texts != null) LicenseText(texts.termuxNotice)
         }
+        SettingsGroup("Libraries") {
+            THIRD_PARTY_LIBRARIES.forEachIndexed { index, library ->
+                if (index > 0) RowDivider()
+                LinkRow(
+                    title = library.name,
+                    note = "${library.owner} · $APACHE",
+                    onClick = { onOpen(library.url) }
+                )
+            }
+        }
+        SettingsGroup(APACHE) {
+            SettingRow(title = "Full text", note = "Covers the terminal emulator and the libraries")
+            if (texts != null) LicenseText(texts.apacheLicense)
+        }
+    }
+}
+
+/** A row that opens a link: [title] over [note], a chevron at the end, a button to TalkBack. */
+@Composable
+private fun LinkRow(title: String, note: String, onClick: () -> Unit) {
+    SettingRow(
+        title = title,
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
+        note = note
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

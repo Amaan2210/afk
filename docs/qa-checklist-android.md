@@ -208,8 +208,10 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       connection is back.
 - [ ] Settings → Terminal: the font size and **Key bar** change the terminal at once.
 - [ ] Settings → Status strip: a chip you turn off disappears from the session screen's strip.
-- [ ] Settings → About and licenses opens a screen with the version, the source link and the
-      Termux licence text. **Source** opens the repository in the browser.
+- [ ] Settings → About and licenses opens a screen with the version, the source link, the Termux
+      notice, a **Libraries** list (AndroidX, Dagger and Hilt, Kotlin, OkHttp, Okio, ZXing and
+      others) and the Apache License 2.0 text once, after the list. **Source** opens the
+      repository in the browser; a library row opens that library's source.
 - [ ] Settings → Laptop → **Unpair**. The confirmation says the laptop still lists this phone
       until you run `afk unpair` there. Confirm. The app returns to the pairing screen, and
       the "Connected to …" notification disappears because the service has stopped. On the

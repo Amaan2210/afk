@@ -7,9 +7,6 @@ they need.
 
 ## Needs a decision
 
-- **Third-party licences.** The About screen credits only Termux (Apache-2.0). AndroidX, OkHttp and
-  zxing-android-embedded are bundled too, all Apache-2.0. A `licenses/` asset list and a loop in
-  `AboutScreen` would show them all.
 - **Release signing.** Without the `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
   `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets, the release job signs with the runner's
   throwaway debug key, so one release APK will not install over another. Add the secrets before
