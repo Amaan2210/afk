@@ -54,6 +54,7 @@ AFK is the phone app and the laptop service that solve all four, built well enou
 ### Future (explicitly deferred, keep the design open to them)
 
 - A "changes" / git-diff tab: what the agent touched, tap a file to read it. Deferred; for now the user asks the agent instead.
+- Resilience to Claude Code / Codex updates: the Chat tab and session state read the agents' own transcript and rollout files, whose format is not a public contract. Add a format-change check (a self-test against the installed agent version, a visible "chat unavailable, terminal still works" fallback instead of silent wrong output) and fall back to the terminal.
 - Voice: dictate prompts, read summaries aloud.
 - Session replay: scrub back through recorded terminal output.
 - Multi-laptop: pair more than one machine.
