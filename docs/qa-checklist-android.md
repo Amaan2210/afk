@@ -19,6 +19,8 @@ bug.
       `android/` run `.\install-on-phone.ps1`. It asks for the keystore's password, builds, and
       installs. The APK it builds is `android\app\build\outputs\apk\release\app-release.apk`.
       Without a keystore (`docs/releasing.md`) it is signed with the debug key.
+      Without a cable: run `.\install-on-phone.ps1 -BuildOnly`, send that APK to the phone and
+      tap it there.
       If the install is refused, the script offers to remove the AFK already on the phone, also
       a copy left over as "Not installed for this user" in Settings → Apps.
       Run the rest of this checklist on the release build, not the debug one: R8 shrinking

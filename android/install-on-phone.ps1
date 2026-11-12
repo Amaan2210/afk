@@ -18,13 +18,20 @@
 .PARAMETER SkipBuild
   Install the APK that is already built.
 
+.PARAMETER BuildOnly
+  Build the APK and stop. No phone is needed: send the file to the phone and tap it there.
+
 .EXAMPLE
   .\install-on-phone.ps1
+
+.EXAMPLE
+  .\install-on-phone.ps1 -BuildOnly
 #>
 param(
     [string]$Keystore = (Join-Path $env:USERPROFILE 'afk-release.jks'),
     [string]$Alias = 'afk',
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$BuildOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,6 +84,12 @@ if (-not $SkipBuild) {
 }
 
 if (-not (Test-Path $Apk)) { throw "No APK at $Apk. Run this without -SkipBuild." }
+
+if ($BuildOnly) {
+    Write-Host "Built: $Apk"
+    Write-Host 'Send this file to the phone and tap it there to install.'
+    exit 0
+}
 
 $adb = Find-Adb
 $phones = Get-Phones $adb
