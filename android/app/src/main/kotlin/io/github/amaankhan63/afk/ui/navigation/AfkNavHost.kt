@@ -23,6 +23,9 @@ import io.github.amaankhan63.afk.ui.subagent.SubagentScreen
  * The app's screens, from [startDestination]: [Routes.PAIRING] while the app is not paired, else
  * [Routes.SESSIONS].
  *
+ * [paired] turning false sends the app back to pairing from wherever it is: the laptop unpaired
+ * this phone.
+ *
  * [deepLink] is a route a notification asked for (see [Routes.parseDeepLink]), and
  * [onDeepLinkConsumed] clears it so it is handled once; [deepLinkAction] decides what it does.
  *
@@ -33,6 +36,7 @@ import io.github.amaankhan63.afk.ui.subagent.SubagentScreen
 @Composable
 fun AfkNavHost(
     startDestination: String,
+    paired: Boolean = true,
     deepLink: String? = null,
     onDeepLinkConsumed: () -> Unit = {},
     navController: NavHostController = rememberNavController()
@@ -107,7 +111,18 @@ fun AfkNavHost(
         }
     }
 
-    // After the NavHost, so its graph is set. Cleared first: the link is handled once at most.
+    // After the NavHost, so its graph is set. No screen stays to go back to.
+    LaunchedEffect(paired) {
+        if (paired || navController.currentDestination?.route == Routes.PAIRING) {
+            return@LaunchedEffect
+        }
+        navController.navigate(Routes.PAIRING) {
+            popUpTo(navController.graph.id) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    // Cleared first: the link is handled once at most.
     LaunchedEffect(deepLink) {
         val route = deepLink ?: return@LaunchedEffect
         onDeepLinkConsumed()

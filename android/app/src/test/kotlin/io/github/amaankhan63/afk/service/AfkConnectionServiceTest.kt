@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import io.github.amaankhan63.afk.MainActivity
 import io.github.amaankhan63.afk.data.InMemoryDataStore
 import io.github.amaankhan63.afk.data.connection.ConnectionManager
+import io.github.amaankhan63.afk.data.connection.ConnectionState
+import io.github.amaankhan63.afk.data.connection.ERROR_UNAUTHORIZED
 import io.github.amaankhan63.afk.data.connection.Endpoint
 import io.github.amaankhan63.afk.data.pairing.PairingPayload
 import io.github.amaankhan63.afk.data.pairing.PairingStore
@@ -76,6 +78,23 @@ class AfkConnectionServiceTest {
 
         assertEquals(listOf("stop", "stop", "start 100.84.12.9", "stop"), manager.calls)
         assertEquals(2, unpaired)
+    }
+
+    /** The laptop unpaired this phone: the app forgets it and says why, at the pairing screen. */
+    @Test fun aRejectedTokenForgetsThePairing() = runTest {
+        val states = MutableStateFlow<ConnectionState>(ConnectionState.Connecting(0))
+        val said = mutableListOf<String>()
+        var forgotten = 0
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            forgetRejectedPairing(states, { forgotten++ }, { said += it })
+        }
+
+        states.value = ConnectionState.Failed("protocol_mismatch")
+        assertEquals(0, forgotten)
+
+        states.value = ConnectionState.Failed(ERROR_UNAUTHORIZED)
+        assertEquals(1, forgotten)
+        assertEquals(listOf(UNPAIRED_NOTICE), said)
     }
 
     /** Preferences that cannot be read count as no pairing, rather than crashing the service. */

@@ -172,7 +172,8 @@ class PairingViewModelTest {
 
         advanceTimeBy(1)
         runCurrent()
-        assertEquals(TestResult.Failed("Timed out"), vm.ui.value.result)
+        val reason = (vm.ui.value.result as TestResult.Failed).reason
+        assertTrue(reason, reason.startsWith("No answer from the laptop"))
         assertFalse(vm.ui.value.testing)
         assertReleased()
     }
@@ -202,6 +203,42 @@ class PairingViewModelTest {
             assertFalse(vm.ui.value.testing)
         }
         assertTrue(factory.managers.isEmpty())
+    }
+
+    /** The one step a scanned code and the Connect button take. */
+    @Test fun connectSavesOnceTheLaptopAccepts() = runTest {
+        val vm = viewModel()
+        var done = 0
+        assertTrue(vm.onScanned(scanned))
+
+        vm.connect { done++ }
+        runCurrent()
+        assertEquals(0, done)
+        assertNull(store.pairing.first())
+
+        factory.managers.single().state.value = ConnectionState.Connected(hello)
+        runCurrent()
+        assertEquals(1, done)
+        assertEquals(PairingPayload("100.84.12.9", 2351, "tok_abc"), store.pairing.first())
+    }
+
+    @Test fun connectSavesNothingTheLaptopRefuses() = runTest {
+        val vm = viewModel()
+        var done = 0
+        vm.fill()
+
+        vm.connect { done++ }
+        runCurrent()
+        factory.managers.single().state.value = ConnectionState.Failed("unauthorized")
+        runCurrent()
+
+        assertEquals(0, done)
+        assertNull(store.pairing.first())
+        assertEquals(TestResult.Failed("Token rejected"), vm.ui.value.result)
+    }
+
+    @Test fun aScanOfSomethingElseSaysItIsNotACode() {
+        assertFalse(viewModel().onScanned("https://example.com"))
     }
 
     @Test fun editDuringTestCancelsIt() = runTest {
@@ -290,6 +327,10 @@ private class FakeConnectionManager : ConnectionManager {
         error("pairing sends no requests")
 
     override fun send(msg: ClientMessage): Unit = error("pairing sends nothing")
+
+    override fun onNetworkLost() = Unit
+
+    override fun onNetworkAvailable() = Unit
 }
 
 /** Hands out [FakeConnectionManager]s and keeps the scope each was made with. */

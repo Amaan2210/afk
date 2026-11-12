@@ -11,6 +11,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,8 +19,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
@@ -27,9 +31,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.pairing.PairingStore
+import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.settings.AppSettingsStore
 import io.github.amaankhan63.afk.service.AfkConnectionService
+import io.github.amaankhan63.afk.ui.components.OfflineFrame
+import io.github.amaankhan63.afk.ui.components.bannerHost
 import io.github.amaankhan63.afk.ui.navigation.AfkNavHost
 import io.github.amaankhan63.afk.ui.navigation.Routes
 import io.github.amaankhan63.afk.ui.theme.AfkTheme
@@ -39,6 +47,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 // The navigation bar's scrims in three-button mode, as androidx.activity's own defaults, which it
@@ -51,6 +60,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var pairingStore: PairingStore
 
     @Inject lateinit var settingsStore: AppSettingsStore
+
+    @Inject lateinit var repo: SessionsRepository
 
     // A denial is accepted as it is: sessions still work, only their notifications stay hidden.
     private val notificationPermission =
@@ -100,16 +111,41 @@ class MainActivity : ComponentActivity() {
                     value = if (pairing != null) Routes.SESSIONS else Routes.PAIRING
                     startReady = true
                 }
+                // Until it is read it counts as paired: only a pairing seen to be gone (or
+                // one that cannot be read, as at the start) sends the app back.
+                val paired by remember { pairingStore.pairingOrNone.map { it != null } }
+                    .collectAsStateWithLifecycle(initialValue = true)
+                val pairedHost by remember { pairingStore.pairingOrNone.map { it?.host } }
+                    .collectAsStateWithLifecycle(initialValue = null)
+                val connection by repo.connection.collectAsStateWithLifecycle()
+                // The laptop's name outlives the connection that gave it, for the banner.
+                var laptop by remember { mutableStateOf<String?>(null) }
+                (connection as? ConnectionState.Connected)?.let {
+                    laptop = it.hello.daemon.hostname
+                }
+                val focus = LocalFocusManager.current
                 val link by deepLink.collectAsStateWithLifecycle()
                 val destination = start
                 if (destination == null) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
                 } else {
-                    AfkNavHost(
-                        startDestination = destination,
-                        deepLink = link,
-                        onDeepLinkConsumed = { deepLink.value = null }
-                    )
+                    OfflineFrame(
+                        connection = connection,
+                        paired = paired,
+                        host = bannerHost(laptop, pairedHost),
+                        // A tap on nothing in particular lets go of the field that has the
+                        // focus, and with it the keyboard.
+                        modifier = Modifier.pointerInput(Unit) {
+                            detectTapGestures(onTap = { focus.clearFocus() })
+                        }
+                    ) {
+                        AfkNavHost(
+                            startDestination = destination,
+                            paired = paired,
+                            deepLink = link,
+                            onDeepLinkConsumed = { deepLink.value = null }
+                        )
+                    }
                 }
             }
         }

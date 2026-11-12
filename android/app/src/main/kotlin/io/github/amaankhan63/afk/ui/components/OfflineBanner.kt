@@ -1,11 +1,27 @@
 package io.github.amaankhan63.afk.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -70,3 +86,56 @@ fun bannerText(connection: ConnectionState, host: String?): String? {
  * [pairingHost] the app was paired with.
  */
 fun bannerHost(hostname: String?, pairingHost: String?): String? = hostname ?: pairingHost
+
+/**
+ * Whether the banner shows in [connection]: once a connection has dropped or been refused. Not
+ * for the first try after a start, which is over in a moment, nor before the app is started.
+ */
+fun showsBanner(connection: ConnectionState): Boolean = when (connection) {
+    is ConnectionState.Connecting -> connection.attempt > 0
+    is ConnectionState.Failed -> true
+    is ConnectionState.Connected, ConnectionState.Disconnected -> false
+}
+
+/**
+ * [content], the app's screens, under a banner that drops in from the top while the app is
+ * [paired] but not connected (see [showsBanner]) and slides away once it is. The banner takes the
+ * status bar's place, so the screens under it keep clear of neither twice.
+ */
+@Composable
+fun OfflineFrame(
+    connection: ConnectionState,
+    paired: Boolean,
+    host: String?,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val visible = paired && showsBanner(connection)
+    // What the banner said last, so it still says it while it slides away.
+    var last by remember { mutableStateOf(connection) }
+    if (visible && last != connection) last = connection
+    Column(modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = expandVertically() + slideInVertically { -it },
+            exit = shrinkVertically() + slideOutVertically { -it }
+        ) {
+            val colors = MaterialTheme.colorScheme
+            val retrying = last is ConnectionState.Connecting
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(if (retrying) colors.tertiaryContainer else colors.errorContainer)
+                    .statusBarsPadding()
+            ) {
+                OfflineBanner(last, host = host)
+            }
+        }
+        val screens = if (visible) {
+            Modifier.consumeWindowInsets(WindowInsets.statusBars)
+        } else {
+            Modifier
+        }
+        Box(Modifier.weight(1f).then(screens)) { content() }
+    }
+}

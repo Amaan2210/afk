@@ -4,7 +4,9 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_BAD_ENDPOINT
 import io.github.amaankhan63.afk.data.sessions.HELLO
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** What the banner over the sessions list says in each connection state. */
@@ -67,5 +69,13 @@ class OfflineBannerTest {
         assertEquals("MY-LAPTOP", bannerHost(hostname = "MY-LAPTOP", pairingHost = "100.84.12.9"))
         assertEquals("100.84.12.9", bannerHost(hostname = null, pairingHost = "100.84.12.9"))
         assertNull(bannerHost(hostname = null, pairingHost = null))
+    }
+
+    @Test fun theBannerWaitsForADropOrARefusal() {
+        assertFalse(showsBanner(ConnectionState.Disconnected))
+        assertFalse(showsBanner(ConnectionState.Connecting(0)))
+        assertFalse(showsBanner(ConnectionState.Connected(HELLO)))
+        assertTrue(showsBanner(ConnectionState.Connecting(1)))
+        assertTrue(showsBanner(ConnectionState.Failed("unauthorized")))
     }
 }

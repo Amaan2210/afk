@@ -8,6 +8,7 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_BAD_ENDPOINT
 import io.github.amaankhan63.afk.data.connection.Endpoint
 import io.github.amaankhan63.afk.data.pairing.PairingCodec
+import io.github.amaankhan63.afk.data.pairing.PairingEvents
 import io.github.amaankhan63.afk.data.pairing.PairingPayload
 import io.github.amaankhan63.afk.data.pairing.PairingStore
 import javax.inject.Inject
@@ -40,12 +41,18 @@ sealed interface TestResult {
     data class Failed(val reason: String) : TestResult
 }
 
-/** Takes pairing values from a QR code or by hand, tests them, and saves them once they pass. */
+/**
+ * Takes pairing values from a QR code or by hand, tests them, and saves them once they pass.
+ * [notice] says why the app came back here, when the laptop unpaired this phone.
+ */
 @HiltViewModel
 class PairingViewModel @Inject constructor(
     private val store: PairingStore,
-    private val connectionFactory: ConnectionManagerFactory
+    private val connectionFactory: ConnectionManagerFactory,
+    private val events: PairingEvents = PairingEvents()
 ) : ViewModel() {
+    val notice: StateFlow<String?> = events.notice
+
     private val mutableUi = MutableStateFlow(PairingUiState())
     val ui: StateFlow<PairingUiState> = mutableUi.asStateFlow()
 
@@ -53,16 +60,21 @@ class PairingViewModel @Inject constructor(
     private var test: Job? = null
     private var saving: Job? = null
 
-    /** Fills the fields from a scanned QR code, or keeps them and says it is not a pairing code. */
-    fun onScanned(raw: String) {
+    /**
+     * Fills the fields from a scanned QR code and returns true, or keeps them, says it is not a
+     * pairing code and returns false.
+     */
+    fun onScanned(raw: String): Boolean {
         cancelTest()
-        mutableUi.value = PairingCodec.parse(raw).fold(
+        val parsed = PairingCodec.parse(raw)
+        mutableUi.value = parsed.fold(
             onSuccess = { PairingUiState(it.host, it.port.toString(), it.token) },
             onFailure = {
                 val reason = TestResult.Failed(NOT_A_PAIRING_CODE)
                 mutableUi.value.copy(testing = false, result = reason)
             }
         )
+        return parsed.isSuccess
     }
 
     /** New values void the last test and stop a running one. */
@@ -73,8 +85,17 @@ class PairingViewModel @Inject constructor(
         mutableUi.value = PairingUiState(host, port, token)
     }
 
-    /** Connects once with the fields' values; ignored while a test is running. */
-    fun testConnection() {
+    /**
+     * Tests the fields' values and, when the laptop accepts them, saves them and calls [onDone]:
+     * the one step the screen's button and a scanned code take.
+     */
+    fun connect(onDone: () -> Unit) = testConnection { save(onDone) }
+
+    /**
+     * Connects once with the fields' values, then calls [onOk] if the laptop accepted them;
+     * ignored while a test is running.
+     */
+    fun testConnection(onOk: () -> Unit = {}) {
         val current = mutableUi.value
         if (current.testing) return
         val port = current.port.trim().toIntOrNull()
@@ -88,6 +109,7 @@ class PairingViewModel @Inject constructor(
         test = viewModelScope.launch {
             val result = probe(endpoint, token)
             mutableUi.update { it.copy(testing = false, result = result) }
+            if (result is TestResult.Ok) onOk()
         }
     }
 
@@ -99,6 +121,7 @@ class PairingViewModel @Inject constructor(
         val pairing = PairingPayload(current.host.trim(), port, current.token.trim())
         saving = viewModelScope.launch {
             store.save(pairing)
+            events.clear()
             onDone()
         }
     }
@@ -136,7 +159,8 @@ class PairingViewModel @Inject constructor(
 
     private companion object {
         const val TEST_TIMEOUT_MS = 10_000L
-        const val TIMED_OUT = "Timed out"
+        const val TIMED_OUT = "No answer from the laptop. Is AFK running there, and is " +
+            "Tailscale on, on both the laptop and this phone?"
         const val PORT_OUT_OF_RANGE = "Port must be 1–65535"
         const val NOT_A_PAIRING_CODE = "That QR code is not an AFK pairing code"
 
