@@ -26,7 +26,7 @@
 
 ## Review Focus
 
-1. **Paths with spaces and non-ASCII** (`D:\Naya Repos\…`): launch lines, `--settings` paths and profile paths must be quoted for PowerShell. Pinned in Task 5 (`renderSessionProfile`, `buildClaudeLaunch` tests) and Task 7 (`create` writes a quoted launch line).
+1. **Paths with spaces and non-ASCII** (`D:\My Repos\…`): launch lines, `--settings` paths and profile paths must be quoted for PowerShell. Pinned in Task 5 (`renderSessionProfile`, `buildClaudeLaunch` tests) and Task 7 (`create` writes a quoted launch line).
 2. **Daemon down while an agent fires hooks:** relays must not block or fail the agent. Pinned in Task 18 (relay tests against a closed port).
 3. **Multi-byte UTF-8 split across PTY chunks or transcript reads:** bytes must arrive intact. Pinned in Task 6 (`SessionProcess` forwards raw bytes) and Task 8 (`JsonlTailer` partial-line test).
 4. **Unknown transcript line types and unknown hook events** (new Claude Code versions): must be ignored, never throw. Pinned in Task 8 (`api-request-blob` fixture line) and Task 9 (`mapClaudeHook` unknown event).
@@ -335,9 +335,9 @@ export function resolveAgentBinary(name: "claude" | "codex", env = process.env, 
 
 ```ts
 // profile.test.ts
-const p = renderSessionProfile({ sessionId: "s_x", port: 2350, nodeExe: "C:\\Program Files\\nodejs\\node.exe", cliEntry: "D:\\Naya Repos\\afk\\service\\dist\\cli.js" });
+const p = renderSessionProfile({ sessionId: "s_x", port: 2350, nodeExe: "C:\\Program Files\\nodejs\\node.exe", cliEntry: "D:\\My Repos\\afk\\service\\dist\\cli.js" });
 it("defines claude and codex functions that call afk exec with splatted args", () => {
-  expect(p).toMatch(/function claude \{[\s\S]*& "C:\\Program Files\\nodejs\\node\.exe" "D:\\Naya Repos\\afk\\service\\dist\\cli\.js" exec claude @args/);
+  expect(p).toMatch(/function claude \{[\s\S]*& "C:\\Program Files\\nodejs\\node\.exe" "D:\\My Repos\\afk\\service\\dist\\cli\.js" exec claude @args/);
   expect(p).toMatch(/function codex \{[\s\S]*exec codex @args/);
 });
 it("exports session env vars", () => { expect(p).toContain(`$env:AFK_SESSION_ID = "s_x"`); expect(p).toContain(`$env:AFK_PORT = "2350"`); });
@@ -510,7 +510,7 @@ it("codex and shell", () => { expect(buildLaunchLine("codex", [], undefined)).to
 
 // registry.test.ts (fake pty factory from Task 6 tests; deps.now injectable)
 it("create spawns the shell with the session profile in cwd and names after the folder", async () => {
-  const s = await reg.create({ cwd: "D:\\Naya Repos\\web-platform", kind: "shell", args: [] });
+  const s = await reg.create({ cwd: "D:\\My Repos\\web-platform", kind: "shell", args: [] });
   expect(s.name).toBe("web-platform"); expect(s.state).toBe("idle"); expect(s.kind).toBe("shell");
   expect(fake.lastSpawn.args).toEqual(["-NoLogo","-NoExit","-ExecutionPolicy","Bypass","-File", join(deps.sessionsDir, s.id, "profile.ps1")]);
   expect(fake.lastSpawn.env.AFK_SESSION_ID).toBe(s.id);
