@@ -22,6 +22,10 @@ export interface WsDeps {
   version: string;
   log: pino.Logger;
   saveConfig: (c: DaemonConfig) => Promise<void>;
+  /** Stops the daemon, for `daemon.stop`; undefined when whoever started it gave no way to. */
+  requestStop?: (reason: string) => void;
+  /** Called once an authenticated client's socket has closed. */
+  onClientGone?: () => void;
   /** Reported in `hello` when the daemon listens on a Tailscale address. */
   tailscaleIp?: string;
   /** Pause between the chunks of a `pending.answer` (default 50 ms). */

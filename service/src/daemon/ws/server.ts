@@ -80,7 +80,10 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
       const text = JSON.stringify(msg);
       for (const c of conns) if (c.authenticated && (filter?.(c) ?? true)) c.sendText(text);
     },
-    remove: (conn) => conns.delete(conn),
+    remove(conn) {
+      conns.delete(conn);
+      deps.onClientGone?.();
+    },
   };
 
   wss.on("connection", (ws) => conns.add(new ClientConn(`c${nextId++}`, ws, ctx)));

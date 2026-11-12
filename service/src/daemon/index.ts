@@ -29,6 +29,8 @@ import { attachWsServer, type WsDeps, type WsServer } from "./ws/server.js";
 const PRUNE_INTERVAL_MS = 10 * 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const HEADERS_TIMEOUT_MS = 10_000;
+/** How long a background daemon stays idle before it stops itself. */
+const IDLE_STOP_MS = 3000;
 
 export interface DaemonOptions {
   /** Defaults to `defaultConfigDir()`. */
@@ -46,6 +48,19 @@ export interface DaemonOptions {
    * undone what it started. (A start past the wait completes; stop that daemon as usual.)
    */
   signal?: AbortSignal;
+  /**
+   * Called when the daemon should stop: a client asked (`daemon.stop`), or it is idle and
+   * `stopWhenIdle` is set. The caller stops it; without this, `daemon.stop` is refused.
+   */
+  onStopRequested?: (reason: string) => void;
+  /**
+   * Ask to stop once nothing is left to serve: no running session, no paired phone and no
+   * connected client. Looked at when a session ends or a client leaves, never on a timer, so a
+   * daemon nobody has used yet keeps waiting.
+   */
+  stopWhenIdle?: boolean;
+  /** How long it must stay idle first (default 3 s). */
+  idleStopMs?: number;
 }
 
 export interface Daemon {
@@ -71,6 +86,7 @@ interface Parts {
   handler?: HttpHandler;
   ws?: WsServer;
   pruneTimer?: NodeJS.Timeout;
+  idleTimer?: NodeJS.Timeout;
   rebind?: Rebinder;
 }
 
@@ -93,7 +109,13 @@ async function teardown(p: Parts): Promise<void> {
   const steps: [string, () => unknown][] = [
     // First: once it resolves, no server is being added any more.
     ["rebind", () => p.rebind?.stop()],
-    ["timers", () => clearInterval(p.pruneTimer)],
+    [
+      "timers",
+      () => {
+        clearInterval(p.pruneTimer);
+        clearTimeout(p.idleTimer);
+      },
+    ],
     ["ws", () => p.ws?.close()],
     ["http", () => p.handler?.dispose()],
     ["servers", () => Promise.all(p.servers.map(closeServer))],
@@ -143,6 +165,12 @@ async function compose(
     onCorrupt: (backup) =>
       log.warn({ backup }, "config was unreadable; moved aside, defaults used"),
   });
+  // A phone is paired for one run of the daemon: `afk pair` pairs it again after a restart.
+  if (config.devices.length > 0) {
+    config.devices = [];
+    await saveConfig(paths, config);
+    log.info("the phone paired in an earlier run was unpaired");
+  }
   const shell = await detectShell(config.shell);
   const onWait = (): void => {
     log.info("waiting for Tailscale");
@@ -202,10 +230,29 @@ async function compose(
     version: VERSION,
     log,
     saveConfig: (c) => saveConfig(paths, c),
+    requestStop: opts.onStopRequested,
     tailscaleIp: bind.tailscaleIp,
   };
   const ws = (p.ws = attachWsServer(p.servers, wsDeps));
   forwarder.use(handler);
+
+  if (opts.stopWhenIdle === true && opts.onStopRequested !== undefined) {
+    const stopRequested = opts.onStopRequested;
+    const idle = (): boolean =>
+      registry.list().every((s) => s.state === "ended") &&
+      config.devices.length === 0 &&
+      ws.clientCount() === 0;
+    const checkIdle = (): void => {
+      if (!idle()) return;
+      clearTimeout(p.idleTimer);
+      p.idleTimer = setTimeout(() => {
+        if (idle()) stopRequested("idle: no running session, no paired phone, no client");
+      }, opts.idleStopMs ?? IDLE_STOP_MS);
+      p.idleTimer.unref();
+    };
+    registry.on("exit", checkIdle);
+    wsDeps.onClientGone = checkIdle;
+  }
 
   // Read at each run: a settings change replaces `config.settings`.
   p.pruneTimer = setInterval(

@@ -13,9 +13,15 @@ function localOnly<T extends DeviceType>(handler: Handler<T>): Handler<T> {
 }
 
 export const deviceHandlers: Pick<HandlerMap, DeviceType> = {
-  /** The token is in this reply only: the daemon keeps just its hash. */
+  /**
+   * The token is in this reply only: the daemon keeps just its hash. The new phone replaces any
+   * paired before, whose open sockets are closed.
+   */
   "device.add": localOnly<"device.add">(async (conn, msg, ctx) => {
     const { id, token } = await ctx.devices.add(msg.name);
+    for (const c of ctx.clients()) {
+      if (!c.isLocal) c.reject("unauthorized", "another phone was paired", CLOSE_UNAUTHORIZED);
+    }
     conn.ack(msg.id, { deviceId: id, token });
   }),
 

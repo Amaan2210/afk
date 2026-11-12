@@ -8,8 +8,8 @@ const NAME_MAX = 40;
 export type DeviceInfo = Omit<DeviceRecord, "tokenHash">;
 
 /**
- * The devices paired with the daemon, kept in its config. A device's token is handed out once, by
- * `add`; only its hash is stored. Every change is written through `save`, and undone in memory
+ * The phone paired with the daemon, kept in its config: one at a time, so `add` replaces whoever
+ * was paired before. Its token is handed out once, by `add`; only its hash is stored. Every change is written through `save`, and undone in memory
  * when the save fails.
  */
 export class DeviceStore {
@@ -18,7 +18,10 @@ export class DeviceStore {
     private readonly save: (c: DaemonConfig) => Promise<void>,
   ) {}
 
-  /** Pairs a device named `name` (trimmed, 1–40 characters) and returns its token. */
+  /**
+   * Pairs a device named `name` (trimmed, 1–40 characters) in place of any paired before, and
+   * returns its token.
+   */
   async add(name: string): Promise<{ id: string; token: string }> {
     const trimmed = name.trim();
     if (trimmed.length === 0 || trimmed.length > NAME_MAX) {
@@ -32,15 +35,28 @@ export class DeviceStore {
       tokenHash: hashToken(token),
       createdAt: new Date().toISOString(),
     };
-    this.cfg.devices.push(record);
+    const previous = this.cfg.devices;
+    this.cfg.devices = [record];
     try {
       await this.save(this.cfg);
     } catch (err) {
-      const at = this.cfg.devices.indexOf(record);
-      if (at >= 0) this.cfg.devices.splice(at, 1);
+      if (this.cfg.devices.includes(record)) this.cfg.devices = previous;
       throw err;
     }
     return { id, token };
+  }
+
+  /** Unpairs every device. */
+  async clear(): Promise<void> {
+    const previous = this.cfg.devices;
+    if (previous.length === 0) return;
+    this.cfg.devices = [];
+    try {
+      await this.save(this.cfg);
+    } catch (err) {
+      if (this.cfg.devices.length === 0) this.cfg.devices = previous;
+      throw err;
+    }
   }
 
   async remove(id: string): Promise<void> {

@@ -33,6 +33,7 @@ it("has an example for every message type", () => {
     "fs.listDirs",
     "daemon.settings.get",
     "daemon.settings.set",
+    "daemon.stop",
     "device.add",
     "device.list",
     "device.remove",

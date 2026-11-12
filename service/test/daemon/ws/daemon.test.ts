@@ -158,7 +158,7 @@ describe("devices", () => {
     expect(await cli.request({ type: "device.add", name: "x".repeat(40) })).toMatchObject({
       type: "ack",
     });
-    expect(h.config.devices).toHaveLength(2);
+    expect(h.config.devices).toHaveLength(1);
   });
 });
 

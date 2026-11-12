@@ -12,9 +12,9 @@ import {
   type InterfaceAddress,
 } from "./net.js";
 
-const DEFAULT_START_WAIT_MS = 30_000;
+const DEFAULT_START_WAIT_MS = 0;
 const DEFAULT_START_POLL_MS = 2_000;
-const DEFAULT_REPROBE_MS = 30_000;
+const DEFAULT_REPROBE_MS = 3_000;
 
 /** How the daemon looks for this machine's Tailscale address, and for how long. */
 export interface TailscaleOptions {
@@ -22,11 +22,11 @@ export interface TailscaleOptions {
   interfaces?: () => NodeJS.Dict<InterfaceAddress[]>;
   /** Whether an address is Tailscale's (default: inside 100.64.0.0/10). Tests use 127.0.0.2. */
   isTailscale?: (address: string) => boolean;
-  /** How long a start waits for an address before listening on 127.0.0.1 alone (default 30 s). */
+  /** How long a start waits for an address before listening on 127.0.0.1 alone (default: no wait). */
   startWaitMs?: number;
   /** How often a start looks while it waits (default 2 s). */
   startPollMs?: number;
-  /** How often a daemon running without an address looks again (default 30 s). */
+  /** How often a daemon running without an address looks again (default 3 s). */
   reprobeMs?: number;
 }
 
@@ -35,9 +35,10 @@ function interfacesOf(o: TailscaleOptions): () => NodeJS.Dict<InterfaceAddress[]
 }
 
 /**
- * Where to listen for `bind`. With "tailscale" and no Tailscale address yet (at logon Tailscale
- * can come up after the daemon), it first waits up to `startWaitMs` for one, looking every
- * `startPollMs`; `onWait` runs once, when the wait begins. Then the plan as it stands. `signal`
+ * Where to listen for `bind`. With "tailscale", no Tailscale address yet and a `startWaitMs`, it
+ * first waits up to that long for one, looking every `startPollMs`; `onWait` runs once, when the
+ * wait begins. By default it does not wait: a session started on the laptop must not be held up
+ * by Tailscale being off, and `listenWhenTailscaleAppears` takes the address when it appears. Then the plan as it stands. `signal`
  * ends the wait at once: it rejects with an AbortError.
  */
 export async function planBind(

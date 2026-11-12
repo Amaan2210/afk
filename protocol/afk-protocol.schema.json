@@ -409,6 +409,23 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "daemon.stop"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "device.add"
             },
             "id": {

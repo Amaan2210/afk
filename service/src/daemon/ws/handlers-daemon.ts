@@ -1,9 +1,10 @@
 import type { DaemonSettings } from "../../protocol/index.js";
 import { listDirs } from "../fs.js";
-import { badRequest } from "./errors.js";
+import { CLOSE_UNAUTHORIZED } from "./context.js";
+import { badRequest, WsError } from "./errors.js";
 import type { HandlerMap } from "./handlers.js";
 
-type DaemonType = "daemon.settings.get" | "daemon.settings.set" | "fs.listDirs";
+type DaemonType = "daemon.settings.get" | "daemon.settings.set" | "daemon.stop" | "fs.listDirs";
 
 /** A timer longer than about 24.8 days fires at once, so the grace is capped well below that. */
 const MAX_GRACE_MIN = 24 * 60;
@@ -39,6 +40,23 @@ export const daemonHandlers: Pick<HandlerMap, DaemonType> = {
     keepAwake.setGraceMs(settings.keepAwakeGraceMin * 60_000);
     conn.send({ type: "daemon.settings", id: msg.id, settings });
     ctx.broadcast({ type: "daemon.settings", settings }, (c) => c !== conn);
+  },
+
+  /**
+   * Unpairs the phone, then asks the daemon to stop, which ends every session. A phone that did
+   * not ask is told it is no longer paired, so it stops reconnecting.
+   */
+  async "daemon.stop"(conn, msg, ctx) {
+    const { requestStop } = ctx.deps;
+    if (requestStop === undefined) throw new WsError("internal", "this daemon cannot be stopped");
+    await ctx.devices.clear();
+    conn.ack(msg.id);
+    for (const c of ctx.clients()) {
+      if (c !== conn && !c.isLocal) c.reject("unauthorized", "unpaired", CLOSE_UNAUTHORIZED);
+    }
+    const who = conn.isLocal ? "the CLI" : `the phone ${conn.device?.name ?? ""}`.trimEnd();
+    // Once the ack has left.
+    setImmediate(() => requestStop(`stop asked by ${who}`));
   },
 
   async "fs.listDirs"(conn, msg, { deps }) {

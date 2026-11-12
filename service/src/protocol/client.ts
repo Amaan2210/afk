@@ -85,6 +85,12 @@ export const DaemonSettingsSetSchema = z.object({
   settings: DaemonSettingsSchema.partial(),
 });
 
+/**
+ * Unpairs the phone, ends every session and stops the daemon. Accepted from the CLI and from the
+ * paired phone (its Unpair).
+ */
+export const DaemonStopSchema = z.object({ type: z.literal("daemon.stop"), id });
+
 // device.* are accepted only on the local (CLI) token; the daemon enforces that, not the schema.
 export const DeviceAddSchema = z.object({ type: z.literal("device.add"), id, name: z.string() });
 export const DeviceListSchema = z.object({ type: z.literal("device.list"), id });
@@ -110,6 +116,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   FsListDirsSchema,
   DaemonSettingsGetSchema,
   DaemonSettingsSetSchema,
+  DaemonStopSchema,
   DeviceAddSchema,
   DeviceListSchema,
   DeviceRemoveSchema,

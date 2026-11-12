@@ -294,3 +294,85 @@ describe("startDaemon with bind tailscale", () => {
     expect(net.probes).toBe(probes);
   });
 });
+
+describe("startDaemon: pairing and stopping", () => {
+  const PHONE = { id: "dev_1", name: "Pixel", tokenHash: "x", createdAt: "2026-01-01T00:00:00Z" };
+
+  async function savedDevices(dir: string): Promise<unknown[]> {
+    const text = await readFile(join(dir, "config.json"), "utf8");
+    return (JSON.parse(text) as { devices: unknown[] }).devices;
+  }
+
+  it("a phone paired in an earlier run is unpaired when the daemon starts", async () => {
+    const dir = await configDir({ devices: [PHONE] });
+    await start(dir);
+    expect(await savedDevices(dir)).toEqual([]);
+  });
+
+  it("daemon.stop unpairs the phone, acks, then asks whoever started the daemon to stop it", async () => {
+    const dir = await configDir();
+    const reasons: string[] = [];
+    const daemon = await startDaemon({
+      configDir: dir,
+      port: 0,
+      onStopRequested: (reason) => reasons.push(reason),
+    });
+    daemons.push(daemon);
+    const cli = await client(`ws://127.0.0.1:${daemon.port}/ws`, dir);
+    expect(await cli.request({ type: "device.add", name: "Pixel" })).toMatchObject({ type: "ack" });
+    expect(await savedDevices(dir)).toHaveLength(1);
+
+    expect(await cli.request({ type: "daemon.stop" })).toMatchObject({ type: "ack" });
+    await vi.waitFor(() => expect(reasons).toEqual(["stop asked by the CLI"]));
+    expect(await savedDevices(dir)).toEqual([]);
+  });
+
+  it("daemon.stop is refused by a daemon that was given no way to stop", async () => {
+    const dir = await configDir();
+    const daemon = await start(dir);
+    const cli = await client(`ws://127.0.0.1:${daemon.port}/ws`, dir);
+    expect(await cli.request({ type: "daemon.stop" })).toMatchObject({
+      type: "error",
+      code: "internal",
+    });
+  });
+
+  it("stopWhenIdle asks to stop once the last client has left and nothing is left to serve", async () => {
+    const dir = await configDir();
+    const reasons: string[] = [];
+    const daemon = await startDaemon({
+      configDir: dir,
+      port: 0,
+      onStopRequested: (reason) => reasons.push(reason),
+      stopWhenIdle: true,
+      idleStopMs: 20,
+    });
+    daemons.push(daemon);
+    const cli = await client(`ws://127.0.0.1:${daemon.port}/ws`, dir);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    // Nobody has left yet: a daemon that is being used, or not used yet, keeps waiting.
+    expect(reasons).toEqual([]);
+
+    cli.terminate();
+    await vi.waitFor(() => expect(reasons).toHaveLength(1));
+    expect(reasons[0]).toMatch(/^idle/);
+  });
+
+  it("stopWhenIdle keeps running while a phone is paired", async () => {
+    const dir = await configDir();
+    const reasons: string[] = [];
+    const daemon = await startDaemon({
+      configDir: dir,
+      port: 0,
+      onStopRequested: (reason) => reasons.push(reason),
+      stopWhenIdle: true,
+      idleStopMs: 20,
+    });
+    daemons.push(daemon);
+    const cli = await client(`ws://127.0.0.1:${daemon.port}/ws`, dir);
+    await cli.request({ type: "device.add", name: "Pixel" });
+    cli.terminate();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(reasons).toEqual([]);
+  });
+});
