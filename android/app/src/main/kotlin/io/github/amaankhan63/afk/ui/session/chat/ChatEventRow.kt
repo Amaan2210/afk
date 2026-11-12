@@ -32,10 +32,17 @@ private val BUBBLE_SHAPE = RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
 /** The `turn` phase that draws a divider; a turn's end draws nothing. */
 internal const val TURN_START = "start"
 
+/** The room over a message, so a turn's messages stand apart from the tools between them. */
+private val MESSAGE_GAP = 6.dp
+
+/** The room around the line that starts a turn. */
+private val TURN_GAP = 10.dp
+
 /**
- * One event of a thread, drawn by its kind. A tool's card is [toolExpanded] and toggles through
- * [onToggleTool]; the other callbacks are [ChatTab]'s. An event without the part its kind needs
- * shows its text, as an assistant's message would.
+ * One event of a thread, drawn by its kind: the user's words in a bubble on the right, the agent's
+ * as plain text across the row, and tools as quiet one-line rows between them. A tool's card is
+ * [toolExpanded] and toggles through [onToggleTool]; the other callbacks are [ChatTab]'s. An event
+ * without the part its kind needs shows its text, as an assistant's message would.
  */
 @Composable
 fun ChatEventRow(
@@ -52,7 +59,8 @@ fun ChatEventRow(
     val pending = event.pending
     val kind = event.kind
     when {
-        kind == ChatKind.user -> UserBubble(event.text.orEmpty(), modifier)
+        kind == ChatKind.user ->
+            UserBubble(event.text.orEmpty(), modifier.padding(top = MESSAGE_GAP))
 
         kind == ChatKind.tool && tool != null ->
             ToolCard(tool, toolExpanded, onToggleTool, modifier)
@@ -65,10 +73,10 @@ fun ChatEventRow(
 
         kind == ChatKind.turn -> if (event.turn?.phase == TURN_START) {
             val line = MaterialTheme.colorScheme.outline
-            HorizontalDivider(modifier.padding(vertical = 4.dp), color = line)
+            HorizontalDivider(modifier.padding(vertical = TURN_GAP), color = line)
         }
 
-        else -> AssistantText(event, modifier)
+        else -> AssistantText(event, modifier.padding(vertical = MESSAGE_GAP))
     }
 }
 

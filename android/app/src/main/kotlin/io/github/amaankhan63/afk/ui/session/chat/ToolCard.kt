@@ -1,6 +1,5 @@
 package io.github.amaankhan63.afk.ui.session.chat
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +37,9 @@ private const val SHOWN_CHARS = 4_000
 private val NAME_MAX_WIDTH = 160.dp
 
 /**
- * One tool call: its status, name and summary on one line. Tapping it calls [onToggle]; while
- * [expanded] it also shows the call's input and result.
+ * One tool call: its status, name and summary on one quiet line, without a border, so the
+ * messages around it lead. Tapping it calls [onToggle]; while [expanded] it also shows the call's
+ * input and result.
  */
 @Composable
 fun ToolCard(
@@ -56,10 +56,9 @@ fun ToolCard(
             stateDescription = if (expanded) "Expanded" else "Collapsed"
         },
         shape = MaterialTheme.shapes.small,
-        color = colors.surfaceContainerLow,
-        border = BorderStroke(1.dp, colors.outline)
+        color = if (expanded) colors.surfaceContainerLow else colors.surfaceContainerLowest
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 5.dp)) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -72,7 +71,8 @@ fun ToolCard(
                 Text(
                     text = tool.name,
                     modifier = Modifier.widthIn(max = NAME_MAX_WIDTH),
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

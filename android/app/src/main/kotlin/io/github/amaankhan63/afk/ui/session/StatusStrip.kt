@@ -23,7 +23,7 @@ private const val MODEL_FILL_ALPHA = 0.12f
 private const val MODEL_BORDER_ALPHA = 0.35f
 
 /**
- * The session's status, one row of [chips] above the composer that scrolls sideways; nothing,
+ * The session's status, one row of [chips] under the tabs that scrolls sideways; nothing,
  * taking no space, when [chips] is empty. The model's chip is in the accent colour.
  */
 @Composable

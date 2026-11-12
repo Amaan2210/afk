@@ -38,9 +38,9 @@ private val COLOR_SLOTS = (0 until ANSI_COLORS) + listOf(
  * The terminal of [bridge]'s session in Termux's TerminalView, in [colors] and at [fontSizeSp].
  * The view reports its grid to the bridge on every layout; a pinch asks [onFontSizeChange] for a
  * size one step larger or smaller, within [MIN_FONT_SP]..[MAX_FONT_SP]. A long press selects text,
- * and its Copy and Paste use the system clipboard. [TerminalBridge.toggleKeyboard] opens and closes
- * the soft keyboard on the view, and [keyBarState]'s armed Ctrl applies to the next character typed
- * into it.
+ * and its Copy and Paste use the system clipboard. A tap opens the soft keyboard on the view,
+ * [TerminalBridge.toggleKeyboard] opens and closes it, and [keyBarState]'s armed Ctrl applies to
+ * the next character typed into it.
  *
  * Termux keeps its default colours process-wide, so every TerminalHost shows the [colors] set last.
  */
@@ -67,7 +67,8 @@ fun TerminalHost(
                         TerminalHostClient(
                             fontSizeSp = { currentFontSizeSp },
                             onFontSizeChange = { currentOnFontSizeChange(it) },
-                            keyBar = { currentKeyBarState }
+                            keyBar = { currentKeyBarState },
+                            onTap = { showSoftKeyboard() }
                         )
                     )
                     isFocusable = true
@@ -132,6 +133,12 @@ private fun TerminalView.toggleSoftKeyboard() {
         keyboard.hideSoftInputFromWindow(windowToken, 0)
         return
     }
+    showSoftKeyboard()
+}
+
+/** Focuses the view and opens the keyboard on it. */
+private fun TerminalView.showSoftKeyboard() {
+    val keyboard = context.getSystemService(InputMethodManager::class.java) ?: return
     requestFocus()
     // Asked at once, the keyboard can still be bound to the field that had the focus before.
     post { keyboard.showSoftInput(this, 0) }

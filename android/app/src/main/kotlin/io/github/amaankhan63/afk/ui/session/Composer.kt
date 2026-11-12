@@ -26,7 +26,7 @@ private val FIELD_SHAPE = RoundedCornerShape(22.dp)
 private val SEND_SIZE = 40.dp
 
 /**
- * The text field under both tabs and its send button. Its text, [value], may span lines; [onSend]
+ * The Chat tab's text field and its send button. Its text, [value], may span lines; [onSend]
  * sends it as one line. A focus requester in [modifier] focuses the field.
  */
 @Composable

@@ -87,8 +87,8 @@ fun ChatTab(
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = list,
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(rows, key = { it.id }, contentType = { it.kind }) { event ->
                 ChatEventRow(

@@ -18,13 +18,14 @@ private const val PINCH_OUT = 1.1f
  * TerminalView's client: keys are left to the view, which writes them to the session, and a pinch
  * steps the font size through [onFontSizeChange]. The key bar's Ctrl, while [keyBar]'s is armed,
  * holds Ctrl down for the next character typed into the view. A long press starts the view's text
- * selection, whose Copy and Paste reach [AfkTerminalSession]. Logs are dropped: they can quote
- * what is typed.
+ * selection, whose Copy and Paste reach [AfkTerminalSession]. A tap calls [onTap], which opens the
+ * keyboard. Logs are dropped: they can quote what is typed.
  */
 internal class TerminalHostClient(
     private val fontSizeSp: () -> Int,
     private val onFontSizeChange: (Int) -> Unit,
-    private val keyBar: () -> KeyBarState? = { null }
+    private val keyBar: () -> KeyBarState? = { null },
+    private val onTap: () -> Unit = {}
 ) : TerminalViewClient {
     /** [scale] is the pinch gathered so far; TerminalView keeps what this returns. */
     override fun onScale(scale: Float): Float {
@@ -42,7 +43,7 @@ internal class TerminalHostClient(
      */
     override fun isTerminalViewSelected(): Boolean = true
 
-    override fun onSingleTapUp(e: MotionEvent?) = Unit
+    override fun onSingleTapUp(e: MotionEvent?) = onTap()
 
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
 
