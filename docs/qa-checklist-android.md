@@ -10,39 +10,40 @@ bug.
 
 ## Before you start
 
-- [ ] On the laptop, `afk service status` says the daemon is running, and Tailscale is connected
-      on both the laptop and the phone.
+- [ ] Tailscale is connected on both the laptop and the phone. AFK itself needs no start: it
+      starts with the first `afk` command below.
 - [ ] With the phone connected over USB, run `.\gradlew :app:connectedDebugAndroidTest` from
       `android/`. All the instrumented sessions-screen tests pass. Do this first: it installs
       the debug build and removes the app when it ends.
-- [ ] Build the release APK: from `android/`, run `.\gradlew :app:assembleRelease`, best with the
-      signing variables of `docs/releasing.md` step 4 set, so the build carries the release key
-      and the first release later installs over it. Without `AFK_KEYSTORE_PATH` set it is signed
-      with the debug key. Install it with
-      `adb install -r app\build\outputs\apk\release\app-release.apk`. Run the rest of this
-      checklist on the release build, not the debug one: R8 shrinking problems (serialization,
-      OkHttp, Hilt) only show up at run time.
+- [ ] Build and install the release APK in one step. Plug the phone in over USB, then from
+      `android/` run `.\install-on-phone.ps1`. It asks for the keystore's password, builds, and
+      installs. The APK it builds is `android\app\build\outputs\apk\release\app-release.apk`.
+      Without a keystore (`docs/releasing.md`) it is signed with the debug key.
+      If the install is refused, the script offers to remove the AFK already on the phone, also
+      a copy left over as "Not installed for this user" in Settings → Apps.
+      Run the rest of this checklist on the release build, not the debug one: R8 shrinking
+      problems (serialization, OkHttp, Hilt) only show up at run time.
 - [ ] On the laptop, have running: one Claude Code session (`afk claude`), one Codex session
       (`afk codex`) and one shell session (`afk shell`), in folders that are git repositories.
 
 ## Pairing
 
-- [ ] First launch: the splash shows the AFK icon, then the "Pair with your computer" screen.
-      There is no blank or white frame in between.
+- [ ] First launch: the splash shows the AFK icon, then the "Pair with your laptop" screen,
+      with three numbered steps and a large **Scan QR code** button. There is no blank or white
+      frame in between.
 - [ ] Android 13 and later: the app asks for notification permission. Allow it.
 - [ ] Pair by QR: run `afk pair` on the laptop, then tap **Scan QR code**. The camera asks for
       permission the first time. The scanner works with the phone held upright and sideways.
-      The scan fills in host, port and token. Tap **Test connection**: it says
-      "Connected to <laptop name>". Tap **Save**: the sessions list opens.
+      After the scan the app says "Connecting to the laptop…" and the sessions list opens,
+      with no further tap.
 - [ ] A notification "Connected to <laptop name>" appears and stays while the app is paired.
 - [ ] Scan a QR code that is not from `afk pair`, for example any website's code. The app says
       "That QR code is not an AFK pairing code".
-- [ ] Pair by hand: unpair first (see Settings below), run `afk pair` again, and type the host,
-      port and token it prints. Tap **Test connection**: the app shows
-      "Connected to <laptop name>". Tap **Save**: the sessions list opens.
-- [ ] Pair by hand with a wrong token, then tap **Test connection**. The app says
-      "Token rejected".
-- [ ] Pair by hand with port `70000`, then tap **Test connection**. The app says
+- [ ] Pair by hand: unpair first (see Settings below), run `afk pair` again, tap **Type the
+      details instead**, and type the host, port and token it prints. Tap **Connect**: the
+      sessions list opens.
+- [ ] Pair by hand with a wrong token, then tap **Connect**. The app says "Token rejected".
+- [ ] Pair by hand with port `70000`, then tap **Connect**. The app says
       "Port must be 1–65535".
 
 ## Sessions list
@@ -52,14 +53,20 @@ bug.
 - [ ] The strip at the top shows the laptop's name, its RAM bar and its CPU %, and they change
       over time.
 - [ ] The list updates live. Start `afk shell` on the laptop: the new card appears within a
-      second or two. End it with `afk kill <id>`: its card shows "Ended".
+      second or two. Start `afk claude`, then end it with `afk kill <name>`: its card shows
+      "Ended".
 - [ ] Each card's state, age and last message follow the agent. Give the Claude session a
       prompt: its card reads "Working · …", then "Finished".
 - [ ] Search for part of a session name, a folder or a branch. Only matching cards stay.
 - [ ] The state chips (All, Needs you, Working, Done) and the agent chips filter the list. The
       counts on the state chips do not change when you filter.
-- [ ] Long-press a card: the sheet offers Rename and Kill, and Resume for an ended agent
-      session. Rename shows the current name. Kill asks first. Resume opens the new session.
+- [ ] Long-press a running card: the sheet offers Rename, Mute notifications and Kill. Rename
+      shows the current name. Kill asks first.
+- [ ] Long-press an ended Claude or Codex card: the sheet offers Rename, Resume and Delete.
+      Resume opens the new session, which takes the ended one's place. Delete removes the card.
+- [ ] Mute a session. Its card shows "Muted", and it sends no notification when it needs you or
+      finishes. Other sessions still notify. Unmute it: its notifications are back.
+- [ ] End a shell session (`afk kill <name>`). Its card disappears: a shell cannot be resumed.
 - [ ] Double-tap a card quickly. The session opens once, and Back returns to the list in one
       press.
 - [ ] Compare the list with `docs/design/mockups/01-core-screens.html` (spacing, colours,
@@ -101,8 +108,18 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 
 - [ ] Open the Claude session. The Terminal tab shows the same screen as the laptop window,
       colours included.
-- [ ] Type into the terminal with the phone keyboard. The text appears on the laptop and the
-      phone at the same time.
+- [ ] Tap the terminal. The keyboard opens. Type: the text appears on the laptop and the phone
+      at the same time. There is no text box under the terminal.
+- [ ] With the keyboard open, the tabs and the status strip are hidden, and they come back when
+      it closes.
+- [ ] While the phone shows a Claude session's terminal, Claude's own status line (the last
+      lines under its input box) is not drawn. Leave the session on the phone: the laptop
+      window shows it again after Claude's next update.
+- [ ] When Claude asks a question, a card with its options shows under the terminal. Tap an
+      option: Claude takes the answer, and the card goes.
+- [ ] Open a shell session. It has no Terminal and Chat tabs, only the terminal.
+- [ ] Swipe up and down on Claude's screen, leave the app and come back. Claude's input box
+      stays empty: no old prompt returns to it.
 - [ ] Rotate the phone once. The terminal redraws to the new width once, and the laptop window
       reflows once too, not repeatedly.
 - [ ] Resize the laptop window while the phone shows the terminal, then switch to Chat and back
@@ -112,7 +129,7 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Ctrl: tap **Ctrl**, then type `c` on the phone keyboard. The running command stops, as
       with Ctrl+C. Ctrl is no longer highlighted afterwards.
 - [ ] Ctrl with Gboard: tap **Ctrl**, then type a letter. The letter does not show up later in
-      the composer or the terminal.
+      the terminal.
 - [ ] The keyboard key shows the phone keyboard, with the terminal focused. Tap it again: the
       keyboard hides.
 - [ ] Long-press terminal text: a selection with Copy appears. Copy it, then paste it into
@@ -124,8 +141,9 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       to copy the text `afk-osc52`. Paste into another app: it is not `afk-osc52`.
       If the daemon does not relay the sequence, nothing reaches the phone and this check
       passes without proving anything; write that down instead of ticking it.
-- [ ] Swipe sideways on the terminal. The view moves between Terminal and Chat, and a
-      long-press selection still works.
+- [ ] Swipe sideways on the terminal. Nothing moves: only the tabs change between Terminal and
+      Chat. Turn on Settings → Terminal → **Swipe between Terminal and Chat**: now a swipe
+      moves between them, and a long-press selection still works.
 - [ ] Pinch to zoom, quickly and several times. The font grows or shrinks one step at a time and
       stops where you stop. Settings → Terminal → Font size then shows the same size.
 - [ ] Use the Claude session from the phone for a few minutes: type, switch tabs, rotate. No
@@ -193,6 +211,9 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 - [ ] Tap **New session**, choose a folder (recent folders, or browse from the drives), choose
       **Shell**, then tap **Start session**. The session opens. Type `dir` in the terminal: it
       lists the folder.
+- [ ] Type a name in **Name · optional** before starting. The session has that name in the
+      list and on the laptop (`afk ls`). Left empty, it is named after the folder.
+- [ ] A session started from the phone opens its own window on the laptop.
 - [ ] New Claude session with a first prompt: choose a folder, **Claude**, type a prompt, then
       tap **Start session**. The session opens, and Claude starts working on the prompt.
 - [ ] Switch the agent to **Codex**. The `--dangerously-bypass-approvals-and-sandbox` chip is
@@ -205,22 +226,32 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 
 ## Settings
 
-- [ ] Settings → Laptop shows the laptop's name and "Connected · <address>".
+- [ ] Settings → Laptop shows the laptop's name and "Connected · <address>". Tap the row, type
+      a name and save: Settings and the strip on the sessions list show the new name. Save an
+      empty name: the computer's own name is back.
 - [ ] Turn on **Keep laptop awake while agents work** while an agent is working. On the laptop,
       in an administrator PowerShell, `powercfg /requests` lists the daemon (`node.exe`) under
       SYSTEM: the laptop reports keep-awake as active. Turn the switch off: the entry goes away.
-- [ ] Turn off the phone's Wi-Fi and mobile data. The keep-awake switch greys out until the
-      connection is back.
+      Under the switch the app says "Keeping the laptop awake now" while an agent works, and
+      "Waiting for an agent to start working" while none does.
+- [ ] Turn off the phone's Wi-Fi and mobile data. The keep-awake switch greys out within a
+      few seconds, without a tap, until the connection is back.
+- [ ] Settings → Notifications → **Sound and vibration** opens Android's notification settings
+      for AFK. Pick another sound for "Needs your input": the next such notification plays it.
 - [ ] Settings → Terminal: the font size and **Key bar** change the terminal at once.
 - [ ] Settings → Status strip: a chip you turn off disappears from the session screen's strip.
-- [ ] Settings → About and licenses opens a screen with the version, the source link, the Termux
-      notice, a **Libraries** list (AndroidX, Dagger and Hilt, Kotlin, OkHttp, Okio, ZXing and
-      others) and the Apache License 2.0 text once, after the list. **Source** opens the
-      repository in the browser; a library row opens that library's source.
-- [ ] Settings → Laptop → **Unpair**. The confirmation says the laptop still lists this phone
-      until you run `afk unpair` there. Confirm. The app returns to the pairing screen, and
-      the "Connected to …" notification disappears because the service has stopped. On the
-      laptop, `afk devices` still lists the phone until you run `afk unpair <deviceId>`.
+- [ ] Settings → About and licenses opens a short screen with the version, the source link, a
+      **Libraries** list (AndroidX, Dagger and Hilt, Kotlin, OkHttp, Okio, ZXing and others) and
+      two rows that say **Show**: the Termux notice and the Apache License 2.0. Tap **Show**:
+      the text opens under the row. Tap **Hide**: it closes. **Source** opens the repository in
+      the browser; a library row opens that library's source.
+- [ ] Settings → Laptop → **Unpair**, while connected. The confirmation says this ends every
+      AFK session on the laptop and stops AFK there. Confirm. On the laptop every session
+      window closes and `afk service status` says AFK is not running. The app returns to the
+      pairing screen, and the "Connected to …" notification disappears.
+- [ ] Unpair while the phone is offline. The confirmation says the app only forgets the laptop.
+      Confirm: the app returns to the pairing screen, and the sessions on the laptop keep
+      running.
 
 ## Theme & icon
 
@@ -258,40 +289,41 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
 
 ## Offline / reconnect
 
-- [ ] Turn off Wi-Fi and mobile data. Within about a minute, a banner under the top bar says
+- [ ] Turn off Wi-Fi and mobile data. Within a few seconds a banner drops in from the top of
+      the screen, on whatever screen is open, saying
       "Reconnecting to <laptop name>… (attempt n)", and n counts up. The last known list stays,
       and you can still scroll it and open sessions.
-- [ ] While still offline, send from a session's composer, then try to start a new session. Both
-      show "Not connected" instead of hanging, and the composer keeps its text.
+- [ ] While still offline, send from the Chat tab's text box, then try to start a new session.
+      Both show "Not connected" instead of hanging, and the text box keeps its text.
 - [ ] Turn the network back on. The banner disappears, and the list catches up with changes made
       while offline.
 - [ ] Stop the daemon (`afk service stop`). The banner shows reconnecting attempts. Start it
       again (`afk service start`): the banner goes away. Stopping the daemon ended every
       session, so start one again on the laptop (`afk shell`); it appears in the list.
-- [ ] Revoke the phone on the laptop (`afk devices`, then `afk unpair <deviceId>`), then make
-      the phone reconnect by turning Wi-Fi off and on. The banner says
-      "Connection refused: unauthorized".
-- [ ] Pair again: in the app, Settings → Laptop → **Unpair**, then run `afk pair` on the laptop
-      and scan the code. Until you do, the phone shows "unauthorized" (or the pairing screen,
-      once unpaired). After pairing, the list shows the laptop's sessions again.
+- [ ] On the laptop, run `afk unpair` and confirm. The app goes to the pairing screen by
+      itself and says the laptop unpaired this phone.
+- [ ] Pair again: run `afk pair` on the laptop and scan the code. The list opens, empty until
+      you start a session.
 
-## Detach and closing
+## Closing a session
 
-- [ ] On the laptop, run `afk shell` in a folder. Press Ctrl+] then d. The window returns to
-      your own prompt. `afk ls` and the app both still show the session as running.
-- [ ] Run `afk attach <name>` in another window. The screen is the same as before the detach
-      (not a fresh shell), and typing reaches the session.
-- [ ] Close the attached window with its X button (no chord). The session keeps running:
-      `afk ls` and the app still show it.
-- [ ] Open the same session on the phone and type a command in the Terminal tab. The laptop
+- [ ] On the laptop, run `afk shell` in a folder, then close its window with the X button. The
+      session ends: its card leaves the app, and `afk ls` no longer lists it.
+- [ ] Run `afk claude`, then `afk attach <name>` in a second window. Both show the same screen.
+      Close one window: the session keeps running. Close the other: it ends, and its card shows
+      "Ended".
+- [ ] Open a running session on the phone and type a command in the Terminal tab. The laptop
       window shows the same screen, including what you typed on the phone.
-- [ ] With a laptop window attached, kill the session from the phone (long-press → Kill, then
-      confirm). The laptop window prints "session ended" and closes. The app shows Ended.
-- [ ] In an attached window, type `exit`. The session shows Ended in the app and in `afk ls`,
-      and the window closes.
+- [ ] Kill a session from the phone (long-press → Kill, then confirm). Its laptop window closes.
+- [ ] In a Claude session, quit Claude (`/exit`). The session ends and its window closes. The
+      app shows it as "Ended", with Resume.
+- [ ] Resume it from the phone. A window opens on the laptop, on the same conversation, and the
+      list shows one session with that name, not two.
 - [ ] Turn on airplane mode on the phone for a minute, then turn it off during a running
       session. The session keeps running on the laptop. The phone reconnects and shows the
       current screen, with no second session created.
+- [ ] End the last session with no phone paired (`afk unpair` first, then `afk shell` and
+      close it). `afk service status` says AFK is not running.
 
 ## Release
 
@@ -328,14 +360,16 @@ These are expected. Do not file them as bugs.
 - A question with three or more options shows only its first two options and **Reply** in the
   notification, or its first three options when it takes no typed answer. A multi-select
   question gets no answer buttons. Open the session for the rest.
-- On a cold start, the offline banner can show "Not connected" for a moment, before the
-  connection service has started connecting.
 - Ctrl+arrow on a hardware keyboard leaves the on-screen Ctrl armed.
 - A chat error after the daemon refuses the stream stays until the chat reconnects (leave the
   session for more than 5 seconds); a chat that timed out retries by itself after 10 seconds,
   then 20, 40 and 60 while the laptop stays silent. There is no Retry button.
-- A sub-agent's thread screen has no composer. Answer its questions with text from the session
-  screen.
+- A sub-agent's thread screen has no text box. Answer its questions with text from the
+  session's Chat tab.
+- The Terminal tab has no text box. A question that wants a typed answer is answered by typing
+  into the terminal, or from the Chat tab.
+- AFK lists only the sessions it started. A `claude` or `codex` started without `afk` is not
+  shown.
 - Android refuses to install an APK over the installed app when the two are signed with
   different keys. That happens with a CI build over a local build, with debug-signed CI builds
   from different runners (no keystore secrets), and with the first release signed with the real
