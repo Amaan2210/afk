@@ -23,4 +23,7 @@ The edited file carries an `AFK:` comment saying what changed.
 - `src/main/AndroidManifest.xml`: removed `package="com.termux.view"`, which AGP 8 and later
   reject; the namespace is set in `build.gradle.kts`.
 
-Every file under `src/main/java/` and `src/main/res/` is unchanged.
+- `src/main/java/com/termux/view/TerminalView.java`, `doScroll`: a swipe on the alternate screen
+  no longer sends Up and Down keys. An agent takes Up as "recall the last prompt".
+
+Every other file under `src/main/java/` and `src/main/res/` is unchanged.
