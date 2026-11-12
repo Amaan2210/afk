@@ -11,6 +11,13 @@ const DEFAULT_SUBAGENT = "general-purpose";
 /** Claude Code's text for an interrupted turn: `… by user]` or `… by user for tool use]`. */
 const INTERRUPTED = "[Request interrupted by user";
 
+/** What Claude Code wraps around text it adds to a user line itself. */
+const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/;
+const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
+/** A user line that is one machine-made block, such as `<task-notification>…</task-notification>`. */
+const MACHINE_BLOCK = /^<([a-z][a-z0-9]*(?:-[a-z0-9]+)+)>[\s\S]*<\/\1>$/;
+
 type Block = Record<string, unknown>;
 type QuestionPending = Extract<Pending, { kind: "question" }>;
 
@@ -63,7 +70,7 @@ export class ClaudeTranscriptNormalizer {
     const events =
       line.type === "assistant"
         ? this.assistantLine(blocks, uuid, at)
-        : this.userLine(blocks, uuid, at, line.toolUseResult);
+        : this.userLine(blocks, uuid, at, line.toolUseResult, line.isMeta === true);
     if (events.length > 0) this.lastAt = at;
     return events;
   }
@@ -156,9 +163,11 @@ export class ClaudeTranscriptNormalizer {
     uuid: string | undefined,
     at: string,
     toolUseResult: unknown,
+    meta: boolean,
   ): ChatEvent[] {
     const events: ChatEvent[] = [];
-    const text = joinText(blocks);
+    // A meta line is Claude Code's own, never something the user typed.
+    const text = meta ? undefined : typedByUser(joinText(blocks));
     if (text !== undefined && uuid !== undefined)
       events.push(this.event(uuid, at, "user", { text }));
     const results = blocks.filter((b) => b.type === "tool_result");
@@ -166,13 +175,18 @@ export class ClaudeTranscriptNormalizer {
     const agentId = results.length === 1 ? agentIdOf(toolUseResult) : undefined;
     for (const block of results) {
       if (typeof block.tool_use_id !== "string") continue;
-      const done = this.toolResult(block.tool_use_id, block, agentId);
+      const done = this.toolResult(block.tool_use_id, block, agentId, toolUseResult);
       if (done !== undefined) events.push(done);
     }
     return events;
   }
 
-  private toolResult(id: string, block: Block, agentId: string | undefined): ChatEvent | undefined {
+  private toolResult(
+    id: string,
+    block: Block,
+    agentId: string | undefined,
+    toolUseResult: unknown,
+  ): ChatEvent | undefined {
     const prev = this.open.get(id);
     if (prev === undefined) return undefined;
     this.open.delete(id);
@@ -188,6 +202,8 @@ export class ClaudeTranscriptNormalizer {
       if (this.question?.id === id) this.question = undefined;
       const answered = { ...prev };
       delete answered.pending;
+      const answer = failed ? undefined : answerOf(toolUseResult, prev.text);
+      if (answer !== undefined) answered.text = `${prev.text ?? ""}\n\n**Answer:** ${answer}`;
       return answered;
     }
     if (prev.tool === undefined) return undefined;
@@ -226,6 +242,44 @@ export function isInterruptLine(line: unknown): boolean {
   return contentBlocks(line.message.content).some(
     (b) => b.type === "text" && typeof b.text === "string" && b.text.startsWith(INTERRUPTED),
   );
+}
+
+/**
+ * What the user typed in a user line's text, or undefined when the line holds nothing of theirs:
+ * reminders are cut out, a slash command reads as typed (`/model opus`), and a line that is one
+ * machine-made block (a sub-agent's hand-back, a task notification, a command's output) is dropped.
+ */
+export function typedByUser(text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  const command = COMMAND_NAME.exec(text)?.[1]?.trim();
+  if (command !== undefined && command !== "") {
+    const args = COMMAND_ARGS.exec(text)?.[1]?.trim() ?? "";
+    return args === "" ? command : `${command} ${args}`;
+  }
+  const typed = text.replace(REMINDER, "").trim();
+  if (typed === "" || MACHINE_BLOCK.test(typed)) return undefined;
+  return typed;
+}
+
+/**
+ * The answer given to an AskUserQuestion, from the tool result's `answers` (question → answer):
+ * the answer to `question` alone when it is the only one, else each as `question: answer`.
+ */
+function answerOf(toolUseResult: unknown, question: string | undefined): string | undefined {
+  if (!isRecord(toolUseResult) || !isRecord(toolUseResult.answers)) return undefined;
+  const answers = Object.entries(toolUseResult.answers).filter(
+    (e): e is [string, string] => typeof e[1] === "string" && e[1].trim() !== "",
+  );
+  if (answers.length === 0) return undefined;
+  const [first] = answers;
+  if (
+    answers.length === 1 &&
+    first !== undefined &&
+    (question === undefined || first[0] === question)
+  ) {
+    return first[1];
+  }
+  return answers.map(([q, a]) => `${q}: ${a}`).join("; ");
 }
 
 /** A message's content as blocks: a plain string is one text block. */
