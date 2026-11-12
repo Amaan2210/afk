@@ -101,3 +101,19 @@ describe("openSessionWindow", () => {
     ).not.toThrow();
   });
 });
+
+describe("laptop stats", () => {
+  it("are sampled only while a phone is connected", async () => {
+    const start = vi.spyOn(h.stats, "start");
+    const stop = vi.spyOn(h.stats, "stop");
+    const cli = await h.client();
+    expect(start).not.toHaveBeenCalled();
+
+    const phone = await h.client(PIXEL_TOKEN);
+    expect(start).toHaveBeenCalledOnce();
+    stop.mockClear();
+    phone.terminate();
+    await vi.waitFor(() => expect(stop).toHaveBeenCalled());
+    expect(cli.isOpen).toBe(true);
+  });
+});

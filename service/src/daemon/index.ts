@@ -218,8 +218,8 @@ async function compose(
   }));
   keepAwake.setEnabled(config.settings.keepAwake);
   p.unfollow = followSessions(keepAwake, registry);
+  // Started by the WebSocket API while a phone is connected, and stopped when none is.
   const stats = (p.stats = new StatsSampler());
-  stats.start(() => keepAwake.active);
 
   const handler = (p.handler = createHttpHandler({
     registry,

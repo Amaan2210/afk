@@ -64,4 +64,6 @@ export interface WsContext {
   broadcast(msg: ServerMessage, filter?: (c: ClientConn) => boolean): void;
   /** Forgets a connection once its socket has closed. */
   remove(conn: ClientConn): void;
+  /** Called once a connection has authenticated. */
+  joined(conn: ClientConn): void;
 }

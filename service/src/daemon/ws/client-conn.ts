@@ -204,6 +204,7 @@ export class ClientConn {
     this.local = who === "local";
     this.device = device;
     for (const frame of greeting) this.send(frame);
+    this.ctx.joined(this);
     if (who !== "local") {
       this.ctx.devices
         .markSeen(who.id)

@@ -68,6 +68,13 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
   const save = serialized(deps.saveConfig);
   let nextId = 1;
 
+  // Only a phone shows the laptop's RAM and CPU, so they are sampled only while one is connected.
+  const sampleForPhones = (): void => {
+    const phoneConnected = [...conns].some((c) => c.authenticated && !c.isLocal);
+    if (phoneConnected) deps.stats.start(() => deps.keepAwake.active);
+    else deps.stats.stop();
+  };
+
   const ctx: WsContext = {
     deps,
     devices: new DeviceStore(deps.config, save),
@@ -82,8 +89,10 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
     },
     remove(conn) {
       conns.delete(conn);
+      sampleForPhones();
       deps.onClientGone?.();
     },
+    joined: sampleForPhones,
   };
 
   wss.on("connection", (ws) => conns.add(new ClientConn(`c${nextId++}`, ws, ctx)));
@@ -108,6 +117,7 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
     clientCount: () => ctx.clients().length,
     async close() {
       closed = true;
+      deps.stats.stop();
       clearInterval(heartbeat);
       for (const server of httpServers) server.off("upgrade", onUpgrade);
       unwire();
