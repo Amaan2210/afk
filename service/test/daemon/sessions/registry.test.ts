@@ -63,11 +63,11 @@ afterEach(async () => {
 describe("SessionRegistry.create", () => {
   it("create spawns the shell with the session profile in cwd and names after the folder", async () => {
     const s = await reg.create({
-      cwd: "D:\\My Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-app",
       kind: "shell",
       args: [],
     });
-    expect(s.name).toBe("web-platform");
+    expect(s.name).toBe("web-app");
     expect(s.state).toBe("idle");
     expect(s.kind).toBe("shell");
     expect(fake.lastSpawn.args).toEqual([
@@ -84,13 +84,13 @@ describe("SessionRegistry.create", () => {
   it("spawns the configured shell in cwd with AFK_* merged over the base environment", async () => {
     const { updates } = collect();
     const s = await reg.create({
-      cwd: "D:\\My Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-app",
       kind: "shell",
       args: [],
     });
     expect(fake.lastSpawn).toMatchObject({
       exe: deps.shell.exe,
-      cwd: "D:\\My Repos\\web-platform",
+      cwd: "D:\\My Repos\\web-app",
       env: { Path: "C:\\Windows", AFK_SESSION_ID: s.id, AFK_PORT: "2350" },
     });
     expect(s).toMatchObject({

@@ -171,7 +171,7 @@ class SessionsScreenTest {
     private val sampleSessions = listOf(
         session(
             "s_needs",
-            "web-platform",
+            "web-app",
             SessionKind.claude,
             SessionState.needs_input,
             lastMessage = "Which auth approach should I use?",

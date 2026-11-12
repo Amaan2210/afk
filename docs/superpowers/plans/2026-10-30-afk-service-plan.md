@@ -510,8 +510,8 @@ it("codex and shell", () => { expect(buildLaunchLine("codex", [], undefined)).to
 
 // registry.test.ts (fake pty factory from Task 6 tests; deps.now injectable)
 it("create spawns the shell with the session profile in cwd and names after the folder", async () => {
-  const s = await reg.create({ cwd: "D:\\My Repos\\web-platform", kind: "shell", args: [] });
-  expect(s.name).toBe("web-platform"); expect(s.state).toBe("idle"); expect(s.kind).toBe("shell");
+  const s = await reg.create({ cwd: "D:\\My Repos\\web-app", kind: "shell", args: [] });
+  expect(s.name).toBe("web-app"); expect(s.state).toBe("idle"); expect(s.kind).toBe("shell");
   expect(fake.lastSpawn.args).toEqual(["-NoLogo","-NoExit","-ExecutionPolicy","Bypass","-File", join(deps.sessionsDir, s.id, "profile.ps1")]);
   expect(fake.lastSpawn.env.AFK_SESSION_ID).toBe(s.id);
 });
