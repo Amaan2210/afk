@@ -76,6 +76,10 @@ class FakeSessionsRepository : SessionsRepository {
     var listDirsResult: Result<ServerMessage.FsDirs> =
         Result.success(ServerMessage.FsDirs(id = "r1", dirs = emptyList(), recent = emptyList()))
     var settingsResult: Result<DaemonSettings> = Result.success(DaemonSettings())
+    var stopResult: Result<Unit> = Result.success(Unit)
+
+    /** How many times [stopDaemon] was asked. */
+    var stops = 0
 
     /**
      * When true, each [listDirs] waits for its reply in [dirsReply] instead of answering
@@ -154,6 +158,11 @@ class FakeSessionsRepository : SessionsRepository {
         ptyInputs += id to bytes
     }
 
+    /** Recorded as one input, the text with its Enter, though the real one sends two. */
+    override fun typeLine(id: String, text: String) {
+        ptyInputs += id to (text + "\r").toByteArray(Charsets.UTF_8)
+    }
+
     override fun ptyResize(id: String, cols: Int, rows: Int) {
         ptyResizes += Triple(id, cols, rows)
     }
@@ -203,5 +212,10 @@ class FakeSessionsRepository : SessionsRepository {
     override suspend fun setDaemonSettings(patch: DaemonSettingsPatch): Result<DaemonSettings> {
         settingsPatches += patch
         return settingsReply?.await() ?: settingsResult
+    }
+
+    override suspend fun stopDaemon(): Result<Unit> {
+        stops++
+        return stopResult
     }
 }

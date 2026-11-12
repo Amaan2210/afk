@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -29,7 +30,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class) // runCurrent
+@OptIn(ExperimentalCoroutinesApi::class) // runCurrent, advanceTimeBy
 class SessionsRepositoryTest {
     private val manager = FakeConnectionManager()
 
@@ -222,6 +223,20 @@ class SessionsRepositoryTest {
         val error = failureOf(repo.pty("s_1", 80, 24))
 
         assertEquals(ERROR_TIMEOUT, (error as AfkError).code)
+    }
+
+    /** Together, an agent takes them as pasted text and does not send the line. */
+    @Test fun aTypedLineSendsItsEnterAMomentAfterItsText() = runTest {
+        val repo = repo()
+        val text = ClientMessage.PtyInput("s_1", "bHM=")
+
+        repo.typeLine("s_1", "ls")
+        runCurrent()
+        assertEquals(listOf(text), manager.sent)
+
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(listOf(text, ClientMessage.PtyInput("s_1", "DQ==")), manager.sent)
     }
 
     @Test fun ptyInputAndResizeAreSent() = runTest {

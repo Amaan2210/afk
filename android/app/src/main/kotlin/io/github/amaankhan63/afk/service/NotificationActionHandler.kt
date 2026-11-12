@@ -98,7 +98,7 @@ class NotificationActionHandler(
         if (repo.connection.value !is ConnectionState.Connected) {
             return Result.failure(AfkError(ERROR_DISCONNECTED, "not connected to the laptop"))
         }
-        repo.ptyInput(sessionId, "$text\r".toByteArray(Charsets.UTF_8))
+        repo.typeLine(sessionId, text)
         return Result.success(Unit)
     }
 

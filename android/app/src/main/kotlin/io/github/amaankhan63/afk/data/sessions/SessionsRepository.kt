@@ -63,6 +63,13 @@ interface SessionsRepository {
     /** Types [bytes] into session [id]; dropped while disconnected. */
     fun ptyInput(id: String, bytes: ByteArray)
 
+    /**
+     * Types [text] into session [id], then Enter a moment later, as a person would: an agent takes
+     * text and Enter that arrive together as pasted text, and does not send it. Dropped while
+     * disconnected.
+     */
+    fun typeLine(id: String, text: String)
+
     /** Resizes session [id]'s terminal; later re-subscriptions of open [pty]s ask for this grid. */
     fun ptyResize(id: String, cols: Int, rows: Int)
 
@@ -99,4 +106,7 @@ interface SessionsRepository {
     suspend fun listDirs(path: String?): Result<ServerMessage.FsDirs>
 
     suspend fun setDaemonSettings(patch: DaemonSettingsPatch): Result<DaemonSettings>
+
+    /** Unpairs this phone on the laptop, ends every session there and stops AFK on it. */
+    suspend fun stopDaemon(): Result<Unit>
 }

@@ -136,7 +136,7 @@ class SessionViewModel internal constructor(
         if (question != null) {
             answer(question.id, null, text, null)
         } else {
-            sendKeys((text + "\r").toByteArray(Charsets.UTF_8))
+            repo.typeLine(sessionId, text)
         }
         return true
     }

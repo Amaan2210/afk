@@ -132,7 +132,9 @@ data class Stats(
 data class DaemonSettings(
     val keepAwake: Boolean = true,
     val keepAwakeGraceMin: Int = 10,
-    val retentionHours: Int = 24
+    val retentionHours: Int = 24,
+    /** What the owner calls the laptop; null while it goes by the computer's own name. */
+    val laptopName: String? = null
 )
 
 /** Wire form of `Partial<DaemonSettings>`: only the non-null fields are sent. */
@@ -140,7 +142,9 @@ data class DaemonSettings(
 data class DaemonSettingsPatch(
     val keepAwake: Boolean? = null,
     val keepAwakeGraceMin: Int? = null,
-    val retentionHours: Int? = null
+    val retentionHours: Int? = null,
+    /** Blank gives the laptop its own name back. */
+    val laptopName: String? = null
 )
 
 @Serializable

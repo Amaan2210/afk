@@ -21,6 +21,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -43,7 +44,7 @@ import kotlinx.coroutines.launch
  */
 class DefaultSessionsRepository(
     private val manager: ConnectionManager,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     private val clock: () -> Instant = Instant::now
 ) : SessionsRepository {
     override val connection: StateFlow<ConnectionState> = manager.state
@@ -121,6 +122,15 @@ class DefaultSessionsRepository(
     override fun ptyInput(id: String, bytes: ByteArray) =
         manager.send(ClientMessage.PtyInput(id, Base64Codec.encode(bytes)))
 
+    override fun typeLine(id: String, text: String) {
+        if (text.isEmpty()) return ptyInput(id, ENTER)
+        ptyInput(id, text.toByteArray(Charsets.UTF_8))
+        scope.launch {
+            delay(ENTER_DELAY_MS)
+            ptyInput(id, ENTER)
+        }
+    }
+
     override fun ptyResize(id: String, cols: Int, rows: Int) {
         grids.computeIfPresent(id) { _, _ -> Grid(cols, rows) }
         manager.send(ClientMessage.PtyResize(id, cols, rows))
@@ -161,6 +171,8 @@ class DefaultSessionsRepository(
         call(ClientMessage.DaemonSettingsSet(NO_ID, patch)) {
             (it as? ServerMessage.DaemonSettingsMsg)?.settings
         }
+
+    override suspend fun stopDaemon(): Result<Unit> = call(ClientMessage.DaemonStop(NO_ID), ::acked)
 
     private suspend fun onPush(msg: ServerMessage) {
         when (msg) {
@@ -315,6 +327,10 @@ class DefaultSessionsRepository(
         /** `request` stamps its own id over this placeholder. */
         const val NO_ID = ""
         const val ERROR_INTERNAL = "internal"
+
+        /** The pause between a line's text and its Enter: long enough for the agent to redraw. */
+        const val ENTER_DELAY_MS = 150L
+        val ENTER = "\r".toByteArray(Charsets.UTF_8)
     }
 }
 

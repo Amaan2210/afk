@@ -187,6 +187,11 @@ sealed interface ClientMessage {
     @SerialName("daemon.settings.set")
     data class DaemonSettingsSet(val id: String, val settings: DaemonSettingsPatch) : ClientMessage
 
+    /** Unpairs this phone, ends every session and stops the daemon. */
+    @Serializable
+    @SerialName("daemon.stop")
+    data class DaemonStop(val id: String) : ClientMessage
+
     // The three device.* messages are CLI-only (local token); kept so the models mirror the whole protocol.
     @Serializable
     @SerialName("device.add")
