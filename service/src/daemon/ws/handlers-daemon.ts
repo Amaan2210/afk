@@ -9,7 +9,18 @@ type DaemonType = "daemon.settings.get" | "daemon.settings.set" | "daemon.stop" 
 /** A timer longer than about 24.8 days fires at once, so the grace is capped well below that. */
 const MAX_GRACE_MIN = 24 * 60;
 
+/** C0 controls, DEL and C1 controls. */
+function hasControlChar(text: string): boolean {
+  return [...text].some((ch) => {
+    const c = ch.codePointAt(0) ?? 0;
+    return c < 0x20 || (c >= 0x7f && c <= 0x9f);
+  });
+}
+
 function checkSettings(patch: Partial<DaemonSettings>): void {
+  if (patch.laptopName !== undefined && hasControlChar(patch.laptopName)) {
+    throw badRequest("laptopName must not contain control characters");
+  }
   for (const [key, value] of Object.entries(patch)) {
     if (typeof value === "number" && value < 0) throw badRequest(`${key} must not be negative`);
   }
@@ -29,6 +40,10 @@ export const daemonHandlers: Pick<HandlerMap, DaemonType> = {
     const { config, keepAwake } = ctx.deps;
     const previous = config.settings;
     const settings: DaemonSettings = { ...previous, ...msg.settings };
+    // A blank name gives the laptop its own name back.
+    const laptopName = settings.laptopName?.trim();
+    if (laptopName === undefined || laptopName === "") delete settings.laptopName;
+    else settings.laptopName = laptopName;
     config.settings = settings;
     try {
       await ctx.save();

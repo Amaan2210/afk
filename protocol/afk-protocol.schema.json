@@ -392,6 +392,10 @@
                 },
                 "retentionHours": {
                   "type": "number"
+                },
+                "laptopName": {
+                  "type": "string",
+                  "maxLength": 40
                 }
               },
               "additionalProperties": true
@@ -988,6 +992,10 @@
                 },
                 "retentionHours": {
                   "type": "number"
+                },
+                "laptopName": {
+                  "type": "string",
+                  "maxLength": 40
                 }
               },
               "required": [
@@ -2198,6 +2206,10 @@
         },
         "retentionHours": {
           "type": "number"
+        },
+        "laptopName": {
+          "type": "string",
+          "maxLength": 40
         }
       },
       "required": [

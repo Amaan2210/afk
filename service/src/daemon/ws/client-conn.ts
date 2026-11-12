@@ -219,7 +219,7 @@ export class ClientConn {
     const { version, tailscaleIp, registry, stats, keepAwake, config } = this.ctx.deps;
     const daemon = {
       version,
-      hostname: os.hostname(),
+      hostname: config.settings.laptopName ?? os.hostname(),
       platform: process.platform,
       ...(tailscaleIp === undefined ? {} : { tailscaleIp }),
     };

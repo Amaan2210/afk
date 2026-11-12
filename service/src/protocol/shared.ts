@@ -119,5 +119,7 @@ export const DaemonSettingsSchema = z.object({
   keepAwake: z.boolean(),
   keepAwakeGraceMin: z.number(),
   retentionHours: z.number(),
+  /** What the phone calls this laptop; absent, it is the computer's own name. */
+  laptopName: z.string().max(40).optional(),
 });
 export type DaemonSettings = z.infer<typeof DaemonSettingsSchema>;
