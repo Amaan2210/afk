@@ -4,7 +4,8 @@ import { isRecord } from "../../../util/is-record.js";
 /**
  * Maps a Claude Code status-line payload to a strip. A field is included only when its source
  * value is present (and, for numbers, finite), so missing sections just leave keys out.
- * `thinking` is not in the payload; see the spec's "derive or omit", we omit it.
+ * `thinking` is the session's effort level, or whether extended thinking is on. The share of the
+ * context in use is null early in a session; it is then worked out from the latest usage.
  */
 export function mapStatusline(payload: unknown, at: string = new Date().toISOString()): Strip {
   const root = isRecord(payload) ? payload : {};
@@ -16,7 +17,9 @@ export function mapStatusline(payload: unknown, at: string = new Date().toISOStr
   if (typeof model.id === "string" && typeof model.display_name === "string") {
     strip.model = { id: model.id, name: model.display_name };
   }
-  put(strip, "contextUsedPct", context.used_percentage);
+  put(strip, "contextUsedPct", context.used_percentage ?? usedFromUsage(context));
+  const thinking = thinkingOf(root);
+  if (thinking !== undefined) strip.thinking = thinking;
   put(strip, "contextSize", context.context_window_size);
   put(strip, "costUsd", cost.total_cost_usd);
   put(strip, "durationMs", cost.total_duration_ms);
@@ -39,6 +42,29 @@ type NumericKey =
 
 function put(strip: Strip, key: NumericKey, value: unknown): void {
   if (typeof value === "number" && Number.isFinite(value)) strip[key] = value;
+}
+
+/** `think high`, from the effort level; `think on` or `think off` when only the switch is known. */
+function thinkingOf(root: Record<string, unknown>): string | undefined {
+  const enabled = section(root, "thinking").enabled;
+  const level = section(root, "effort").level;
+  if (enabled === false) return "think off";
+  if (typeof level === "string" && level !== "") return `think ${level}`;
+  return enabled === true ? "think on" : undefined;
+}
+
+/** The context in use as Claude Code counts it: the input side of the latest request. */
+function usedFromUsage(context: Record<string, unknown>): number | undefined {
+  const usage = section(context, "current_usage");
+  const size = context.context_window_size;
+  const parts = [
+    usage.input_tokens,
+    usage.cache_creation_input_tokens,
+    usage.cache_read_input_tokens,
+  ].filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  if (parts.length === 0 || typeof size !== "number" || size <= 0) return undefined;
+  const used = parts.reduce((a, b) => a + b, 0);
+  return Math.min(100, Math.round((used / size) * 1000) / 10);
 }
 
 function section(parent: Record<string, unknown>, key: string): Record<string, unknown> {

@@ -30,3 +30,37 @@ describe("mapStatusline", () => {
     expect(Number.isNaN(Date.parse(strip.at))).toBe(false);
   });
 });
+
+describe("mapStatusline: thinking and the context fallback", () => {
+  it("reads the effort level as the thinking chip", () => {
+    expect(mapStatusline({ effort: { level: "high" }, thinking: { enabled: true } }).thinking).toBe(
+      "think high",
+    );
+    expect(mapStatusline({ thinking: { enabled: true } }).thinking).toBe("think on");
+    expect(
+      mapStatusline({ effort: { level: "high" }, thinking: { enabled: false } }).thinking,
+    ).toBe("think off");
+    expect(mapStatusline({}).thinking).toBeUndefined();
+  });
+
+  it("works the context share out from the latest usage while Claude reports none", () => {
+    const context_window = {
+      context_window_size: 200000,
+      used_percentage: null,
+      current_usage: {
+        input_tokens: 8500,
+        output_tokens: 1200,
+        cache_creation_input_tokens: 5000,
+        cache_read_input_tokens: 2000,
+      },
+    };
+    expect(mapStatusline({ context_window }).contextUsedPct).toBe(7.8);
+    expect(
+      mapStatusline({ context_window: { ...context_window, used_percentage: 11 } }).contextUsedPct,
+    ).toBe(11);
+    expect(
+      mapStatusline({ context_window: { context_window_size: 200000, current_usage: null } })
+        .contextUsedPct,
+    ).toBeUndefined();
+  });
+});
