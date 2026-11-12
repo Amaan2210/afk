@@ -71,6 +71,10 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
         state.update { it.copy(flags = if (id in it.flags) it.flags - id else it.flags + id) }
     }
 
+    fun setName(n: String) {
+        state.update { it.copy(name = n) }
+    }
+
     fun setModel(m: String) {
         state.update { it.copy(model = m) }
     }
@@ -85,7 +89,8 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
 
     /**
      * Starts the session; its id goes to [created]. Does nothing until a folder is chosen or while
-     * a start is under way. A blank prompt is none.
+     * a start is under way. A blank prompt is none, and a blank name leaves the daemon to name
+     * the session after its folder.
      */
     fun start() {
         val form = state.value
@@ -95,8 +100,9 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
         val shell = form.kind == SessionKind.shell
         val args = if (shell) emptyList() else LaunchFlags.args(form.kind, form.flags, form.model)
         val prompt = if (shell) null else form.prompt.ifBlank { null }
+        val name = form.name.trim().ifBlank { null }
         viewModelScope.launch {
-            repo.createSession(form.cwd, form.kind, args, name = null, prompt = prompt)
+            repo.createSession(form.cwd, form.kind, args, name = name, prompt = prompt)
                 .onSuccess { createdIds.send(it) }
                 .onFailure { e ->
                     val message = e.shownMessage(creating = true)
@@ -108,6 +114,7 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
 
     private companion object {
         const val NOT_CONNECTED = "Not connected"
+        const val NO_ANSWER = "The laptop did not answer; try again"
         const val NO_REPLY = "No reply — the session may have started; check the list"
 
         fun defaultFlags(kind: SessionKind): Set<String> = when (kind) {
@@ -118,15 +125,16 @@ class NewSessionViewModel @Inject constructor(private val repo: SessionsReposito
 
         /**
          * A failure in the screen's words. The daemon's own messages, such as why it refuses a
-         * folder, are already readable; a request it did not get or did not answer is
-         * "Not connected". The daemon creates a session even when its reply is lost, so an
-         * unanswered create ([creating]) says to check the list before starting it again.
+         * folder, are already readable; a request it did not get is "Not connected", and one
+         * it did not answer says so. The daemon creates a session even when its reply is lost, so
+         * an unanswered create ([creating]) says to check the list before starting it again.
          */
         fun Throwable.shownMessage(creating: Boolean = false): String {
             val error = asAfkError(answering = false)
             return when {
                 creating && error.code == ERROR_TIMEOUT -> NO_REPLY
-                error.code == ERROR_DISCONNECTED || error.code == ERROR_TIMEOUT -> NOT_CONNECTED
+                error.code == ERROR_TIMEOUT -> NO_ANSWER
+                error.code == ERROR_DISCONNECTED -> NOT_CONNECTED
                 else -> error.message ?: error.code
             }
         }

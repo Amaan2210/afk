@@ -26,14 +26,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,8 +72,8 @@ internal fun readLicenseTexts(assets: AssetManager): LicenseTexts {
 /**
  * About: the app's name and version, a link to its source, and its licenses: AFK's own (MIT),
  * the Termux terminal emulator it includes, with Termux's notice, every other bundled library
- * with its owner and a link to its source, and the Apache License 2.0 they are all under, in
- * full.
+ * with its owner and a link to its source, and the Apache License 2.0 they are all under. The
+ * two long texts, Termux's notice and the Apache License, open on a tap.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,8 +160,11 @@ private fun AboutContent(
         SettingsGroup("Licenses") {
             SettingRow(title = "AFK", note = "MIT")
             RowDivider()
-            SettingRow(title = "Terminal emulator", note = "Termux ($APACHE)")
-            if (texts != null) LicenseText(texts.termuxNotice)
+            ExpandableText(
+                title = "Terminal emulator",
+                note = "Termux ($APACHE)",
+                text = texts?.termuxNotice
+            )
         }
         SettingsGroup("Libraries") {
             THIRD_PARTY_LIBRARIES.forEachIndexed { index, library ->
@@ -169,8 +177,11 @@ private fun AboutContent(
             }
         }
         SettingsGroup(APACHE) {
-            SettingRow(title = "Full text", note = "Covers the terminal emulator and the libraries")
-            if (texts != null) LicenseText(texts.apacheLicense)
+            ExpandableText(
+                title = "Full text",
+                note = "Covers the terminal emulator and the libraries",
+                text = texts?.apacheLicense
+            )
         }
     }
 }
@@ -189,6 +200,26 @@ private fun LinkRow(title: String, note: String, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/** A row that shows [text] under it once tapped, and hides it on the next tap. */
+@Composable
+private fun ExpandableText(title: String, note: String, text: String?) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    SettingRow(
+        title = title,
+        modifier = Modifier
+            .clickable(role = Role.Button) { open = !open }
+            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+        note = note
+    ) {
+        Text(
+            text = if (open) "Hide" else "Show",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+    if (open && text != null) LicenseText(text)
 }
 
 /** [text] in monospace, selectable, on a tinted block; the screen scrolls it. */

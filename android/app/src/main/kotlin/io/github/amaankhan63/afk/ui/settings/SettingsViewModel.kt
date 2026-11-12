@@ -14,6 +14,7 @@ import io.github.amaankhan63.afk.data.pairing.PairingStore
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.DaemonSettings
 import io.github.amaankhan63.afk.data.protocol.DaemonSettingsPatch
+import io.github.amaankhan63.afk.data.protocol.Stats
 import io.github.amaankhan63.afk.data.sessions.ERROR_TIMEOUT
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.data.settings.AppSettings
@@ -43,7 +44,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The Settings screen: the app's settings, which it saves as they change, and the paired laptop,
- * whose keep-awake it switches and which it unpairs. Failures go to [errors].
+ * whose keep-awake it switches, which it names and which it unpairs. Failures go to [errors].
  */
 @HiltViewModel
 class SettingsViewModel internal constructor(
@@ -90,15 +91,23 @@ class SettingsViewModel internal constructor(
     val ui: StateFlow<SettingsUiState> = combine(
         store.settings,
         repo.connection,
-        repo.daemonSettings,
+        combine(repo.daemonSettings, repo.stats, ::Pair),
         // A pairing that cannot be read leaves the address to the connection.
         pairingStore.pairing.catch { emit(null) },
-        keepAwakeBusy,
-        ::uiState
-    ).stateIn(
+        keepAwakeBusy
+    ) { settings, connection, (daemon, stats), pairing, busy ->
+        uiState(settings, connection, daemon, stats, pairing, busy)
+    }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        uiState(store.settings.value, repo.connection.value, repo.daemonSettings.value, null, false)
+        uiState(
+            store.settings.value,
+            repo.connection.value,
+            repo.daemonSettings.value,
+            repo.stats.value,
+            null,
+            false
+        )
     )
 
     fun setTheme(id: AfkThemeId) = save { it.copy(theme = id) }
@@ -124,6 +133,19 @@ class SettingsViewModel internal constructor(
 
     fun setKeyBar(on: Boolean) = save { it.copy(keyBar = on) }
 
+    fun setSwipeTabs(on: Boolean) = save { it.copy(swipeTabs = on) }
+
+    /**
+     * Names the laptop, as the app shows it from then on; a blank [name] gives it the computer's
+     * own name back.
+     */
+    fun setLaptopName(name: String) {
+        viewModelScope.launch {
+            repo.setDaemonSettings(DaemonSettingsPatch(laptopName = name.trim()))
+                .onFailure { errorEvents.trySend(it.shown()) }
+        }
+    }
+
     /**
      * Asks the daemon to keep the laptop awake while agents work, or not. Ignored while an earlier
      * change waits for its reply; the switch shows the daemon's answer.
@@ -138,13 +160,24 @@ class SettingsViewModel internal constructor(
     }
 
     /**
-     * Forgets the laptop: clears the pairing, stops the connection service, then sends
-     * [unpaired]. Ignored while an unpair is under way.
+     * Unpairs. While connected, the laptop is first told to unpair this phone, end every session
+     * and stop AFK; if that fails nothing changes, so it can be tried again. Then, and at once
+     * while not connected, the app forgets the laptop: clears the pairing, stops the connection
+     * service and sends [unpaired]. Ignored while an unpair is under way.
      */
     fun unpair() {
         if (unpairing) return
         unpairing = true
         viewModelScope.launch {
+            if (repo.connection.value is ConnectionState.Connected) {
+                val failure = repo.stopDaemon().exceptionOrNull()
+                if (failure != null) {
+                    unpairing = false
+                    val why = failure.shown().message
+                    errorEvents.trySend(AfkError(ERROR_NOT_STOPPED, "$NOT_STOPPED: $why"))
+                    return@launch
+                }
+            }
             try {
                 pairingStore.clear()
             } catch (e: IOException) {
@@ -176,17 +209,20 @@ class SettingsViewModel internal constructor(
         settings: AppSettings,
         connection: ConnectionState,
         daemon: DaemonSettings?,
+        stats: Stats?,
         pairing: PairingPayload?,
         busy: Boolean
     ): SettingsUiState {
         val laptop = (connection as? ConnectionState.Connected)?.hello?.daemon
         return SettingsUiState(
             settings = settings,
-            hostname = laptop?.hostname,
+            hostname = laptop?.let { daemon?.laptopName ?: it.hostname },
+            laptopName = daemon?.laptopName,
             address = laptop?.tailscaleIp ?: pairing?.let { "${it.host}:${it.port}" },
             connected = laptop != null,
             keepAwake = daemon?.keepAwake,
             keepAwakeBusy = busy,
+            keepAwakeActive = stats?.keepAwakeActive.takeIf { laptop != null },
             graceMin = daemon?.keepAwakeGraceMin ?: DEFAULT_GRACE_MIN,
             version = version
         )
@@ -196,6 +232,8 @@ class SettingsViewModel internal constructor(
         const val ERROR_NOT_SAVED = "not_saved"
         const val NOT_SAVED = "The setting could not be saved"
         const val NOT_UNPAIRED = "Could not unpair; try again"
+        const val ERROR_NOT_STOPPED = "not_stopped"
+        const val NOT_STOPPED = "Not unpaired, the laptop did not stop AFK"
         const val NOT_CONNECTED = "Not connected"
 
         /** A request the daemon did not get or did not answer is "Not connected". */

@@ -123,6 +123,64 @@ class SettingsViewModelTest {
         assertEquals(listOf("stop after clear", "done"), events)
     }
 
+    @Test fun unpairWhileConnectedStopsAfkOnTheLaptopFirst() = runTest {
+        pairingStore.save(pairing)
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        val vm = viewModel()
+        recordingUnpaired(vm)
+
+        vm.unpair()
+
+        assertEquals(1, repo.stops)
+        assertNull(pairingStore.pairing.first())
+        assertEquals(listOf("stop after clear", "done"), events)
+    }
+
+    @Test fun unpairKeepsThePairingWhenTheLaptopDoesNotStop() = runTest {
+        pairingStore.save(pairing)
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.stopResult = Result.failure(AfkError("internal", "this daemon cannot be stopped"))
+        val vm = viewModel()
+        val errors = errorsOf(vm)
+        recordingUnpaired(vm)
+
+        vm.unpair()
+
+        assertEquals(pairing, pairingStore.pairing.first())
+        assertEquals(emptyList<String>(), events)
+        assertEquals(
+            listOf("Not unpaired, the laptop did not stop AFK: this daemon cannot be stopped"),
+            errors.map { it.message }
+        )
+    }
+
+    @Test fun unpairWhileNotConnectedOnlyForgetsTheLaptop() = runTest {
+        pairingStore.save(pairing)
+        val vm = viewModel()
+
+        vm.unpair()
+
+        assertEquals(0, repo.stops)
+        assertNull(pairingStore.pairing.first())
+    }
+
+    @Test fun theLaptopGoesByTheNameItsOwnerGaveIt() = runTest {
+        repo.connection.value = ConnectionState.Connected(HELLO)
+        repo.daemonSettings.value = DaemonSettings(laptopName = "Desk")
+        val vm = viewModel()
+        assertEquals("Desk", vm.ui.value.hostname)
+
+        vm.setLaptopName("  Work  ")
+
+        assertEquals(listOf(DaemonSettingsPatch(laptopName = "Work")), repo.settingsPatches)
+    }
+
+    @Test fun theUnpairWarningSaysWhatEnds() {
+        val connected = unpairWarning("Desk", connected = true)
+        assertTrue(connected.contains("ends every AFK session on Desk"))
+        assertTrue(unpairWarning(null, connected = false).contains("only forgets"))
+    }
+
     @Test fun unpairFailureReportsAndAllowsRetry() = runTest {
         pairingStore.save(pairing)
         val vm = viewModel()

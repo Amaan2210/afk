@@ -204,10 +204,19 @@ class NewSessionViewModelTest {
         assertFalse(vm.ui.value.starting)
         assertTrue(vm.ui.value.canStart)
 
-        // Only a create can have happened anyway: an unanswered listing is "Not connected".
+        // Only a create can have happened anyway: an unanswered listing just says so.
         repo.listDirsResult = Result.failure(AfkError("timeout", "the daemon did not answer"))
         vm.browse(null)
-        assertEquals("Not connected", vm.ui.value.error)
+        assertEquals("The laptop did not answer; try again", vm.ui.value.error)
+    }
+
+    @Test fun aTypedNameIsGivenToTheSession() {
+        vm.pick("D:\\Repos\\app")
+        vm.setName("  fix login  ")
+
+        vm.start()
+
+        assertEquals("fix login", repo.created.single().name)
     }
 
     @Test fun aNewerBrowseDropsTheOlderReply() {

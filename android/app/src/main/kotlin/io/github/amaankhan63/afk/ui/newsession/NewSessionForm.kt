@@ -48,7 +48,8 @@ internal fun NewSessionForm(
     onToggleFlag: (String) -> Unit,
     onModel: (String) -> Unit,
     onPrompt: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onName: (String) -> Unit = {}
 ) {
     val chips = LaunchFlags.chipsFor(state.kind)
     Column(
@@ -57,6 +58,14 @@ internal fun NewSessionForm(
     ) {
         Label("Folder")
         FolderField(state.cwd, onChooseFolder)
+        OutlinedTextField(
+            value = state.name,
+            onValueChange = onName,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            label = { Text("Name · optional") },
+            placeholder = { Text("The folder's name") },
+            singleLine = true
+        )
         Label("Agent")
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             AGENTS.forEachIndexed { index, kind ->

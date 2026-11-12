@@ -47,12 +47,14 @@ fun NewSessionScreen(onCreated: (String) -> Unit, onClose: () -> Unit) {
     val state by viewModel.ui.collectAsStateWithLifecycle()
     // The fields' text lives here, not in the round trip through the view model's flow: a
     // recomposition before that trip ends would put stale text back under the keyboard.
+    var name by rememberSaveable { mutableStateOf(viewModel.ui.value.name) }
     var model by rememberSaveable { mutableStateOf(viewModel.ui.value.model) }
     var prompt by rememberSaveable { mutableStateOf(viewModel.ui.value.prompt) }
     var picking by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     // After process death the fields get their text back but the view model starts empty.
     LaunchedEffect(viewModel) {
+        viewModel.setName(name)
         viewModel.setModel(model)
         viewModel.setPrompt(prompt)
     }
@@ -85,7 +87,7 @@ fun NewSessionScreen(onCreated: (String) -> Unit, onClose: () -> Unit) {
     ) { padding ->
         Column(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
             NewSessionForm(
-                state = state.copy(model = model, prompt = prompt),
+                state = state.copy(name = name, model = model, prompt = prompt),
                 onChooseFolder = { picking = true },
                 onKind = viewModel::setKind,
                 onToggleFlag = viewModel::toggleFlag,
@@ -97,7 +99,11 @@ fun NewSessionScreen(onCreated: (String) -> Unit, onClose: () -> Unit) {
                     prompt = it
                     viewModel.setPrompt(it)
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                onName = {
+                    name = it
+                    viewModel.setName(it)
+                }
             )
             Button(
                 onClick = viewModel::start,

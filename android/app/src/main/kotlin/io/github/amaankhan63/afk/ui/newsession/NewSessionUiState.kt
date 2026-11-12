@@ -4,7 +4,8 @@ import io.github.amaankhan63.afk.data.protocol.ServerMessage
 import io.github.amaankhan63.afk.data.protocol.SessionKind
 
 /**
- * The new-session form. [cwd] is the chosen folder, blank until one is; [flags] holds the ids of
+ * The new-session form. [cwd] is the chosen folder, blank until one is; [name] is what to call
+ * the session, blank for the folder's name; [flags] holds the ids of
  * the selected [LaunchFlags] chips and [model] the value of the model chip. [recent] and [browse]
  * come from the latest folder listing; [browse] is null until the picker lists a folder, and again
  * once one is picked. [browsing] is true while a listing is under way. [error] is the latest
@@ -12,6 +13,7 @@ import io.github.amaankhan63.afk.data.protocol.SessionKind
  */
 data class NewSessionUiState(
     val cwd: String = "",
+    val name: String = "",
     val kind: SessionKind = SessionKind.claude,
     val flags: Set<String> = setOf("skip"),
     val model: String = "",

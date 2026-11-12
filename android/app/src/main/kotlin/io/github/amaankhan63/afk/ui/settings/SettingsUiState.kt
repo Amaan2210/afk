@@ -4,18 +4,22 @@ import io.github.amaankhan63.afk.data.settings.AppSettings
 
 /**
  * The Settings screen: the app's [settings], and the paired laptop. [hostname] is the laptop's
- * name while connected; [address] is its Tailscale address while connected, else the pairing's
- * `host:port`. [keepAwake] is the daemon's switch, null until its settings arrive;
+ * name while connected, the one its owner gave it ([laptopName]) or else the computer's own;
+ * [address] is its Tailscale address while connected, else the pairing's `host:port`.
+ * [keepAwake] is the daemon's switch, null until its settings arrive;
  * [keepAwakeBusy] holds while a change of it waits for the daemon. The daemon releases the laptop
- * [graceMin] minutes after the last agent goes idle. [version] is the app's.
+ * [graceMin] minutes after the last agent goes idle; [keepAwakeActive] says whether it holds
+ * the laptop awake right now, null while unknown. [version] is the app's.
  */
 data class SettingsUiState(
     val settings: AppSettings = AppSettings(),
     val hostname: String? = null,
+    val laptopName: String? = null,
     val address: String? = null,
     val connected: Boolean = false,
     val keepAwake: Boolean? = null,
     val keepAwakeBusy: Boolean = false,
+    val keepAwakeActive: Boolean? = null,
     val graceMin: Int = DEFAULT_GRACE_MIN,
     val version: String = ""
 )
