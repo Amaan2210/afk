@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -66,7 +67,7 @@ export class RecentFolders {
   /** Remembered folders, newest first, limited to those that still exist. Does not rewrite the file. */
   async list(): Promise<string[]> {
     const all = await this.read();
-    const exists = await Promise.all(all.map(isDirectory));
+    const exists = await Promise.all(all.map(isDirectorySoon));
     return all.filter((_, i) => exists[i]);
   }
 
@@ -92,9 +93,51 @@ export class RecentFolders {
   }
 }
 
+/** How long one look at a drive or folder may take before it counts as absent. */
+const PROBE_TIMEOUT_MS = 1500;
+
+/** `isDirectory`, giving up after `PROBE_TIMEOUT_MS`: a sleeping or unplugged drive can take minutes. */
+function isDirectorySoon(p: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), PROBE_TIMEOUT_MS);
+    timer.unref();
+    void isDirectory(p).then((is) => {
+      clearTimeout(timer);
+      resolve(is);
+    });
+  });
+}
+
+/** The drive roots in `fsutil fsinfo drives` output (`Drives: C:\ D:\`); empty when there are none. */
+export function parseDrives(output: string): string[] {
+  return [...output.matchAll(/\b([A-Za-z]):\\/g)].map((m) => `${(m[1] ?? "").toUpperCase()}:\\`);
+}
+
+/** The drives Windows knows, without touching any of them; undefined when it cannot be asked. */
+function knownDrives(): Promise<string[] | undefined> {
+  return new Promise((resolve) => {
+    execFile(
+      "fsutil",
+      ["fsinfo", "drives"],
+      { windowsHide: true, timeout: PROBE_TIMEOUT_MS },
+      (err, stdout) => {
+        const drives = err ? [] : parseDrives(stdout);
+        resolve(drives.length > 0 ? drives : undefined);
+      },
+    );
+  });
+}
+
+/**
+ * The drive roots. Windows is asked for its list, which reads no drive. Only when that fails is
+ * every letter looked at, each for a short time: a look at a network drive that is away, or an
+ * empty card reader, can hang for minutes, and held the whole listing up until the phone gave up.
+ */
 async function driveRoots(): Promise<{ name: string; path: string }[]> {
+  const known = await knownDrives();
+  if (known !== undefined) return known.map((r) => ({ name: r, path: r }));
   const roots = Array.from({ length: 26 }, (_, i) => `${String.fromCharCode(65 + i)}:\\`);
-  const present = await Promise.all(roots.map(isDirectory));
+  const present = await Promise.all(roots.map(isDirectorySoon));
   return roots.filter((_, i) => present[i]).map((r) => ({ name: r, path: r }));
 }
 

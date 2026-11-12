@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { RecentFolders, listDirs } from "../../src/daemon/fs.js";
+import { RecentFolders, listDirs, parseDrives } from "../../src/daemon/fs.js";
 
 let tmp: string;
 beforeEach(async () => {
@@ -164,5 +164,12 @@ describe("RecentFolders", () => {
     const r = new RecentFolders(path.join(sub, "recent.json"));
     await r.add(a!);
     expect(await readdir(sub)).toEqual(["recent.json"]);
+  });
+});
+
+describe("parseDrives", () => {
+  it("reads the drive roots Windows lists", () => {
+    expect(parseDrives("\r\nDrives: C:\\ D:\\ e:\\ \r\n")).toEqual(["C:\\", "D:\\", "E:\\"]);
+    expect(parseDrives("Error: access denied")).toEqual([]);
   });
 });
