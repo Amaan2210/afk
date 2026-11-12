@@ -275,6 +275,24 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       and scan the code. Until you do, the phone shows "unauthorized" (or the pairing screen,
       once unpaired). After pairing, the list shows the laptop's sessions again.
 
+## Detach and closing
+
+- [ ] On the laptop, run `afk shell` in a folder. Press Ctrl+] then d. The window returns to
+      your own prompt. `afk ls` and the app both still show the session as running.
+- [ ] Run `afk attach <name>` in another window. The screen is the same as before the detach
+      (not a fresh shell), and typing reaches the session.
+- [ ] Close the attached window with its X button (no chord). The session keeps running:
+      `afk ls` and the app still show it.
+- [ ] Open the same session on the phone and type a command in the Terminal tab. The laptop
+      window shows the same screen, including what you typed on the phone.
+- [ ] With a laptop window attached, kill the session from the phone (long-press → Kill, then
+      confirm). The laptop window prints "session ended" and closes. The app shows Ended.
+- [ ] In an attached window, type `exit`. The session shows Ended in the app and in `afk ls`,
+      and the window closes.
+- [ ] Turn on airplane mode on the phone for a minute, then turn it off during a running
+      session. The session keeps running on the laptop. The phone reconnects and shows the
+      current screen, with no second session created.
+
 ## Release
 
 - [ ] Push a tag `vX.Y.Z` that matches `versionName` in `android/app/build.gradle.kts` and the
