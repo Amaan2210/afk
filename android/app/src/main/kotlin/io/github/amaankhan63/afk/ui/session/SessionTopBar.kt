@@ -35,6 +35,7 @@ import io.github.amaankhan63.afk.ui.components.KillDialog
 import io.github.amaankhan63.afk.ui.components.RenameDialog
 import io.github.amaankhan63.afk.ui.components.StateDot
 import io.github.amaankhan63.afk.ui.sessions.canResume
+import io.github.amaankhan63.afk.ui.sessions.muteLabel
 import java.time.Instant
 import kotlinx.coroutines.launch
 
@@ -48,9 +49,9 @@ private enum class Dialog { Rename, Kill }
 /**
  * The session screen's app bar: back, the session's name, and its agent and state under it, a
  * working session's time counted from [workingSince] to [now]. The overflow menu offers Rename,
- * Kill while the session has not ended, Resume for an ended agent session that can be picked up
- * again, and Copy attach command, which puts [attachCommand] on the clipboard and then calls
- * [onCopied]. Renaming and killing go through a dialog first.
+ * Mute or Unmute notifications ([muted], [onMute]), Kill while the session has not ended, Resume
+ * and Delete ([onDelete]) for an ended one, and Copy attach command, which puts [attachCommand] on
+ * the clipboard and then calls [onCopied]. Renaming and killing go through a dialog first.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +63,10 @@ fun SessionTopBar(
     onRename: (name: String) -> Unit,
     onKill: () -> Unit,
     onResume: () -> Unit,
-    onCopied: () -> Unit
+    onCopied: () -> Unit,
+    muted: Boolean = false,
+    onMute: (Boolean) -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     var dialog by rememberSaveable { mutableStateOf<Dialog?>(null) }
     TopAppBar(
@@ -79,7 +83,10 @@ fun SessionTopBar(
                     onRename = { dialog = Dialog.Rename },
                     onKill = { dialog = Dialog.Kill },
                     onResume = onResume,
-                    onCopied = onCopied
+                    onCopied = onCopied,
+                    muted = muted,
+                    onMute = onMute,
+                    onDelete = onDelete
                 )
             }
         }
@@ -134,7 +141,10 @@ private fun Overflow(
     onRename: () -> Unit,
     onKill: () -> Unit,
     onResume: () -> Unit,
-    onCopied: () -> Unit
+    onCopied: () -> Unit,
+    muted: Boolean,
+    onMute: (Boolean) -> Unit,
+    onDelete: () -> Unit
 ) {
     var open by remember { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
@@ -149,8 +159,11 @@ private fun Overflow(
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Rename") }, onClick = { choose(onRename) })
-            // The daemon ignores a kill of an ended session: there is nothing left to stop.
             if (session.state != SessionState.ended) {
+                DropdownMenuItem(
+                    text = { Text(muteLabel(muted)) },
+                    onClick = { choose { onMute(!muted) } }
+                )
                 DropdownMenuItem(
                     text = { Text("Kill", color = MaterialTheme.colorScheme.error) },
                     onClick = { choose(onKill) }
@@ -158,6 +171,13 @@ private fun Overflow(
             }
             if (session.canResume()) {
                 DropdownMenuItem(text = { Text("Resume") }, onClick = { choose(onResume) })
+            }
+            // A kill of an ended session takes it off the list.
+            if (session.state == SessionState.ended) {
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    onClick = { choose(onDelete) }
+                )
             }
             DropdownMenuItem(
                 text = { Text("Copy attach command") },

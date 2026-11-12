@@ -20,11 +20,12 @@ import io.github.amaankhan63.afk.data.settings.NotificationPrefs
  */
 class SessionNotifier(
     private val context: Context,
+    private val mutedProvider: () -> Set<String> = { emptySet() },
     private val prefsProvider: () -> NotificationPrefs
 ) {
     /**
-     * The notification for [n]; null when the user turned its channel off, its session is on
-     * screen ([ForegroundTracker]), or its event is one this app does not know.
+     * The notification for [n]; null when the user turned its channel off or muted its session,
+     * its session is on screen ([ForegroundTracker]), or its event is one this app does not know.
      */
     fun build(n: ServerMessage.Notify): Notification? {
         val prefs = prefsProvider()
@@ -34,7 +35,8 @@ class SessionNotifier(
             EVENT_SUBAGENT_FINISHED -> NotificationChannels.SUBAGENTS to prefs.subagents
             else -> return null
         }
-        if (!enabled || ForegroundTracker.foregroundSessionId.value == n.sessionId) return null
+        if (!enabled || n.sessionId in mutedProvider()) return null
+        if (ForegroundTracker.foregroundSessionId.value == n.sessionId) return null
 
         val open = openSession(n.sessionId)
         val builder = NotificationCompat.Builder(context, channel)

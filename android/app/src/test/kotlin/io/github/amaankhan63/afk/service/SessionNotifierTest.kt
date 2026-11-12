@@ -55,6 +55,12 @@ class SessionNotifierTest {
 
     private fun Notification.Action.savedIntent() = shadowOf(actionIntent).savedIntent
 
+    @Test fun aMutedSessionGetsNoNotification() {
+        val notifier = SessionNotifier(context, { setOf("s_1") }) { NotificationPrefs() }
+        assertNull(notifier.build(notify(sessionId = "s_1")))
+        assertNotNull(notifier.build(notify(sessionId = "s_2")))
+    }
+
     @Test fun textQuestionHasTwoChoicesAndReply() {
         val n = notifier().build(notify(pending = question(options = 4)))!!
         assertEquals(listOf("Option 1", "Option 2", "Reply"), n.titles())

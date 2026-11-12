@@ -28,9 +28,10 @@ import kotlinx.coroutines.launch
 private enum class Step { Menu, Rename, Kill }
 
 /**
- * What a long press on [session] offers: a sheet with Rename, Kill while the session has not
- * ended, and Resume for an ended agent session that can be picked up again. Renaming and killing
- * go through a dialog first.
+ * What a long press on [session] offers: a sheet with Rename; Mute or Unmute notifications
+ * ([muted], [onMute]) and Kill while the session has not ended; Resume, for an agent session that
+ * can be picked up again, and Delete once it has. Renaming and killing go through a dialog first;
+ * Delete calls [onKill] at once: a kill of an ended session takes it off the list.
  */
 @Composable
 internal fun SessionActionsSheet(
@@ -38,7 +39,9 @@ internal fun SessionActionsSheet(
     onDismiss: () -> Unit,
     onRename: (name: String) -> Unit,
     onKill: () -> Unit,
-    onResume: () -> Unit
+    onResume: () -> Unit,
+    muted: Boolean = false,
+    onMute: (Boolean) -> Unit = {}
 ) {
     var step by rememberSaveable(session.id) { mutableStateOf(Step.Menu) }
     when (step) {
@@ -49,6 +52,15 @@ internal fun SessionActionsSheet(
             onKill = { step = Step.Kill },
             onResume = {
                 onResume()
+                onDismiss()
+            },
+            muted = muted,
+            onMute = {
+                onMute(!muted)
+                onDismiss()
+            },
+            onDelete = {
+                onKill()
                 onDismiss()
             }
         )
@@ -73,6 +85,9 @@ internal fun SessionActionsSheet(
     }
 }
 
+/** What the action that turns a session's notifications off, or back on, is called. */
+internal fun muteLabel(muted: Boolean) = if (muted) "Unmute notifications" else "Mute notifications"
+
 /** The daemon resumes an ended session from its agent's own session id. */
 internal fun Session.canResume() = state == SessionState.ended && agentSessionId != null
 
@@ -83,7 +98,10 @@ private fun ActionsMenu(
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onKill: () -> Unit,
-    onResume: () -> Unit
+    onResume: () -> Unit,
+    muted: Boolean,
+    onMute: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -98,11 +116,14 @@ private fun ActionsMenu(
             style = MaterialTheme.typography.titleMedium
         )
         Action("Rename") { afterHiding(onRename) }
-        // The daemon ignores a kill of an ended session: there is nothing left to stop.
         if (session.state != SessionState.ended) {
+            Action(muteLabel(muted)) { afterHiding(onMute) }
             Action("Kill", color = MaterialTheme.colorScheme.error) { afterHiding(onKill) }
         }
         if (session.canResume()) Action("Resume") { afterHiding(onResume) }
+        if (session.state == SessionState.ended) {
+            Action("Delete", color = MaterialTheme.colorScheme.error) { afterHiding(onDelete) }
+        }
     }
 }
 

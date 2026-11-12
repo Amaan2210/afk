@@ -38,7 +38,8 @@ private val AGENT_EDGE = 3.dp
 
 /**
  * One session in the list: its state, name, age and last message, its agent's colour on the
- * left edge. [workingSince] is when the session was first seen working, if it is.
+ * left edge. [workingSince] is when the session was first seen working, if it is. A [muted]
+ * session, whose notifications are off, says so.
  */
 @Composable
 fun SessionCard(
@@ -47,7 +48,8 @@ fun SessionCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     workingSince: Instant? = null,
-    now: Instant = Instant.now()
+    now: Instant = Instant.now(),
+    muted: Boolean = false
 ) {
     val shape = MaterialTheme.shapes.large
     val colors = MaterialTheme.colorScheme
@@ -113,6 +115,7 @@ fun SessionCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 AgentTag(session.kind)
+                if (muted) Tag("Muted")
                 if (session.subagentsRunning > 0) Tag(subagentsLabel(session.subagentsRunning))
                 session.gitBranch?.let { Tag(it, Modifier.weight(1f, fill = false)) }
             }

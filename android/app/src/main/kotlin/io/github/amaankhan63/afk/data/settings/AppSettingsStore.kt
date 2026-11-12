@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.github.amaankhan63.afk.di.AppScope
 import io.github.amaankhan63.afk.ui.session.DEFAULT_STRIP_CHIPS
 import io.github.amaankhan63.afk.ui.session.StripChip
@@ -61,6 +62,8 @@ class AppSettingsStore @Inject constructor(
         val NOTIF_SUBAGENTS = booleanPreferencesKey("settings.notif.subagents")
         val TERMINAL_FONT_SP = intPreferencesKey("settings.terminalFontSp")
         val KEY_BAR = booleanPreferencesKey("settings.keyBar")
+        val SWIPE_TABS = booleanPreferencesKey("settings.swipeTabs")
+        val MUTED_SESSIONS = stringSetPreferencesKey("settings.mutedSessions")
 
         const val SEPARATOR = ","
         const val READ_RETRY_MS = 1_000L
@@ -81,7 +84,9 @@ class AppSettingsStore @Inject constructor(
                 terminalFontSp = prefs[TERMINAL_FONT_SP]
                     ?.coerceIn(MIN_TERMINAL_FONT_SP, MAX_TERMINAL_FONT_SP)
                     ?: defaults.terminalFontSp,
-                keyBar = prefs[KEY_BAR] ?: defaults.keyBar
+                keyBar = prefs[KEY_BAR] ?: defaults.keyBar,
+                swipeTabs = prefs[SWIPE_TABS] ?: defaults.swipeTabs,
+                mutedSessions = prefs[MUTED_SESSIONS] ?: defaults.mutedSessions
             )
         }
 
@@ -95,6 +100,8 @@ class AppSettingsStore @Inject constructor(
             prefs[NOTIF_SUBAGENTS] = settings.notifications.subagents
             prefs[TERMINAL_FONT_SP] = settings.terminalFontSp
             prefs[KEY_BAR] = settings.keyBar
+            prefs[SWIPE_TABS] = settings.swipeTabs
+            prefs[MUTED_SESSIONS] = settings.mutedSessions
         }
 
         /** The chips [saved] names, in its order; an empty string is no chips at all. */

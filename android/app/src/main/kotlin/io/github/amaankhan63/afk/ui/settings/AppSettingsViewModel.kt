@@ -31,6 +31,21 @@ class AppSettingsViewModel @Inject constructor(private val store: AppSettingsSto
         }
     }
 
+    /** Turns session [sessionId]'s notifications off ([muted]) or back on, on this phone. */
+    fun setMuted(sessionId: String, muted: Boolean) {
+        viewModelScope.launch {
+            try {
+                store.update {
+                    val ids = it.mutedSessions
+                    it.copy(mutedSessions = if (muted) ids + sessionId else ids - sessionId)
+                }
+            } catch (e: IOException) {
+                // It stays as it was; the next tap tries again.
+                Log.w(TAG, "mute not saved", e)
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "AppSettingsViewModel"
     }

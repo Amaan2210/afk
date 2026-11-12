@@ -13,7 +13,9 @@ const val MAX_TERMINAL_FONT_SP = 20
 
 /**
  * The app's own settings, kept on the phone; the laptop's live in the daemon. [stripChips] are the
- * status strip's chips in the order it shows them.
+ * status strip's chips in the order it shows them. [swipeTabs] lets a sideways swipe change
+ * between a session's Terminal and Chat. [mutedSessions] holds the ids of the sessions whose
+ * notifications are off.
  */
 data class AppSettings(
     val theme: AfkThemeId = AfkThemeId.Graphite,
@@ -22,5 +24,7 @@ data class AppSettings(
     val stripChips: List<StripChip> = DEFAULT_STRIP_CHIPS,
     val notifications: NotificationPrefs = NotificationPrefs(),
     val terminalFontSp: Int = 12,
-    val keyBar: Boolean = true
+    val keyBar: Boolean = true,
+    val swipeTabs: Boolean = false,
+    val mutedSessions: Set<String> = emptySet()
 )

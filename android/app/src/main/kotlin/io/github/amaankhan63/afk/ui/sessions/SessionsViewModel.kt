@@ -32,10 +32,10 @@ import kotlinx.coroutines.launch
 
 /**
  * What the sessions screen shows. [sessions] is filtered, searched and ordered; [counts] counts
- * every session per state chip, whatever the filter and query; [hostname] is the laptop's name
- * from the latest `hello`; [workingSince] holds, per working session id, when it started working
- * ([SessionsRepository.workingSince]); [allSessions] is every session, unfiltered, as the
- * repository lists them;
+ * every session per state chip, whatever the filter and query; [hostname] is the name the owner
+ * gave the laptop in Settings, else the laptop's own from the latest `hello`; [workingSince]
+ * holds, per working session id, when it started working ([SessionsRepository.workingSince]);
+ * [allSessions] is every session, unfiltered, as the repository lists them;
  * [pairingHost] is the host the app was paired with.
  */
 data class SessionsUiState(
@@ -95,7 +95,9 @@ class SessionsViewModel internal constructor(
         combine(query, filter, ::Pair),
         repo.stats,
         repo.connection,
-        combine(hostname, pairedHost, ::Pair)
+        combine(hostname, repo.daemonSettings, pairedHost) { host, settings, paired ->
+            (settings?.laptopName ?: host) to paired
+        }
     ) { (all, since), (q, f), stats, connection, (host, paired) ->
         uiState(all, since, q, f, stats, connection, host, paired)
     }.stateIn(
@@ -110,7 +112,7 @@ class SessionsViewModel internal constructor(
             f = filter.value,
             stats = repo.stats.value,
             connection = repo.connection.value,
-            host = repo.connection.value.hostname(),
+            host = repo.daemonSettings.value?.laptopName ?: repo.connection.value.hostname(),
             paired = pairedHost.value
         )
     )

@@ -40,8 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amaankhan63.afk.data.sessions.SessionFilter
-import io.github.amaankhan63.afk.ui.components.OfflineBanner
-import io.github.amaankhan63.afk.ui.components.bannerHost
+import io.github.amaankhan63.afk.ui.settings.AppSettingsViewModel
 import java.time.Instant
 import kotlinx.coroutines.delay
 
@@ -55,7 +54,9 @@ private val FAB_CLEARANCE = 88.dp
 @Composable
 fun SessionsScreen(onOpen: (String) -> Unit, onNew: () -> Unit, onSettings: () -> Unit) {
     val viewModel: SessionsViewModel = hiltViewModel()
+    val appSettings: AppSettingsViewModel = hiltViewModel()
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val settings by appSettings.settings.collectAsStateWithLifecycle()
     // The field's text lives here, not in the round trip through the view model's flows: a
     // recomposition before that trip ends would put stale text back under the keyboard.
     var query by rememberSaveable { mutableStateOf(viewModel.ui.value.query) }
@@ -87,6 +88,8 @@ fun SessionsScreen(onOpen: (String) -> Unit, onNew: () -> Unit, onSettings: () -
         onRename = viewModel::rename,
         onKill = viewModel::kill,
         onResume = viewModel::resume,
+        muted = settings.mutedSessions,
+        onMute = appSettings::setMuted,
         snackbarHostState = snackbar,
         now = now
     )
@@ -105,6 +108,8 @@ fun SessionsScreen(
     onRename: (id: String, name: String) -> Unit = { _, _ -> },
     onKill: (id: String) -> Unit = {},
     onResume: (id: String) -> Unit = {},
+    muted: Set<String> = emptySet(),
+    onMute: (id: String, muted: Boolean) -> Unit = { _, _ -> },
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     now: Instant = Instant.now()
 ) {
@@ -135,11 +140,6 @@ fun SessionsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            // Above the list, never over it: offline, the last known sessions stay usable.
-            OfflineBanner(
-                connection = state.connection,
-                host = bannerHost(state.hostname, state.pairingHost)
-            )
             LaptopStrip(
                 hostname = state.hostname,
                 stats = state.stats,
@@ -172,7 +172,8 @@ fun SessionsScreen(
                         onClick = { onOpen(session.id) },
                         onLongClick = { actionsFor = session.id },
                         workingSince = state.workingSince[session.id],
-                        now = now
+                        now = now,
+                        muted = session.id in muted
                     )
                 }
             }
@@ -188,7 +189,9 @@ fun SessionsScreen(
             onDismiss = { actionsFor = null },
             onRename = { onRename(target.id, it) },
             onKill = { onKill(target.id) },
-            onResume = { onResume(target.id) }
+            onResume = { onResume(target.id) },
+            muted = target.id in muted,
+            onMute = { onMute(target.id, it) }
         )
     }
     // A session the daemon removes takes its actions with it for good.
