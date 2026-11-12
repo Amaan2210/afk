@@ -73,6 +73,28 @@ class ConnectionManagerTest {
         assertEquals(ConnectionState.Connected(hello), manager.state.value)
     }
 
+    @Test fun aLostNetworkDropsTheConnectionAtOnce() = runTest {
+        val manager = connectedManager()
+
+        manager.onNetworkLost()
+        runCurrent()
+
+        assertEquals(ConnectionState.Connecting(1), manager.state.value)
+        assertFalse(socket.isOpen)
+    }
+
+    @Test fun aNetworkComingBackEndsTheWaitBeforeTheNextTry() = runTest {
+        val manager = connectedManager()
+        socket.serverCloses()
+        runCurrent()
+        assertEquals(1, socket.opens.size)
+
+        manager.onNetworkAvailable()
+        runCurrent()
+
+        assertEquals(2, socket.opens.size)
+    }
+
     @Test fun reconnectsAfterServerClose() = runTest {
         val manager = connectedManager()
 

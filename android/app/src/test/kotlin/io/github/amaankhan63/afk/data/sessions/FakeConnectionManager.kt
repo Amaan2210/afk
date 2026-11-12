@@ -46,6 +46,10 @@ class FakeConnectionManager : ConnectionManager {
         sent += msg
     }
 
+    override fun onNetworkLost() = Unit
+
+    override fun onNetworkAvailable() = Unit
+
     fun receive(msg: ServerMessage) = check(incoming.tryEmit(msg))
 
     fun connect() {
@@ -67,5 +71,6 @@ private fun ClientMessage.stamped(): ClientMessage = when (this) {
     is ClientMessage.PendingAnswer -> copy(id = REQUEST_ID)
     is ClientMessage.FsListDirs -> copy(id = REQUEST_ID)
     is ClientMessage.DaemonSettingsSet -> copy(id = REQUEST_ID)
+    is ClientMessage.DaemonStop -> copy(id = REQUEST_ID)
     else -> error("the repository does not request ${this::class.simpleName}")
 }

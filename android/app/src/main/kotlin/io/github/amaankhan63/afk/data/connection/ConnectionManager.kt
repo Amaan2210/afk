@@ -12,6 +12,9 @@ const val ERROR_DISCONNECTED = "disconnected"
 /** [ConnectionState.Failed] code for an endpoint no socket can be opened to, such as a bad host. */
 const val ERROR_BAD_ENDPOINT = "bad_endpoint"
 
+/** [ConnectionState.Failed] code of a token the daemon no longer accepts: the phone is unpaired. */
+const val ERROR_UNAUTHORIZED = "unauthorized"
+
 /** Keeps one authenticated connection to the daemon and matches replies to requests. */
 interface ConnectionManager {
     val state: StateFlow<ConnectionState>
@@ -40,4 +43,13 @@ interface ConnectionManager {
 
     /** Sends a message that gets no reply; it is dropped when not connected. */
     fun send(msg: ClientMessage)
+
+    /**
+     * A network the phone was on is gone: the connection is dropped and tried again now, rather
+     * than when its pings run out, so the app says it is offline at once.
+     */
+    fun onNetworkLost()
+
+    /** A network is there: a wait before the next try ends now. */
+    fun onNetworkAvailable()
 }

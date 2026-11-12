@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -23,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * [ConnectionManager] over one [AfkSocket]. A single loop in [scope] opens the socket, reads its
@@ -47,6 +47,9 @@ class DefaultConnectionManager(
 
     /** The socket's frames and events in the order it emitted them; unbounded, so never lossy. */
     private val inbox = Channel<Inbound>(Channel.UNLIMITED)
+
+    /** Ends the wait before the next try; conflated, so at most one waits to be taken. */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
     private val pending = ConcurrentHashMap<String, CompletableDeferred<ServerMessage>>()
     private val requestCount = AtomicLong()
     private val lock = Any()
@@ -106,6 +109,14 @@ class DefaultConnectionManager(
         if (state.value is ConnectionState.Connected) socket.send(msg)
     }
 
+    override fun onNetworkLost() {
+        inbox.trySend(Inbound.NetworkLost)
+    }
+
+    override fun onNetworkAvailable() {
+        wake.trySend(Unit)
+    }
+
     /** Connects, reconnecting after drops, until cancelled, rejected or given a bad endpoint. */
     private suspend fun connectUntilStopped(endpoint: Endpoint, token: String) {
         try {
@@ -134,7 +145,9 @@ class DefaultConnectionManager(
                         // State first: a request registered after this sees it and fails fast.
                         mutableState.value = ConnectionState.Connecting(attempt)
                         failPending(ERROR_DISCONNECTED, "connection lost")
-                        delay(wait)
+                        // A wake-up from before this drop is not about this wait.
+                        wake.tryReceive()
+                        withTimeoutOrNull(wait) { wake.receive() }
                     }
                 }
             }
@@ -155,6 +168,12 @@ class DefaultConnectionManager(
                 is Inbound.Event -> when (item.event) {
                     is SocketEvent.Closed, is SocketEvent.Failure -> return End.Dropped(greeted)
                     SocketEvent.Opened, is SocketEvent.DecodeFailure -> Unit
+                }
+
+                // The socket would only notice when its pings run out.
+                Inbound.NetworkLost -> {
+                    socket.close()
+                    return End.Dropped(greeted)
                 }
 
                 is Inbound.Frame -> {
@@ -194,6 +213,8 @@ class DefaultConnectionManager(
         data class Frame(val message: ServerMessage) : Inbound
 
         data class Event(val event: SocketEvent) : Inbound
+
+        data object NetworkLost : Inbound
     }
 
     private sealed interface End {
@@ -239,6 +260,8 @@ private fun ClientMessage.withRequestId(id: String): ClientMessage? = when (this
     is ClientMessage.DaemonSettingsGet -> copy(id = id)
 
     is ClientMessage.DaemonSettingsSet -> copy(id = id)
+
+    is ClientMessage.DaemonStop -> copy(id = id)
 
     is ClientMessage.DeviceAdd -> copy(id = id)
 

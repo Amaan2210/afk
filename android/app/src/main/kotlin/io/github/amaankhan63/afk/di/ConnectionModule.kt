@@ -16,11 +16,14 @@ import okhttp3.OkHttpClient
 @Module
 @InstallIn(SingletonComponent::class)
 object ConnectionModule {
-    /** Pings every 30 s, so a connection that died silently fails instead of hanging. */
+    /**
+     * Pings every 10 s, so a connection that died silently fails within about 20 s instead of
+     * hanging; the connection service is also told at once when a network goes.
+     */
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-        .pingInterval(30, TimeUnit.SECONDS)
+        .pingInterval(10, TimeUnit.SECONDS)
         .build()
 
     /** Each manager gets its own socket: an [OkHttpAfkSocket] carries one connection at a time. */
