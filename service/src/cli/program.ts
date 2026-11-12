@@ -4,8 +4,8 @@ import type { DaemonClient } from "./client.js";
 import type { DaemonCommandOptions } from "./daemon-cmd.js";
 import type { LaunchOptions, LaunchRunner } from "./launch.js";
 import { parsePort, parsePortOption } from "./options.js";
-import type { ClientOptions, CommandIo } from "./run.js";
-import type { ServiceAction } from "./service.js";
+import type { ClientOptions, CommandIo, DaemonNeed } from "./run.js";
+import type { ServiceAction, ServiceOptions } from "./service.js";
 
 // Only commander's wiring lives here. Each action imports its implementation when it runs, so
 // `afk hook` (run by every agent hook) and `afk --version` load neither the daemon nor the client.
@@ -17,9 +17,10 @@ async function withDaemonLoaded<M>(
   opts: ClientOptions,
   load: () => Promise<M>,
   command: (module: M, io: CommandIo<DaemonClient>) => Promise<number | void>,
+  need?: (module: M) => DaemonNeed,
 ): Promise<void> {
   const [{ withDaemon }, module] = await Promise.all([import("./run.js"), load()]);
-  await withDaemon(opts, (io) => command(module, io));
+  await withDaemon(opts, (io) => command(module, io), undefined, undefined, need?.(module));
 }
 
 const runLaunchLazily: LaunchRunner = async (kind, args, opts) =>
@@ -54,12 +55,12 @@ export function registerLaunchCommands(program: Command, run = runLaunchLazily):
   );
 }
 
+const STOP_HELP = "unpair the phone, end every session and stop AFK (asks first)";
+
 const SERVICE_ACTIONS: [ServiceAction, string][] = [
-  ["install", "create the scheduled task that runs the daemon from logon, and start it"],
-  ["uninstall", "stop the daemon and remove the scheduled task; this ends every session"],
-  ["start", "start the daemon from the scheduled task"],
-  ["stop", "stop the daemon the scheduled task runs; this ends every session"],
-  ["status", "print whether the scheduled task's daemon is running"],
+  ["start", "start AFK in the background now, without a session or a phone"],
+  ["stop", `the same as \`afk unpair\`: ${STOP_HELP}`],
+  ["status", "print whether AFK is running, and what it is serving"],
 ];
 
 function registerDaemonCommand(program: Command): void {
@@ -68,8 +69,8 @@ function registerDaemonCommand(program: Command): void {
     .description("run the AFK daemon in the foreground; stopping it ends every session")
     .option("--verbose", "log at debug level, to stdout as well as to the log file")
     .option("--port <n>", "listen on this port instead of the configured one", parsePort)
-    // For the scheduled task (afk service), whose PowerShell is the parent.
-    .addOption(new Option("--exit-with-parent", "stop when the parent process exits").hideHelp())
+    // For the commands that start the daemon themselves.
+    .addOption(new Option("--background", "stop once nothing is left to serve").hideHelp())
     .action(async (opts: DaemonCommandOptions) =>
       (await import("./daemon-cmd.js")).runDaemon(opts),
     );
@@ -78,21 +79,18 @@ function registerDaemonCommand(program: Command): void {
 function registerServiceCommands(program: Command): void {
   const service = program
     .command("service")
-    .description("run the daemon in the background from logon (a Windows scheduled task)");
+    .description(
+      "AFK's background daemon: it starts with your first session or with `afk pair`, never at logon",
+    );
   for (const [action, description] of SERVICE_ACTIONS) {
-    const command = service.command(action).description(description);
-    if (action !== "status") {
-      command.option(
-        "--port <n>",
-        "the port to check for a running daemon (default: the configured one)",
-        parsePortOption,
-      );
-    }
-    command.action(async (opts: { port?: number }) => {
-      const { execProgram, runService } = await import("./service.js");
-      const io = { exec: execProgram, stdout: process.stdout, port: opts.port };
-      process.exitCode = await runService(action, io);
-    });
+    const command = service
+      .command(action)
+      .description(description)
+      .option("--port <n>", PORT_HELP, parsePortOption);
+    if (action === "stop") command.option("-y, --yes", "do not ask first");
+    command.action(async (opts: ServiceOptions) =>
+      (await import("./service.js")).runService(action, opts),
+    );
   }
 }
 
@@ -118,31 +116,34 @@ function registerClientCommands(program: Command): void {
     );
   program
     .command("kill")
-    .description("end a session")
-    .argument("<sessionId>", "the session id, as shown by `afk ls`")
+    .description("end a session; inside a session, with no argument, that session")
+    .argument("[session]", "the session's id or name, as shown by `afk ls`")
     .option("--port <n>", PORT_HELP, parsePortOption)
-    .action((sessionId: string, opts: ClientOptions) =>
+    .action((session: string | undefined, opts: ClientOptions) =>
       withDaemonLoaded(
         opts,
         () => import("./kill.js"),
-        (m, io) => m.runKill(sessionId, io),
+        (m, io) => m.runKill(session, io),
       ),
     );
   program
     .command("pair")
-    .description("pair a phone: shows a QR code for the AFK app to scan")
-    .option("--name <name>", "the phone name (asked for if omitted)")
+    .description(
+      "pair your phone: starts AFK, waits for Tailscale, then shows a QR code for the app to scan",
+    )
+    .option("--name <name>", "what to call the phone (asked for if omitted)")
     .option("--port <n>", PORT_HELP, parsePortOption)
     .action((opts: ClientOptions & { name?: string }) =>
       withDaemonLoaded(
         opts,
         () => import("./pair.js"),
         (m, io) => m.runPair(opts, { ...io, promptName: m.promptNameOnTty }),
+        () => ({ autostart: true }),
       ),
     );
   program
     .command("devices")
-    .description("list the paired phones")
+    .description("show the paired phone")
     .option("--port <n>", PORT_HELP, parsePortOption)
     .action((opts: ClientOptions) =>
       withDaemonLoaded(
@@ -153,14 +154,15 @@ function registerClientCommands(program: Command): void {
     );
   program
     .command("unpair")
-    .description("revoke a paired phone")
-    .argument("<deviceId>", "the device id, as shown by `afk devices`")
+    .description(STOP_HELP)
+    .option("-y, --yes", "do not ask first")
     .option("--port <n>", PORT_HELP, parsePortOption)
-    .action((deviceId: string, opts: ClientOptions) =>
+    .action((opts: ClientOptions & { yes?: boolean }) =>
       withDaemonLoaded(
         opts,
-        () => import("./devices.js"),
-        (m, io) => m.runUnpair(deviceId, io),
+        () => import("./unpair.js"),
+        (m, io) => m.runUnpair(opts, { ...io, confirm: m.confirmOnTty }),
+        (m) => ({ whenDown: m.alreadyStopped }),
       ),
     );
 }

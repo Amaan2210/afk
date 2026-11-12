@@ -54,13 +54,7 @@ export interface PairPayload {
 }
 
 /** What the phone scans: the address it can reach the daemon at, and its own token. */
-export function pairPayload(
-  hello: { daemon: { tailscaleIp?: string } },
-  token: string,
-  port: number = DEFAULT_PORT,
-): PairPayload {
-  const host = hello.daemon.tailscaleIp;
-  if (host === undefined) throw new Error("The daemon has no Tailscale address.");
+export function pairPayload(host: string, token: string, port: number = DEFAULT_PORT): PairPayload {
   return { afk: 1, host, port, token };
 }
 

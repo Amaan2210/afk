@@ -53,16 +53,14 @@ daemon listens only on your Tailscale address and `127.0.0.1`. More in
    npm i -g afkdev
    ```
 
-3. Run the daemon in the background from logon (a Windows scheduled task for your account):
-
-   ```
-   afk service install
-   ```
-
-4. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
+3. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
    [GitHub Release](https://github.com/AmaanKhan63/afk/releases) and open it. When Android asks,
    allow your browser (or file manager) to install unknown apps, then install.
-5. Pair the phone: `afk pair` prints a QR code. Scan it in the AFK app.
+4. Pair the phone: run `afk pair` on the laptop and scan the QR code it prints in the AFK app.
+
+Nothing runs at logon. AFK starts in the background, with no window, when you start your first
+session or run `afk pair`. It stops when you run `afk unpair`, or by itself once the last session
+has ended and no phone is paired. After a laptop restart, run `afk pair` again.
 
 ## Usage
 
@@ -78,28 +76,26 @@ afk shell
 window to it. `afk claude` and `afk codex` pass every argument after their own options to the
 agent untouched; `--name` and `--port` count only before the first agent argument.
 
-| Command                                               | What it does                                                                                                                                                                                         |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `afk claude [--name n] [--port n] [claude args…]`     | Start Claude Code in a new session in this folder and attach to it. The session is named after the folder unless `--name` is given.                                                                  |
-| `afk codex [--name n] [--port n] [codex args…]`       | The same for Codex.                                                                                                                                                                                  |
-| `afk shell [--name n] [--port n]`                     | A plain shell session; takes no arguments. Agents typed into it (`claude`, `codex`) are tracked too.                                                                                                 |
-| `afk attach <id\|name> [--port n]`                    | Attach this window to a running session. Detach with `Ctrl+]` then `d`; the session keeps running. Closing the window also detaches. A name matches running sessions only; an id matches any.        |
-| `afk ls [--port n]`                                   | List the sessions the daemon owns.                                                                                                                                                                   |
-| `afk kill <sessionId> [--port n]`                     | End a session.                                                                                                                                                                                       |
-| `afk pair [--name n] [--port n]`                      | Add a phone and print a QR code (and the same payload as one JSON line) for the app to scan. The token is shown once. Needs a Tailscale address on the daemon.                                       |
-| `afk devices [--port n]`                              | List the paired phones.                                                                                                                                                                              |
-| `afk unpair <deviceId> [--port n]`                    | Revoke a phone's token.                                                                                                                                                                              |
-| `afk service install\|uninstall\|start\|stop\|status` | Manage the scheduled task that runs the daemon from logon. `install` also starts it. `--port` (all but `status`) is the port checked for a running daemon. `stop` and `uninstall` end every session. |
-| `afk daemon [--verbose] [--port n]`                   | Run the daemon in the foreground (what the scheduled task runs). Stopping it ends every session. `--port` is a development override and is not saved.                                                |
+| Command                                           | What it does                                                                                                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `afk claude [--name n] [--port n] [claude args…]` | Start Claude Code in a new session in this folder and attach to it. The session is named after the folder unless `--name` is given.                                                           |
+| `afk codex [--name n] [--port n] [codex args…]`   | The same for Codex.                                                                                                                                                                           |
+| `afk shell [--name n] [--port n]`                 | A plain shell session; takes no arguments. Agents typed into it (`claude`, `codex`) are tracked too.                                                                                          |
+| `afk attach <id\|name> [--port n]`                | Attach this window to a running session. Detach with `Ctrl+]` then `d`; the session keeps running. Closing the window also detaches. A name matches running sessions only; an id matches any. |
+| `afk ls [--port n]`                               | List the sessions the daemon owns.                                                                                                                                                            |
+| `afk kill [id\|name] [--port n]`                  | End a session. Inside a session, `afk kill` alone ends that session.                                                                                                                          |
+| `afk pair [--name n] [--port n]`                  | Pair your phone, in place of any paired before. Starts AFK, waits for Tailscale if it is off, then prints a QR code and the host, port and token for the app. The token is shown once.        |
+| `afk devices [--port n]`                          | Show the paired phone.                                                                                                                                                                        |
+| `afk unpair [--yes] [--port n]`                   | Unpair the phone, end every session and stop AFK. Says what will end and asks first; `--yes` skips the question.                                                                              |
+| `afk service start\|stop\|status`                 | `start` starts AFK in the background by hand, `stop` is `afk unpair`, `status` prints whether it is running and what it is serving.                                                           |
+| `afk daemon [--verbose] [--port n]`               | Run the daemon in this window instead of the background. Stopping it ends every session. `--port` is a development override and is not saved.                                                 |
 
 The service commands, one by one:
 
 ```
-afk service install     # create the scheduled task and start the daemon
-afk service status      # is the daemon the task runs up?
-afk service stop        # stop it; ends every session
-afk service start       # start it again
-afk service uninstall   # stop it and remove the task; ends every session
+afk service status      # is AFK running, and what is it serving?
+afk service stop        # the same as afk unpair
+afk service start       # start it by hand
 ```
 
 Session names are unique among live sessions: a second session in the same folder is `name-2`,
@@ -140,8 +136,8 @@ nothing loops.
 Run `afk pair` on the laptop. In the app, tap **Scan QR code** and scan the code it prints; or
 type the host, port and token it prints. Tap **Test connection**, and once the app says
 "Connected to" your laptop's name, tap **Save**. The token is shown once: to pair again, run
-`afk pair` again. **Unpair** in the app's Settings forgets the laptop on the phone; to revoke the
-phone's token on the laptop as well, find it with `afk devices` and run `afk unpair <deviceId>`.
+`afk pair` again. One phone is paired at a time. `afk unpair` on the laptop unpairs it, ends every
+session and stops AFK.
 
 ### What it does
 
@@ -189,13 +185,12 @@ Captured on a phone in Aurora, dark mode.
 
 ## Limitations
 
-- The daemon is Windows-only for now: it depends on ConPTY, a Windows keep-awake request and a
-  scheduled task. The CLI and the tests also run on Linux in CI, but the product targets Windows 11.
+- The daemon is Windows-only for now: it depends on ConPTY and a Windows keep-awake request. The
+  CLI and the tests also run on Linux in CI, but the product targets Windows 11.
 - Stopping or restarting the daemon ends every session and clears the list. While the daemon keeps
   running, ended sessions stay listed for 24 hours (the retention setting) so they can be resumed
   from the phone or the CLI.
 - The Codex chat view is thinner than Claude's.
-- `afk service` reads `schtasks` output and assumes an English-language Windows.
 - A free-text answer to a multi-select question is refused; use the terminal view for that.
 - Codex approval prompts are not detected: a Codex session waiting for an approval still shows as
   working, and the phone gets no card or notification for it. Answer it in the terminal view.

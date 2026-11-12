@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonClient } from "../../src/cli/client.js";
-import { runDevices, runUnpair } from "../../src/cli/devices.js";
+import { runDevices } from "../../src/cli/devices.js";
 import { runKill } from "../../src/cli/kill.js";
 import { runLs } from "../../src/cli/ls.js";
 import type { CommandIo } from "../../src/cli/run.js";
@@ -39,34 +39,26 @@ describe("commands against a live daemon", () => {
     expect(text).toBe("No sessions.\n");
   });
 
-  it("kill reports the daemon's not_found for an unknown session", async () => {
-    await expect(runKill("s_nope", io)).rejects.toMatchObject({ code: "not_found" });
+  it("kill refuses a session nobody has, by id or by name", async () => {
+    await expect(runKill("s_nope", io)).rejects.toThrow(/There is no session "s_nope"/);
     expect(text).toBe("");
   });
 
-  it("devices lists a paired device and unpair removes it", async () => {
-    await runDevices(io);
-    expect(text).toContain("No paired devices");
-
-    const { deviceId } = await client.request<{ deviceId: string }>({
-      type: "device.add",
-      name: "Pixel",
-    });
-    text = "";
-    await runDevices(io);
-    const row = text.split("\n")[1] ?? "";
-    expect(text.split("\n")[0]).toMatch(/^ID\s+NAME\s+PAIRED\s+LAST SEEN$/);
-    expect(row).toMatch(new RegExp(`^${deviceId}\\s+Pixel\\s+\\d+s\\s+never$`));
-
-    text = "";
-    await runUnpair(deviceId, io);
-    expect(text).toBe(`Unpaired ${deviceId}.\n`);
-    text = "";
-    await runDevices(io);
-    expect(text).toContain("No paired devices");
+  it("kill with no target and outside a session asks for one", async () => {
+    await expect(runKill(undefined, io, {})).rejects.toThrow(/afk kill <id or name>/);
   });
 
-  it("unpair reports the daemon's error for an unknown device", async () => {
-    await expect(runUnpair("dev_nope", io)).rejects.toMatchObject({ code: "not_found" });
+  it("devices shows the paired phone, and a second pairing replaces the first", async () => {
+    await runDevices(io);
+    expect(text).toContain("No phone is paired");
+
+    await client.request({ type: "device.add", name: "Pixel" });
+    await client.request({ type: "device.add", name: "Galaxy" });
+    text = "";
+    await runDevices(io);
+    const [header, row, ...rest] = text.trimEnd().split("\n");
+    expect(header).toMatch(/^PHONE\s+PAIRED\s+LAST CONNECTED$/);
+    expect(row).toMatch(/^Galaxy\s+\d+s ago\s+never$/);
+    expect(rest).toEqual([]);
   });
 });

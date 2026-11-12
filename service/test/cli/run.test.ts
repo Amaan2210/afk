@@ -76,7 +76,52 @@ describe("withDaemon", () => {
     expect(s.exit).toHaveBeenCalledWith(2);
     expect(s.err()).toContain("not running");
     expect(s.err()).toContain(NOT_RUNNING_HINT);
-    expect(NOT_RUNNING_HINT).toMatch(/afk service install.*afk daemon/);
+    expect(NOT_RUNNING_HINT).toMatch(/afk claude.*afk pair/);
+  });
+
+  it("with autostart, starts a daemon that is not running, then connects again", async () => {
+    let up = false;
+    const s = setup(async () => {
+      if (!up) throw new DaemonNotRunningError("ECONNREFUSED");
+      return { close: vi.fn() } as unknown as DaemonClient;
+    });
+    const start = vi.fn(async () => void (up = true));
+    const command = vi.fn(async () => undefined);
+    await withDaemon({ port: 4000 }, command, { ...s.deps, start }, undefined, { autostart: true });
+    expect(start).toHaveBeenCalledExactlyOnceWith(s.deps.paths, 4000);
+    expect(s.connect).toHaveBeenCalledTimes(2);
+    expect(command).toHaveBeenCalledOnce();
+    expect(s.err()).toBe("Starting AFK in the background…\n");
+    expect(s.exit).not.toHaveBeenCalled();
+  });
+
+  it("with autostart, reports a daemon that would not start and exits 1", async () => {
+    const s = setup(async () => {
+      throw new DaemonNotRunningError("ECONNREFUSED");
+    });
+    const start = vi.fn(async () => {
+      throw new Error("AFK did not start. Its log is in /cfg/logs.");
+    });
+    const command = vi.fn(async () => undefined);
+    await withDaemon({}, command, { ...s.deps, start }, undefined, { autostart: true });
+    expect(command).not.toHaveBeenCalled();
+    expect(s.err()).toContain("afk: AFK did not start.");
+    expect(s.exit).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
+  it("without autostart, never starts one; whenDown runs in the command's place", async () => {
+    const s = setup(async () => {
+      throw new DaemonNotRunningError("ECONNREFUSED");
+    });
+    const start = vi.fn(async () => undefined);
+    const command = vi.fn(async () => undefined);
+    const whenDown = vi.fn(() => 0);
+    await withDaemon({}, command, { ...s.deps, start }, undefined, { whenDown });
+    expect(start).not.toHaveBeenCalled();
+    expect(command).not.toHaveBeenCalled();
+    expect(whenDown).toHaveBeenCalledOnce();
+    expect(s.err()).toBe("");
+    expect(s.exit).toHaveBeenCalledExactlyOnceWith(0);
   });
 
   it("exits 1 with the reason when the daemon refuses", async () => {

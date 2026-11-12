@@ -17,7 +17,7 @@ describe("README", () => {
       "afk pair",
       "afk devices",
       "afk unpair",
-      "afk service install",
+      "afk service start",
     ]) {
       expect(readme).toContain(c);
     }
@@ -36,7 +36,7 @@ describe("README", () => {
       if (subs.length === 0) names.push(cmd.name());
       else names.push(...subs.map((s) => `${cmd.name()} ${s.name()}`));
     }
-    expect(names).toEqual(expect.arrayContaining(["claude", "attach", "service install"]));
+    expect(names).toEqual(expect.arrayContaining(["claude", "attach", "service start"]));
     for (const name of names) expect(readme, `afk ${name}`).toContain(`afk ${name}`);
   });
 });

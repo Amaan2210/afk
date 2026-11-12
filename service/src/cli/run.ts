@@ -1,5 +1,6 @@
 import { readConfig } from "../daemon/config.js";
 import { afkPaths, defaultConfigDir, type AfkPaths } from "../daemon/paths.js";
+import { startInBackground } from "./autostart.js";
 import {
   DaemonClient,
   DaemonNotRunningError,
@@ -38,15 +39,25 @@ export interface ClientOptions {
 
 export const EXIT_NOT_RUNNING = 2;
 export const NOT_RUNNING_HINT =
-  "Run `afk service install` to keep it running in the background, or `afk daemon` to run it in this window.";
+  "It starts with your first session (`afk claude`, `afk codex` or `afk shell`) or with `afk pair`.";
 
 export interface RunDeps {
   paths: AfkPaths;
   loadPort: (paths: AfkPaths) => Promise<number>;
   connect: (paths: AfkPaths, port: number) => Promise<DaemonClient>;
+  /** Starts the daemon in the background and waits until it answers (default: the real one). */
+  start?: (paths: AfkPaths, port?: number) => Promise<unknown>;
   stdout: Output;
   stderr: Output;
   setExitCode: (code: number) => void;
+}
+
+/** How a command treats a daemon that is not running. */
+export interface DaemonNeed {
+  /** Start it in the background first. For the commands that give it something to do. */
+  autostart?: boolean;
+  /** Runs instead of the command, in place of the "not running" error; returns the exit code. */
+  whenDown?: (stdout: Output) => number;
 }
 
 /**
@@ -72,29 +83,57 @@ function defaultDeps(): RunDeps {
   return localDeps(afkPaths(defaultConfigDir()));
 }
 
+function isDown(err: unknown): boolean {
+  return err instanceof DaemonNotRunningError || err instanceof DaemonNotSetUpError;
+}
+
+/** A connection to the daemon and its port; with `autostart`, a daemon that is down is started. */
+async function open(
+  opts: ClientOptions,
+  deps: RunDeps,
+  autostart: boolean,
+): Promise<{ client: DaemonClient; port: number }> {
+  const connect = async () => {
+    const port = opts.port ?? (await deps.loadPort(deps.paths));
+    return { client: await deps.connect(deps.paths, port), port };
+  };
+  try {
+    return await connect();
+  } catch (err) {
+    if (!autostart || !isDown(err)) throw err;
+  }
+  deps.stderr.write("Starting AFK in the background…\n");
+  await (deps.start ?? startInBackground)(deps.paths, opts.port);
+  return connect();
+}
+
 /**
- * Connects to the local daemon, runs `command`, and closes the connection. Sets the exit code:
- * the one `command` returns, if any (else 0 on success), 2 when no daemon is running or none was
- * ever set up (no config or local token; nothing is created), 1 for anything else. `precheck`
- * runs first, before the config is read: a command that cannot run here fails the same way
- * whether or not a daemon is running.
+ * Connects to the local daemon, runs `command`, and closes the connection. A daemon that is not
+ * running is started first when `need.autostart` is set; otherwise `need.whenDown` runs in the
+ * command's place, if given. Sets the exit code: the one `command` returns, if any (else 0 on
+ * success), 2 when no daemon is running or none was ever set up (nothing is created), 1 for
+ * anything else. `precheck` runs first, before the config is read: a command that cannot run here
+ * fails the same way whether or not a daemon is running.
  */
 export async function withDaemon(
   opts: ClientOptions,
   command: (io: CommandIo<DaemonClient>) => Promise<number | void>,
   deps: RunDeps = defaultDeps(),
   precheck: () => void = () => undefined,
+  need: DaemonNeed = {},
 ): Promise<void> {
   let client: DaemonClient | undefined = undefined;
   try {
     precheck();
-    const port = opts.port ?? (await deps.loadPort(deps.paths));
-    client = await deps.connect(deps.paths, port);
-    const code = await command({ stdout: deps.stdout, client, port });
+    const opened = await open(opts, deps, need.autostart === true);
+    client = opened.client;
+    const code = await command({ stdout: deps.stdout, client, port: opened.port });
     if (typeof code === "number") deps.setExitCode(code);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (err instanceof DaemonNotRunningError) {
+    if (isDown(err) && need.whenDown !== undefined) {
+      deps.setExitCode(need.whenDown(deps.stdout));
+    } else if (err instanceof DaemonNotRunningError) {
       deps.stderr.write(`afk: ${message}\n${NOT_RUNNING_HINT}\n`);
       deps.setExitCode(EXIT_NOT_RUNNING);
     } else if (err instanceof DaemonNotSetUpError) {

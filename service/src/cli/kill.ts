@@ -1,7 +1,23 @@
-import type { CommandIo } from "./run.js";
+import { resolveSession } from "./attach-cmd.js";
+import { CliError, type CommandIo } from "./run.js";
 
-/** Ends a session; the daemon answers an unknown id with a `not_found` error. */
-export async function runKill(sessionId: string, { stdout, client }: CommandIo): Promise<void> {
-  await client.request({ type: "session.kill", sessionId });
-  stdout.write(`Killed ${sessionId}.\n`);
+/**
+ * Ends the session `target` names (its id or name). With no target it ends the session this
+ * command was typed in, which the session's shell names in `AFK_SESSION_ID`.
+ */
+export async function runKill(
+  target: string | undefined,
+  { stdout, client }: CommandIo,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  const wanted = target ?? env.AFK_SESSION_ID;
+  if (wanted === undefined || wanted === "") {
+    throw new CliError(
+      "Name the session to end: `afk kill <id or name>` (`afk ls` lists them). " +
+        "Inside a session, `afk kill` alone ends that session.",
+    );
+  }
+  const session = resolveSession(wanted, await client.sessions(), "kill");
+  await client.request({ type: "session.kill", sessionId: session.id });
+  stdout.write(`Ended ${session.name || session.id}.\n`);
 }

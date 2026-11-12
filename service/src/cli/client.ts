@@ -20,7 +20,7 @@ export class DaemonNotRunningError extends Error {
 }
 
 export const NOT_SET_UP =
-  "The AFK daemon is not set up — run `afk service install`, or `afk daemon` to run it in this window.";
+  "AFK has not run on this machine yet. It starts with your first session (`afk claude`, `afk codex` or `afk shell`) or with `afk pair`.";
 
 /** No config or local token yet: the daemon has never run for this user. */
 export class DaemonNotSetUpError extends Error {

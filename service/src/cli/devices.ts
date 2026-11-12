@@ -8,27 +8,20 @@ interface DeviceInfo {
   lastSeenAt?: string;
 }
 
-/** Prints the paired phones. */
+/** Prints the paired phone. */
 export async function runDevices(
   { stdout, client }: CommandIo,
   now: Date = new Date(),
 ): Promise<void> {
   const { devices } = await client.request<{ devices: DeviceInfo[] }>({ type: "device.list" });
   if (devices.length === 0) {
-    stdout.write("No paired devices. Run `afk pair` to add one.\n");
+    stdout.write("No phone is paired. Run `afk pair` to pair one.\n");
     return;
   }
   const rows = devices.map((d) => [
-    d.id,
     d.name,
-    formatAge(d.createdAt, now),
+    `${formatAge(d.createdAt, now)} ago`,
     d.lastSeenAt === undefined ? "never" : `${formatAge(d.lastSeenAt, now)} ago`,
   ]);
-  stdout.write(`${table([["ID", "NAME", "PAIRED", "LAST SEEN"], ...rows])}\n`);
-}
-
-/** Revokes a device token. */
-export async function runUnpair(deviceId: string, { stdout, client }: CommandIo): Promise<void> {
-  await client.request({ type: "device.remove", deviceId });
-  stdout.write(`Unpaired ${deviceId}.\n`);
+  stdout.write(`${table([["PHONE", "PAIRED", "LAST CONNECTED"], ...rows])}\n`);
 }

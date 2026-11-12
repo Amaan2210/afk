@@ -6,9 +6,14 @@ import { SessionWatch } from "./session-watch.js";
 /**
  * The session `target` names: the one with that exact id, else the running one with that exact
  * name (the daemon keeps those unique; ended sessions keep theirs). Refuses no match, a name
- * several sessions share (listing them), and a session that has ended.
+ * several sessions share (listing them), and a session that has ended. `verb` is the command
+ * asking, for the messages.
  */
-export function resolveSession(target: string, sessions: Session[]): Session {
+export function resolveSession(
+  target: string,
+  sessions: Session[],
+  verb: "attach" | "kill" = "attach",
+): Session {
   const byId = sessions.find((s) => s.id === target);
   const named = sessions.filter((s) => s.name === target);
   const matches = byId !== undefined ? [byId] : named.filter((s) => s.state !== "ended");
@@ -25,14 +30,14 @@ export function resolveSession(target: string, sessions: Session[]): Session {
     const rows = matches.map(
       (s) => `  ${s.id.padEnd(idWidth)}  ${s.name.padEnd(nameWidth)}  ${s.state}`,
     );
-    const header = `"${target}" names ${matches.length} sessions; use \`afk attach <id>\`:`;
+    const header = `"${target}" names ${matches.length} sessions; use \`afk ${verb} <id>\`:`;
     throw new CliError([header, ...rows].join("\n"));
   }
   const session = matches[0] as Session;
   if (session.state === "ended") {
     const name = session.name || session.id;
     const code = session.exitCode === undefined ? "" : ` (exit ${session.exitCode})`;
-    throw new CliError(`The session ${name} has ended${code}; there is nothing to attach to.`);
+    throw new CliError(`The session ${name} has ended${code}; there is nothing to ${verb}.`);
   }
   return session;
 }

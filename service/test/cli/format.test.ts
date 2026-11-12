@@ -69,8 +69,8 @@ describe("formatSessionTable", () => {
 });
 
 describe("pairPayload", () => {
-  it("uses the Tailscale ip and port from hello", () =>
-    expect(pairPayload({ daemon: { tailscaleIp: "100.84.12.9" } }, "tok")).toEqual({
+  it("carries the host, the default port and the token", () =>
+    expect(pairPayload("100.84.12.9", "tok")).toEqual({
       afk: 1,
       host: "100.84.12.9",
       port: 2350,
@@ -78,10 +78,7 @@ describe("pairPayload", () => {
     }));
 
   it("takes the port it connected on", () =>
-    expect(pairPayload({ daemon: { tailscaleIp: "100.1.1.1" } }, "t", 4000).port).toBe(4000));
-
-  it("throws without a Tailscale ip", () =>
-    expect(() => pairPayload({ daemon: {} }, "t")).toThrow(/Tailscale/));
+    expect(pairPayload("100.1.1.1", "t", 4000).port).toBe(4000));
 });
 
 describe("renderQr", () => {

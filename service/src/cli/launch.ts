@@ -40,7 +40,10 @@ export async function launch(kind: SessionKind, args: string[], io: LaunchIo): P
   }
 }
 
-/** `afk claude|codex|shell`; refuses without a terminal before connecting. */
+/**
+ * `afk claude|codex|shell`; refuses without a terminal before connecting, and starts the daemon
+ * when it is not running.
+ */
 export function runLaunch(
   kind: SessionKind,
   args: string[],
@@ -54,5 +57,5 @@ export function runLaunch(
 ): Promise<void> {
   const command = ({ client }: { client: AttachClient }) =>
     launch(kind, args, { ...io, client, name: opts.name });
-  return withDaemon(opts, command, deps, () => requireTty(io.stdin));
+  return withDaemon(opts, command, deps, () => requireTty(io.stdin), { autostart: true });
 }
