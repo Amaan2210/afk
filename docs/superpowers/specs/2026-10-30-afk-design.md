@@ -61,6 +61,8 @@ AFK is the phone app and the laptop service that solve all four, built well enou
 - Web client reusing the same protocol; macOS/Linux daemon; Wear OS actions; alternative push transports (ntfy / FCM) for phones with aggressive battery killers.
 - Attachments: send files or images to a session from the phone.
 - Mimic Me: details to come from the owner when this is built.
+- Work without Tailscale (asked by the owner 2026-11-12). Free routes: the same Wi-Fi only (simplest, home only); a free Cloudflare quick tunnel started by `afk pair` (works anywhere, needs the `cloudflared` program, its address changes on each start); or a direct phone-to-laptop link (WebRTC), which needs a small always-on meeting server and fails on some networks. Tailscale encrypts the link today, so any of these also needs AFK's own encryption first.
+- Move an already running agent into AFK (asked by the owner 2026-11-12). Windows does not let AFK take over another window's terminal, so the live window cannot be adopted. What can be done: a command such as `afk adopt` that finds the newest Claude or Codex conversation of the current folder and resumes it under AFK, after the user quits the agent in the old window. A plain shell cannot be moved; `afk shell` starts a new one in the same folder.
 - Persisted session list: the daemon keeps its session list in memory only, so a daemon restart empties the phone's list. Saving the list (with resume ids) to disk would let the phone resume sessions from before the restart.
 
 ## 3. Context and constraints
