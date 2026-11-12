@@ -65,6 +65,11 @@ export function reduce(slice: StateSlice, signal: AgentSignal): ReduceResult {
 
     case "pending":
       if (signal.pending.id === slice.pending?.id) return { slice: { ...slice } };
+      // A question stays until it is answered: a permission prompt reported while it is open is
+      // the question's own dialog, and replacing it would take away the options to answer with.
+      if (signal.pending.kind === "permission" && slice.pending?.kind === "question") {
+        return { slice: { ...slice } };
+      }
       return {
         slice: { ...slice, state: "needs_input", pending: signal.pending },
         notify: "needs_input",

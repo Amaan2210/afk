@@ -98,3 +98,12 @@ describe("pendingFromAskUserQuestion", () => {
     expect(pendingFromAskUserQuestion("t1", null)).toBeUndefined();
   });
 });
+
+describe("the permission prompt for the question tool", () => {
+  it("maps to no signal: the question is already pending with its options", () => {
+    const message = "Claude needs your permission to use AskUserQuestion";
+    expect(
+      mapClaudeHook("Notification", { notification_type: "permission_prompt", message }).signals,
+    ).toEqual([]);
+  });
+});

@@ -79,6 +79,9 @@ function notification(payload: Record<string, unknown>): AgentSignal[] {
   if (payload.notification_type !== "permission_prompt") return [];
   const message = typeof payload.message === "string" ? payload.message : "";
   const tool = USED_TOOL.exec(message)?.[1]?.replace(/[.,;:!?]+$/, "") || "unknown";
+  // Claude Code reports its question dialog as a permission prompt for the question tool. The
+  // question itself is already pending (PreToolUse), with its options; this adds nothing to answer.
+  if (tool === QUESTION_TOOL) return [];
   permissionCounter += 1;
   return [
     {

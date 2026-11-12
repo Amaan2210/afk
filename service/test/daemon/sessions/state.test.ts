@@ -248,3 +248,22 @@ describe("reduce", () => {
     });
   });
 });
+
+describe("a question and the permission prompt Claude reports for it", () => {
+  const perm: Pending = { kind: "permission", id: "perm-1", tool: "Bash", summary: "use Bash" };
+
+  it("a permission reported while a question is pending changes nothing and does not notify", () => {
+    const asking: StateSlice = { ...initialSlice, state: "needs_input", pending: q };
+    const r = reduce(asking, { kind: "pending", pending: perm });
+    expect(r.slice.pending).toEqual(q);
+    expect(r.slice.state).toBe("needs_input");
+    expect(r.notify).toBeUndefined();
+  });
+
+  it("a question still replaces a pending permission", () => {
+    const waiting: StateSlice = { ...initialSlice, state: "needs_input", pending: perm };
+    const r = reduce(waiting, { kind: "pending", pending: q });
+    expect(r.slice.pending).toEqual(q);
+    expect(r.notify).toBe("needs_input");
+  });
+});
