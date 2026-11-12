@@ -25,9 +25,12 @@ The scope of 0.1.0, the first release: the service (daemon and CLI) and the Andr
   at start and picks its address up later if it appears.
 - Keep-awake while a session works, device pairing with a QR code, system stats, and a folder
   picker backend.
-- CLI `afk`: `daemon`, `claude`, `codex`, `shell`, `attach` (detach with `Ctrl+]` then `d`), `ls`,
-  `kill`, `pair`, `devices`, `unpair`, and `service install|uninstall|start|stop|status`, which
-  runs the daemon from logon as a Windows scheduled task.
+- CLI `afk`: `daemon`, `claude`, `codex`, `shell`, `attach`, `ls`, `kill`, `pair`, `devices`,
+  `unpair` and `service start|stop|status`. Nothing runs at logon: AFK starts in the background
+  with the first session or `afk pair`, and stops on `afk unpair` or once the last session has
+  ended with no phone paired.
+- Every session has a window on the laptop, also one started or resumed from the phone, and ends
+  when its last window closes or its agent quits.
 - README, architecture notes, and a release workflow that publishes the `afkdev` package to npm
   with provenance on a `v*` tag.
 - Android app (`android/`): pairs with the daemon by QR code over Tailscale and shows the session
@@ -36,6 +39,9 @@ The scope of 0.1.0, the first release: the service (daemon and CLI) and the Andr
   thread screen, new sessions with a folder picker and launch flags, settings (laptop, themes and
   modes, status strip, notifications, terminal), an offline banner and an About screen with the
   bundled licences.
+- In the app: typing goes straight into the terminal, a session can be muted, an ended one
+  deleted, the laptop named, and Unpair ends every session and stops AFK on the laptop.
+- `android/install-on-phone.ps1` builds the release APK and installs it over USB in one step.
 - A foreground service on the phone keeps the connection alive, starts on boot when paired, and
   posts notifications for questions, finished turns and sub-agents with up to three actions.
 - CI for the app on JDK 21, a phone QA checklist, and an `android` release job that attaches
@@ -45,15 +51,14 @@ The scope of 0.1.0, the first release: the service (daemon and CLI) and the Andr
 
 - Windows-only daemon; the CLI and tests also run on Linux in CI.
 - Restarting the daemon ends every session and clears the list; ended sessions are kept in memory for 24 hours only while it runs.
-- `afk service` assumes English-language Windows output from `schtasks`.
 - Free-text answers to multi-select questions are refused.
 - Codex approval prompts are not detected; the session shows as working and the phone gets no
   card for them. Answer them in the terminal view.
 - The user's own Codex `notify` must name a program, not a `.cmd` or `.bat` script.
 - A few Claude prompt keystrokes are unverified from the phone.
 - Resuming a session whose command carried a prompt passes that prompt to the agent again.
-- The detach chord is fixed to `Ctrl+]` then `d`.
-- Reattaching at a different window size can redraw imperfectly until the session next paints.
+- Only sessions started through `afk` are listed.
+- A second window at a different size can redraw imperfectly until the session next paints.
 - Node.js 24.15.0 crashes intermittently in the test suite (a libuv bug); develop on 22.23.x or
   24.22 and newer.
 - Android app limitations are listed in `docs/android-follow-ups.md` and in the QA checklist's

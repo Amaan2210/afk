@@ -302,3 +302,27 @@ Reconnection uses exponential backoff with jitter; the service survives app swip
 | Voice, replay, multi-laptop | Future | — |
 | Name / repo / package | AFK · `AmaanKhan63/afk` · npm `afkdev`, binary `afk` | tether-dev, overwatch-dev |
 | License | MIT (author's call) | Apache-2.0 |
+
+## 14. Changes after the first phone test (2026-11-12)
+
+These replace what the sections above say. Reasons are in `docs/qa-feedback.md`.
+
+| Topic | Now | Before |
+|---|---|---|
+| When AFK runs | Starts with the first `afk claude`, `afk codex`, `afk shell` or `afk pair`. Never at logon | A scheduled task from logon (`afk service install`) |
+| When AFK stops | On unpair, or by itself once the last session has ended and no phone is paired | Ran until stopped |
+| Phones | One at a time; pairing again replaces it | Several |
+| Unpair | In the app or with `afk unpair`: cancels the token, ends every session, stops AFK, after a warning | The app only forgot the laptop |
+| A refused token | The app drops the pairing and shows the pairing screen | A banner, no retries |
+| Laptop windows | Every session has one, also from the phone. No detach keys | Phone sessions had none; `Ctrl+]` then `d` detached |
+| When a session ends | Its last window closes, its agent quits, it is killed, or AFK stops | Only when its shell exited or it was killed |
+| Ended sessions | Agent sessions stay 24 hours and can be deleted; shell sessions go at once; a resumed session replaces the ended one | All stayed 24 hours |
+| Typing on the phone | Straight into the terminal; the text box is on the Chat tab only | A text box under both tabs |
+| A line sent from the phone | The text, then Enter a moment later | Text and Enter together (the agent took it as a paste) |
+| Tabs | A shell has no Chat tab; swipe between tabs is off unless turned on | Both tabs always; swipe on |
+| Status strip | Under the tabs; hidden while typing in the terminal | Above the text box |
+| Claude's own status line | Hidden while a phone shows the terminal | Always drawn |
+| Offline banner | On every screen, drops in from the top, within seconds of losing the network | On the sessions list, after the connection timed out |
+| Mute | Per session, kept on the phone | None |
+| Laptop name | Can be set from the app | The computer's name |
+| Pairing screen | Setup steps, one Scan button; a scan tests and saves by itself | Test connection, then Save |

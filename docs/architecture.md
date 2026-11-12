@@ -124,10 +124,11 @@ connects: it reads the port from the config, connects with the local token (`cli
 command and sets the exit code (2 when no daemon runs, or none was ever set up: with no config or
 token it creates neither). `launch.ts` creates a session and attaches;
 `attach.ts` puts the window in raw mode, forwards keys and resizes, and renders output, with
-`detach-detector.ts` watching for `Ctrl+]` then `d`, `conpty-filter.ts` dropping the pseudo-
+`conpty-filter.ts` dropping the pseudo-
 console's win32-input-mode request, and `terminal-reset.ts` restoring the window on exit.
 `session-watch.ts` tracks session updates so the exit code is the session's own. `ls`, `kill`,
-`pair`, `devices` and the other commands are thin wrappers over requests. `service.ts` and
-`schtasks.ts` install, query and remove the scheduled task that runs `afk daemon` from logon.
+`pair`, `devices` and the other commands are thin wrappers over requests. `autostart.ts`
+starts the daemon in the background, with no window, for a command that needs it, and
+`service.ts` is `afk service start|stop|status`. Nothing runs at logon.
 `exec.ts`, `hook.ts` and `statusline.ts` are the hidden relays that run inside sessions and post to
 the daemon over loopback.

@@ -13,7 +13,8 @@ still need a check by a person on a real terminal or phone; they are listed unde
 ## How it works
 
 The daemon owns every terminal. Your laptop window and your phone are both clients of it, which is
-how a session survives closing the window and how the phone shows exactly what the laptop shows.
+how the phone shows exactly what the laptop shows. Every session has a window on the laptop, and
+ends when that window closes.
 
 ```
  Laptop (Windows 11)                                   Phone (Android)
@@ -33,8 +34,8 @@ how a session survives closing the window and how the phone shows exactly what t
 ```
 
 A session is a real PowerShell (`pwsh` if present, else Windows PowerShell 5.1) in a folder. For
-`afk claude`, the daemon types the agent's launch line into that shell, so when the agent exits
-you land back in the shell with the session still alive. Each session's agent is started with its
+`afk claude`, the daemon types the agent's launch line into that shell, and the session ends
+when that agent quits. Each session's agent is started with its
 own hooks and status line (Claude Code) or notify program (Codex) pointing back at the daemon over
 loopback; your own `~/.claude/settings.json` and `~/.codex/config.toml` are never changed. If
 your `config.toml` sets a `notify` program, AFK still runs it after each Codex turn, with the
@@ -134,29 +135,36 @@ nothing loops.
 
 ### Pairing
 
-Run `afk pair` on the laptop. In the app, tap **Scan QR code** and scan the code it prints; or
-type the host, port and token it prints. Tap **Test connection**, and once the app says
-"Connected to" your laptop's name, tap **Save**. The token is shown once: to pair again, run
-`afk pair` again. One phone is paired at a time. `afk unpair` on the laptop unpairs it, ends every
-session and stops AFK.
+Run `afk pair` on the laptop. In the app, tap **Scan QR code** and scan the code it prints: the
+app tests it and opens the sessions list. Or tap **Type the details instead**, type the host,
+port and token, and tap **Connect**. The token is shown once: to pair again, run `afk pair`
+again. One phone is paired at a time.
+
+**Unpair** in the app's Settings and `afk unpair` on the laptop do the same: they unpair the
+phone, end every session and stop AFK, after asking. When the laptop unpairs the phone, the app
+goes back to the pairing screen by itself.
 
 ### What it does
 
 - **Sessions:** every session on the laptop, updated live, with the sessions that need you first.
   Search by name, folder or branch, and filter by state or agent. The strip at the top shows the
-  laptop's name, RAM and CPU. Long-press a session to rename, kill or resume it. While the
-  connection is down, a banner says so and the last known list stays usable.
-- **Terminal:** the session's real terminal, the same screen as the laptop window, with a key bar
-  (Esc, Tab, Ctrl, arrows, keyboard), pinch to zoom, and long-press to copy and paste.
-- **Chat:** the agent's conversation as messages, tool calls and sub-agents. Tap a sub-agent to
-  open its thread. A status strip shows the model, context, cost and more.
-- **Questions:** when an agent asks a question or for permission, a card in the chat shows the
-  choices. Tap one to answer, or **Other…** to type an answer.
-- **New session:** pick a folder on the laptop, the agent (Claude, Codex or a plain shell), its
-  flags and an optional first prompt.
-- **Settings:** the laptop's connection, keeping the laptop awake while agents work, unpairing,
-  which notifications to get, the terminal's font size and key bar, the theme, the status strip's
-  chips, and the licences.
+  laptop's name, RAM and CPU. Long-press a session to rename it, mute its notifications, kill
+  it, or resume or delete an ended one. While the connection is down, a banner at the top of
+  every screen says so and the last known list stays usable.
+- **Terminal:** the session's real terminal, the same screen as the laptop window. Tap it and
+  type: there is no separate text box. A key bar adds Esc, Tab, Ctrl and the arrows; pinch to
+  zoom, long-press to copy and paste. While the phone shows the terminal, Claude's own status
+  line is hidden, since the app's strip shows the same.
+- **Chat:** the agent's conversation as messages, tool calls and sub-agents, with a text box to
+  send the next prompt. Tap a sub-agent to open its thread. A plain shell has no chat.
+- **Status strip:** the model, thinking level, context, cost and more, under the tabs.
+- **Questions:** when an agent asks a question or for permission, a card shows the choices, in
+  the chat and under the terminal. Tap one to answer, or **Other…** in the chat to type one.
+- **New session:** pick a folder on the laptop, a name if you want one, the agent (Claude, Codex
+  or a plain shell), its flags and an optional first prompt. Its window opens on the laptop.
+- **Settings:** the laptop's name and connection, keeping the laptop awake while agents work,
+  unpairing, which notifications to get and their sound, the terminal's font size, key bar and
+  swipe between tabs, the theme, the status strip's chips, and the licences.
 
 ### Notifications
 
@@ -164,7 +172,9 @@ The app keeps one connection to the laptop in a foreground service, shown as a "
 notification, and starts it again when the phone restarts. It notifies you when a session needs
 your input (with the question's first choices, or Allow and Deny, as buttons), when an agent
 finishes its turn (with an inline Reply that sends your next prompt), and when a sub-agent
-finishes. The session you have open does not notify. Each kind can be turned off in Settings.
+finishes. The session you have open does not notify, and neither does one you muted. Each kind
+can be turned off in Settings, where **Sound and vibration** opens Android's settings to pick a
+sound for each.
 For notifications to arrive while the phone sleeps, exempt the app from battery optimisation:
 see [Battery](#battery).
 
@@ -186,6 +196,8 @@ Captured on a phone in Aurora, dark mode.
 
 ## Limitations
 
+- AFK shows only the sessions it started. A `claude` or `codex` started without `afk` is not
+  listed; see [make plain `claude` start an AFK session](#optional-make-plain-claude-start-an-afk-session).
 - The daemon is Windows-only for now: it depends on ConPTY and a Windows keep-awake request. The
   CLI and the tests also run on Linux in CI, but the product targets Windows 11.
 - Stopping or restarting the daemon ends every session and clears the list. While the daemon keeps
@@ -216,6 +228,7 @@ Settings → Apps → Special app access → Battery optimisation → All apps �
 
 ## Documentation
 
+- [How AFK works](docs/how-afk-works.md), in plain steps
 - [Design spec](docs/superpowers/specs/2026-10-30-afk-design.md)
 - [Architecture notes](docs/architecture.md)
 - [Wire protocol v1](protocol/protocol.md)
