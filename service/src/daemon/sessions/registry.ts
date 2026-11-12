@@ -99,7 +99,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
   /**
    * A new session in the same folder resuming the ended one's conversation, reusing the original
    * args if the agent is unchanged, less any resume args of their own: `claude <args> --resume
-   * <id>`, `codex <args> resume <id>`.
+   * <id>`, `codex <args> resume <id>`. The ended session leaves the list: the new one replaces it.
    */
   async resume(id: string): Promise<Session> {
     const { session: source, origin } = this.require(id);
@@ -110,7 +110,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     }
     const args = origin.kind === source.kind ? withoutResumeArgs(source.kind, origin.args) : [];
     const resumeArgs = source.kind === "claude" ? ["--resume", agentId] : ["resume", agentId];
-    return this.spawn({
+    const resumed = await this.spawn({
       cwd: source.cwd,
       kind: source.kind,
       name: source.name,
@@ -119,6 +119,10 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
     });
+    // The new session carries the conversation on. Left listed, the ended one could be resumed
+    // again, into a second session on the same conversation.
+    if (this.records.has(id)) this.remove(id);
+    return resumed;
   }
 
   /**

@@ -505,7 +505,8 @@ describe("SessionRegistry.resume", () => {
     expect(fake.written.map(String)).toEqual([
       "claude --dangerously-skip-permissions --model opus --resume abc\r",
     ]);
-    expect(reg.list().map((x) => x.id)).toEqual([src.id, s.id]);
+    // The ended session leaves the list: the new one carries its conversation on.
+    expect(reg.list().map((x) => x.id)).toEqual([s.id]);
 
     // Resuming the resumed session keeps the original args and does not stack --resume.
     reg.setMeta(s.id, { agentSessionId: "def" });
