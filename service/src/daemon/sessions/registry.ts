@@ -83,10 +83,14 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     return [...this.records.values()].map((rec) => structuredClone(rec.session));
   }
 
-  /** Ends the session's process; the session ends when the pty reports the exit. */
+  /**
+   * Ends the session's process; the session ends when the pty reports the exit. A session that
+   * has already ended is removed from the list instead: there is nothing left to stop.
+   */
   kill(id: string): void {
     const rec = this.require(id);
-    if (rec.session.state !== "ended") this.terminate(rec);
+    if (rec.session.state === "ended") this.remove(id);
+    else this.terminate(rec);
   }
 
   /** A name another live session holds gets the first free `-2`, `-3`, … suffix, as on create. */

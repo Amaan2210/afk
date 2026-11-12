@@ -678,3 +678,15 @@ describe("a session and the agent it was started for", () => {
     expect(reg.get(shell.id)).toBeUndefined();
   });
 });
+
+describe("kill of a session that has ended", () => {
+  it("removes it from the list", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    const { removed } = collect();
+    fake.emitExit(0);
+    expect(reg.get(s.id)?.session.state).toBe("ended");
+    reg.kill(s.id);
+    expect(reg.get(s.id)).toBeUndefined();
+    expect(removed).toEqual([s.id]);
+  });
+});
