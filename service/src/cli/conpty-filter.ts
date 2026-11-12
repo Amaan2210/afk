@@ -6,8 +6,8 @@ const REQUEST = Buffer.from("\x1b[?9001h", "latin1");
  *
  * A session's pseudoconsole sends this request to the terminal hosting it, which is the daemon's
  * node-pty, when it starts. If the request reached the attached window, that window's console
- * would encode every key as a win32-input sequence, and the detach chord would never arrive as
- * its plain byte. The session's pseudoconsole reads plain keys as well, so dropping the request
+ * would encode every key as a win32-input sequence instead of its plain bytes, which the phone's
+ * keys are too. The session's pseudoconsole reads plain keys as well, so dropping the request
  * loses nothing.
  *
  * A chunk can end with the first bytes of a request. Those bytes are held back until the next

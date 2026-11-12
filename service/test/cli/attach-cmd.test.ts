@@ -2,8 +2,6 @@ import { resolveSession, runAttach, runAttachCommand } from "../../src/cli/attac
 import { CliError, NOT_RUNNING_HINT } from "../../src/cli/run.js";
 import { FakeClient, fakeTerminal, noDaemon, session } from "../helpers/fake-attach.js";
 
-const CHORD = [0x1d, 0x64];
-
 describe("resolveSession", () => {
   const live = session({ id: "s_1", name: "api" });
   const other = session({ id: "s_2", name: "web", state: "working" });
@@ -83,15 +81,25 @@ describe("runAttach", () => {
     return { client, term: fakeTerminal() };
   }
 
-  it("attaches to the session a name resolves to and exits 0 on detach", async () => {
+  it("attaches to the session a name resolves to", async () => {
     const { client, term } = setup();
     const code = runAttach("api", client, term.io);
     await vi.waitFor(() => expect(client.ofType("pty.subscribe")).toHaveLength(1));
     expect(client.ofType("pty.subscribe")[0]).toMatchObject({ sessionId: "s_1" });
-    term.type(CHORD);
+    client.push({ type: "session.removed", sessionId: "s_1" });
     expect(await code).toBe(0);
-    expect(term.text()).toContain("[afk] detached, session api keeps running · afk attach api");
     expect(client.listening()).toBe(0);
+  });
+
+  it("in the window the daemon opened, exits 0 however the session ended", async () => {
+    const { client, term } = setup();
+    const code = runAttach("s_1", client, term.io, true);
+    await vi.waitFor(() => expect(client.ofType("pty.subscribe")).toHaveLength(1));
+    client.push({
+      type: "session.updated",
+      session: session({ id: "s_1", name: "api", state: "ended", exitCode: 4 }),
+    });
+    expect(await code).toBe(0);
   });
 
   it("exits with the session's code when it ends while attached", async () => {
@@ -122,7 +130,7 @@ describe("runAttach", () => {
     };
     const code = runAttach("renamed", client, term.io);
     await vi.waitFor(() => expect(client.ofType("pty.subscribe")).toHaveLength(1));
-    term.type(CHORD);
+    client.push({ type: "session.removed", sessionId: "s_1" });
     expect(await code).toBe(0);
   });
 

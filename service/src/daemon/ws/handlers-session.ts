@@ -53,6 +53,8 @@ export const sessionHandlers: Pick<HandlerMap, SessionType> = {
     await deps.recent
       .add(cwd)
       .catch((err: unknown) => deps.log.warn({ err, cwd }, "ws: recent folder not saved"));
+    // The CLI attaches its own window; a session from the phone gets one here.
+    if (!conn.isLocal) deps.openWindow?.(session.id);
     conn.ack(msg.id, { sessionId: session.id });
   },
 
@@ -70,6 +72,7 @@ export const sessionHandlers: Pick<HandlerMap, SessionType> = {
 
   async "session.resume"(conn, msg, { deps }) {
     const session = await deps.registry.resume(msg.sessionId);
+    if (!conn.isLocal) deps.openWindow?.(session.id);
     conn.ack(msg.id, { sessionId: session.id });
   },
 };

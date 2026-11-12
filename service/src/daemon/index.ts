@@ -21,6 +21,7 @@ import {
   type TailscaleOptions,
 } from "./rebind.js";
 import { nodePtyFactory } from "./sessions/pty.js";
+import { openSessionWindow } from "./sessions/window.js";
 import { SessionRegistry } from "./sessions/registry.js";
 import { detectShell } from "./sessions/shell.js";
 import { StatsSampler } from "./stats.js";
@@ -199,6 +200,16 @@ async function compose(
     snapshotScrollback: config.snapshotScrollback,
     retentionHours: config.settings.retentionHours,
   }));
+  // After the clients were told it ended: an ended session nobody can resume is only clutter.
+  registry.on("exit", (id) => {
+    setImmediate(() => {
+      try {
+        if (registry.get(id) !== undefined && !registry.resumable(id)) registry.forget(id);
+      } catch (err) {
+        log.warn({ err, sessionId: id }, "an ended session was not removed");
+      }
+    });
+  });
   const hub = (p.hub = new ChatHub(registry, {
     onError: (sessionId, err) => log.warn({ err, sessionId }, "chat: reading an agent file failed"),
   }));
@@ -231,6 +242,7 @@ async function compose(
     log,
     saveConfig: (c) => saveConfig(paths, c),
     requestStop: opts.onStopRequested,
+    openWindow: (sessionId) => openSessionWindow(sessionId, port, log),
     tailscaleIp: bind.tailscaleIp,
   };
   const ws = (p.ws = attachWsServer(p.servers, wsDeps));

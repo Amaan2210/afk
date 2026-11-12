@@ -97,10 +97,13 @@ function registerServiceCommands(program: Command): void {
 function registerClientCommands(program: Command): void {
   program
     .command("attach")
-    .description("attach this window to a running session (detach: Ctrl+] then d)")
+    .description("show a running session in this window too; it ends with its last window")
     .argument("<session>", "the session's id or name, as shown by `afk ls`")
     .option("--port <n>", PORT_HELP, parsePortOption)
-    .action(async (target: string, opts: ClientOptions) =>
+    // For the window the daemon opens for a session the phone started: it closes when the
+    // session ends, which a terminal only does for an exit code of 0.
+    .addOption(new Option("--own-window", "exit 0 however the session ended").hideHelp())
+    .action(async (target: string, opts: ClientOptions & { ownWindow?: boolean }) =>
       (await import("./attach-cmd.js")).runAttachCommand(target, opts),
     );
   program

@@ -230,9 +230,30 @@ export class ClientConn {
     ];
   }
 
+  /**
+   * A session cannot outlive its window: when the last laptop window showing it goes (it was
+   * closed, or its terminal was), the session ends. A window that unsubscribed first, or a phone
+   * that drops off, ends nothing.
+   */
+  private endWindowlessSessions(): void {
+    if (!this.local) return;
+    const { registry, log } = this.ctx.deps;
+    const others = this.ctx.clients().filter((c) => c !== this && c.isLocal);
+    for (const sessionId of this.pty) {
+      if (others.some((c) => c.pty.has(sessionId))) continue;
+      try {
+        registry.kill(sessionId);
+        log.info({ ...this.fields(), sessionId }, "ws: session ended with its window");
+      } catch (err) {
+        log.debug({ ...this.fields(err), sessionId }, "ws: session already gone");
+      }
+    }
+  }
+
   private onClose(): void {
     this.state = "closed";
     clearTimeout(this.authTimer);
+    this.endWindowlessSessions();
     this.pty.clear();
     this.chat.clear();
     this.ctx.remove(this);

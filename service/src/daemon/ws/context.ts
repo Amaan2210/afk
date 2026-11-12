@@ -24,6 +24,11 @@ export interface WsDeps {
   saveConfig: (c: DaemonConfig) => Promise<void>;
   /** Stops the daemon, for `daemon.stop`; undefined when whoever started it gave no way to. */
   requestStop?: (reason: string) => void;
+  /**
+   * Opens a window on this machine attached to the session, for one a phone started: no session
+   * runs out of sight.
+   */
+  openWindow?: (sessionId: string) => void;
   /** Called once an authenticated client's socket has closed. */
   onClientGone?: () => void;
   /** Reported in `hello` when the daemon listens on a Tailscale address. */

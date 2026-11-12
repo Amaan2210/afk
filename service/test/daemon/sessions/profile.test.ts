@@ -39,10 +39,10 @@ describe("renderSessionProfile", () => {
     expect(p).not.toMatch(/\$PROFILE/);
   });
 
-  it("titles the window without failing on non-console hosts and prints the detach hint", () => {
+  it("titles the window without failing on non-console hosts and says what closing the window does", () => {
     expect(p).toContain(`try { $Host.UI.RawUI.WindowTitle = "afk · s_x" } catch {}`);
     expect(p).toContain(
-      `Write-Host "afk session s_x · detach: Ctrl+] d" -ForegroundColor DarkGray`,
+      `Write-Host "afk session s_x · closing this window ends it" -ForegroundColor DarkGray`,
     );
   });
 

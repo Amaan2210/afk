@@ -72,7 +72,7 @@ export function renderSessionProfile(o: ProfileOptions): string {
     `function claude { ${forwarded} ${exec} claude @afkArgs }`,
     `function codex { ${forwarded} ${exec} codex @afkArgs }`,
     `try { $Host.UI.RawUI.WindowTitle = ${psString(`afk · ${o.sessionId}`)} } catch {}`,
-    `Write-Host ${psString(`afk session ${o.sessionId} · detach: Ctrl+] d`)} -ForegroundColor DarkGray`,
+    `Write-Host ${psString(`afk session ${o.sessionId} · closing this window ends it`)} -ForegroundColor DarkGray`,
   ];
   return BOM + lines.join("\r\n") + "\r\n";
 }

@@ -32,6 +32,8 @@ export type { CreateOptions, MetaPatch, RegistryDeps, RegistryEvents } from "./r
 const LAUNCH_FALLBACK_MS = 3000;
 /** Output bumps `lastActivityAt` on every chunk but emits "updated" at most this often. */
 const ACTIVITY_UPDATE_MS = 5000;
+/** Typed into a session's shell once its agent has quit. */
+const EXIT_LINE = "exit\r";
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
 
@@ -119,10 +121,31 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     });
   }
 
+  /**
+   * An agent's report. When the agent a session was started for quits, the session ends with it:
+   * its shell is back at the prompt, and is told to exit. A shell session keeps running.
+   */
   signal(id: string, s: AgentSignal): void {
     const rec = this.require(id);
     this.apply(rec, s);
+    if (s.kind === "agent_exit" && rec.origin.kind !== "shell" && rec.session.state !== "ended") {
+      rec.process?.write(Buffer.from(EXIT_LINE, "utf8"));
+      return;
+    }
     this.refreshBranch(rec);
+  }
+
+  /** Whether an ended session's conversation can be picked up again by `resume`. */
+  resumable(id: string): boolean {
+    const { session } = this.require(id);
+    return session.kind !== "shell" && session.agentSessionId !== undefined;
+  }
+
+  /** Drops an ended session from the list and deletes its folder. */
+  forget(id: string): void {
+    const rec = this.require(id);
+    if (rec.session.state !== "ended") throw badRequest(`session ${id} has not ended`);
+    this.remove(id);
   }
 
   setMeta(id: string, m: MetaPatch): void {
@@ -148,12 +171,16 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     for (const [id, rec] of this.records) {
       const endedAt = rec.session.endedAt;
       if (endedAt === undefined || Date.parse(endedAt) >= cutoff) continue;
-      this.records.delete(id);
-      const dir = path.join(this.deps.sessionsDir, id);
-      // Best effort: nothing reads a pruned session's folder again.
-      rm(dir, { recursive: true, force: true }).catch(() => undefined);
-      this.emit("removed", id);
+      this.remove(id);
     }
+  }
+
+  private remove(id: string): void {
+    this.records.delete(id);
+    const dir = path.join(this.deps.sessionsDir, id);
+    // Best effort: nothing reads a removed session's folder again.
+    rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    this.emit("removed", id);
   }
 
   stopAll(): void {

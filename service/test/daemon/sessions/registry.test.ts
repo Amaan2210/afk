@@ -643,3 +643,37 @@ describe("SessionRegistry retention", () => {
     expect([a, b, c].map((s) => reg.get(s.id)!.killRequested)).toEqual([true, true, false]);
   });
 });
+
+describe("a session and the agent it was started for", () => {
+  it("ends with its agent: the shell is told to exit once the agent has quit", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    fake.emitData("PS> ");
+    fake.written.length = 0;
+    reg.signal(s.id, { kind: "agent_exit" });
+    expect(fake.written.map(String)).toEqual(["exit\r"]);
+  });
+
+  it("a shell session keeps running when an agent typed into it quits", async () => {
+    const s = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    fake.emitData("PS> ");
+    reg.signal(s.id, { kind: "agent_exit" });
+    expect(fake.written).toEqual([]);
+  });
+
+  it("only an ended agent session with a conversation is resumable; forget drops an ended one", async () => {
+    const shell = await reg.create({ cwd: "D:\\p", kind: "shell", args: [] });
+    const shellPty = fake;
+    const agent = await reg.create({ cwd: "D:\\p", kind: "claude", args: [] });
+    expect(reg.resumable(shell.id)).toBe(false);
+    expect(reg.resumable(agent.id)).toBe(false);
+    reg.setMeta(agent.id, { agentSessionId: "conv-1" });
+    expect(reg.resumable(agent.id)).toBe(true);
+
+    expect(() => reg.forget(shell.id)).toThrow(/bad_request: .*has not ended/);
+    const { removed } = collect();
+    shellPty.emitExit(0);
+    reg.forget(shell.id);
+    expect(removed).toEqual([shell.id]);
+    expect(reg.get(shell.id)).toBeUndefined();
+  });
+});

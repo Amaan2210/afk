@@ -5,7 +5,10 @@ import { CliError, NOT_RUNNING_HINT } from "../../src/cli/run.js";
 import type { SessionKind } from "../../src/protocol/index.js";
 import { FakeClient, fakeTerminal, noDaemon, session } from "../helpers/fake-attach.js";
 
-const CHORD = [0x1d, 0x64];
+/** The session ends, which is how a launch returns while the daemon is up. */
+function end(client: FakeClient, s = session({ id: "s_7", name: "proj" })): void {
+  client.push({ type: "session.updated", session: { ...s, state: "ended", exitCode: 0 } });
+}
 
 function setup(created = session({ id: "s_7", name: "proj" })) {
   const client = new FakeClient();
@@ -20,7 +23,7 @@ async function attached(client: FakeClient): Promise<void> {
 
 describe("launch", () => {
   it("launch creates the session from cwd with pass-through args and attaches", async () => {
-    const { client, term, io } = setup();
+    const { client, io } = setup();
     const code = launch("claude", ["--dangerously-skip-permissions"], io);
     await attached(client);
     expect(client.sent.map((m) => m.type)).toEqual(["session.create", "pty.subscribe"]);
@@ -31,12 +34,12 @@ describe("launch", () => {
       args: ["--dangerously-skip-permissions"],
     });
     expect(client.sent[1]).toEqual({ type: "pty.subscribe", sessionId: "s_7", cols: 90, rows: 33 });
-    term.type(CHORD);
+    end(client);
     expect(await code).toBe(0);
   });
 
   it("passes --name to session.create", async () => {
-    const { client, term, io } = setup();
+    const { client, io } = setup();
     const code = launch("shell", [], { ...io, name: "scratch" });
     await attached(client);
     expect(client.sent[0]).toEqual({
@@ -46,19 +49,8 @@ describe("launch", () => {
       args: [],
       name: "scratch",
     });
-    term.type(CHORD);
+    end(client);
     await code;
-  });
-
-  it("names the session from the update that arrived before the create ack", async () => {
-    const { client, term, io } = setup(session({ id: "s_7", name: "remote-dev" }));
-    const code = launch("codex", [], io);
-    await attached(client);
-    term.type(CHORD);
-    expect(await code).toBe(0);
-    expect(term.text()).toContain(
-      "[afk] detached, session remote-dev keeps running · afk attach remote-dev",
-    );
   });
 
   it("returns the session's exit code when it ends", async () => {

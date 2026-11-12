@@ -1,13 +1,12 @@
 import type { Session } from "../protocol/index.js";
 import type { Frame } from "./client.js";
 import { Win32InputFilter } from "./conpty-filter.js";
-import { DetachDetector } from "./detach-detector.js";
 import { CliError } from "./run.js";
 import { SessionWatch } from "./session-watch.js";
 import { TerminalReset } from "./terminal-reset.js";
 
-/** How an attach ended: the user detached, the session ended, or the daemon went away. */
-export type AttachOutcome = "detached" | "ended" | "lost";
+/** How an attach ended: the session ended, or the daemon went away. */
+export type AttachOutcome = "ended" | "lost";
 
 /** What attach uses of a daemon client; tests hand it a fake. */
 export interface AttachClient {
@@ -60,17 +59,17 @@ export function requireTty(stdin: TtyIn): void {
   }
 }
 
-/** A command's exit code after attaching: 0 on detach, 1 if the daemon went away, else the session's. */
+/** A command's exit code after attaching: 1 if the daemon went away, else the session's. */
 export function exitCodeFor(outcome: AttachOutcome, session: Session | undefined): number {
-  if (outcome === "detached") return 0;
   if (outcome === "lost") return 1;
   return session?.exitCode ?? 0;
 }
 
 /**
- * Connects this terminal to a session's pty until the user presses the detach chord, the session
- * ends, or the connection drops. The terminal is restored on every one of those paths and on
- * error. `watch` is the caller's view of the sessions, when it needs one that started earlier.
+ * Connects this terminal to a session's pty until the session ends or the connection drops.
+ * There is no way to leave a session running without a window: closing this one ends the session
+ * (the daemon sees the connection go), unless another window still shows it. The terminal is
+ * restored on every path and on error. `watch` is the caller's view of the sessions, when it needs one that started earlier.
  */
 export async function attach(
   client: AttachClient,
@@ -91,7 +90,6 @@ export async function attach(
 
 /** One attach, from taking the terminal to handing it back. */
 class Attachment {
-  private readonly detector = new DetachDetector();
   private readonly reset = new TerminalReset();
   private readonly filter = new Win32InputFilter();
   private readonly stops: (() => void)[] = [];
@@ -159,14 +157,11 @@ class Attachment {
   }
 
   private readonly onKeys = (chunk: Buffer): void => {
-    const { forward, detach } = this.detector.feed(chunk);
-    if (forward.length > 0) {
-      // The pty follows the size of the window that typed last.
-      if (this.ptySize !== undefined && !sameSize(this.ptySize, this.localSize())) this.sendSize();
-      const data = forward.toString("base64");
-      this.trySend({ type: "pty.input", sessionId: this.sessionId, data });
-    }
-    if (detach) this.finish("detached");
+    if (chunk.length === 0) return;
+    // The pty follows the size of the window that typed last.
+    if (this.ptySize !== undefined && !sameSize(this.ptySize, this.localSize())) this.sendSize();
+    const data = chunk.toString("base64");
+    this.trySend({ type: "pty.input", sessionId: this.sessionId, data });
   };
 
   private readonly onResize = (): void => this.sendSize();
@@ -202,10 +197,7 @@ class Attachment {
     const session = this.watch.get(this.sessionId);
     if (outcome === "lost") return "[afk] lost connection to the daemon";
     // With no exit code known the command exits 0, and the message says so.
-    if (outcome === "ended") return `[afk] session ended (exit ${session?.exitCode ?? 0})`;
-    const name = session?.name || this.sessionId;
-    const arg = /\s/.test(name) ? `"${name}"` : name;
-    return `[afk] detached, session ${name} keeps running · afk attach ${arg}`;
+    return `[afk] session ended (exit ${session?.exitCode ?? 0})`;
   }
 
   /** Hands the terminal back: listeners off, cooked mode, stdin paused, modes reset. */

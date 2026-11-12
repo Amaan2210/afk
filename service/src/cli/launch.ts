@@ -22,7 +22,7 @@ export type LaunchRunner = (
 
 /**
  * Creates a session in `cwd` that runs `kind` with `args`, then attaches this terminal to it.
- * Resolves with 0 on detach, 1 if the daemon went away, else the session's exit code.
+ * Resolves with 1 if the daemon went away, else the session's exit code.
  */
 export async function launch(kind: SessionKind, args: string[], io: LaunchIo): Promise<number> {
   // Checked before the session exists: a refused launch must not leave one running.

@@ -42,11 +42,16 @@ export function resolveSession(
   return session;
 }
 
-/** Attaches this terminal to the session `target` names; resolves with the exit code. */
+/**
+ * Attaches this terminal to the session `target` names; resolves with the exit code. With
+ * `ownWindow` (the window the daemon opened for the session) that is 0 however the session
+ * ended, so the window closes with it.
+ */
 export async function runAttach(
   target: string,
   client: AttachClient,
   io: AttachIo,
+  ownWindow = false,
 ): Promise<number> {
   requireTty(io.stdin);
   // Watching from before the list is read: no update between the two is missed.
@@ -55,7 +60,7 @@ export async function runAttach(
     watch.seed(await client.sessions());
     const { id } = resolveSession(target, watch.list());
     const outcome = await attach(client, id, io, watch);
-    return exitCodeFor(outcome, watch.get(id));
+    return ownWindow ? 0 : exitCodeFor(outcome, watch.get(id));
   } finally {
     watch.stop();
   }
@@ -64,10 +69,11 @@ export async function runAttach(
 /** `afk attach <session>`; refuses without a terminal before connecting. */
 export function runAttachCommand(
   target: string,
-  opts: ClientOptions,
+  opts: ClientOptions & { ownWindow?: boolean },
   io: AttachIo = { stdin: process.stdin, stdout: process.stdout },
   deps?: RunDeps,
 ): Promise<void> {
-  const command = ({ client }: { client: AttachClient }) => runAttach(target, client, io);
+  const command = ({ client }: { client: AttachClient }) =>
+    runAttach(target, client, io, opts.ownWindow === true);
   return withDaemon(opts, command, deps, () => requireTty(io.stdin));
 }

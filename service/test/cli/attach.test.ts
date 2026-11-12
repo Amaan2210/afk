@@ -3,8 +3,6 @@ import { CliError } from "../../src/cli/run.js";
 import { b64, FakeClient, fakeTerminal, session } from "../helpers/fake-attach.js";
 
 const CLEAR = "\x1b[H\x1b[2J";
-const CHORD = [0x1d, 0x64];
-const DETACHED = "[afk] detached, session proj keeps running · afk attach proj";
 /** The message starts a line and clears what the session drew below the cursor (a TUI's footer). */
 const NEW_LINE = "\r\n\x1b[J";
 
@@ -25,6 +23,11 @@ function data(text: string | Buffer, sessionId = "s_1") {
   return { type: "pty.data", sessionId, data: b64(text) };
 }
 
+/** The session ends, which is the only way an attach finishes while the daemon is up. */
+function end(client: FakeClient, s = session()): void {
+  client.push({ type: "session.updated", session: { ...s, state: "ended", exitCode: 0 } });
+}
+
 function inputs(client: FakeClient): string[] {
   return client.ofType("pty.input").map((m) => Buffer.from(String(m.data), "base64").toString());
 }
@@ -41,7 +44,7 @@ describe("attach", () => {
     });
     expect(term.text()).toBe(`${CLEAR}PS C:\\proj> `);
     expect(term.stdin.setRawMode).toHaveBeenCalledWith(true);
-    term.type(CHORD);
+    end(client);
     await done;
   });
 
@@ -54,7 +57,7 @@ describe("attach", () => {
     client.push(data(text.subarray(1, 5)));
     client.push(data(text.subarray(5)));
     expect(term.bytes().subarray(Buffer.byteLength(CLEAR))).toEqual(text);
-    term.type(CHORD);
+    end(client);
     await done;
   });
 
@@ -65,7 +68,7 @@ describe("attach", () => {
     client.push(data("x\x1b[?90"));
     client.push(data("01hy"));
     expect(term.text()).toBe(`${CLEAR}\x1b[?1004hPS> xy`);
-    term.type(CHORD);
+    end(client);
     await done;
   });
 
@@ -76,8 +79,8 @@ describe("attach", () => {
     client.push(data("elsewhere", "s_2"));
     client.push({ type: "session.updated", session: session({ id: "s_2", state: "ended" }) });
     expect(term.text()).toBe(CLEAR);
-    term.type(CHORD);
-    expect(await done).toBe("detached");
+    end(client);
+    expect(await done).toBe("ended");
   });
 
   it("forwards keystrokes as pty.input", async () => {
@@ -87,47 +90,25 @@ describe("attach", () => {
     term.type("dir\r");
     term.type([0x03]);
     expect(inputs(client)).toEqual(["dir\r", "\x03"]);
-    term.type(CHORD);
+    end(client);
     await done;
   });
 
-  it("Ctrl+] d detaches: nothing typed, the terminal restored, the session named", async () => {
+  it("has no detach keys: Ctrl+] then d are typed into the session like any others", async () => {
     const { client, term } = setup();
     const done = attach(client, "s_1", term.io);
     await subscribed(client);
     term.type([0x1d]);
     term.type("d");
-    expect(await done).toBe("detached");
-    expect(inputs(client)).toEqual([]);
+    expect(inputs(client)).toEqual(["\x1d", "d"]);
+    end(client);
+    expect(await done).toBe("ended");
     expect(term.stdin.setRawMode.mock.calls).toEqual([[true], [false]]);
-    expect(term.stdin.pause).toHaveBeenCalled();
     expect(client.ofType("pty.unsubscribe")).toEqual([
       { type: "pty.unsubscribe", sessionId: "s_1" },
     ]);
-    expect(client.listening()).toBe(0);
     expect(term.stdin.listenerCount("data")).toBe(0);
     expect(term.stdout.listenerCount("resize")).toBe(0);
-    expect(term.text().endsWith(`${NEW_LINE}${DETACHED}\r\n`)).toBe(true);
-  });
-
-  it("names the session by its id when it has no name", async () => {
-    const { client, term } = setup("", session({ name: "" }));
-    const done = attach(client, "s_1", term.io);
-    await subscribed(client);
-    term.type(CHORD);
-    await done;
-    expect(term.text()).toContain("[afk] detached, session s_1 keeps running · afk attach s_1");
-  });
-
-  it("quotes a name with whitespace in the attach hint", async () => {
-    const { client, term } = setup("", session({ name: "My Repos" }));
-    const done = attach(client, "s_1", term.io);
-    await subscribed(client);
-    term.type(CHORD);
-    await done;
-    expect(term.text()).toContain(
-      '[afk] detached, session My Repos keeps running · afk attach "My Repos"\r\n',
-    );
   });
 
   it("writes no output that arrives before the snapshot, which already holds it", async () => {
@@ -140,18 +121,8 @@ describe("attach", () => {
     client.push({ type: "pty.snapshot", sessionId: "s_1", cols: 100, rows: 40, data: b64("snap") });
     client.push(data("late"));
     expect(term.text()).toBe(`${CLEAR}snaplate`);
-    term.type(CHORD);
+    end(client);
     await done;
-  });
-
-  it("uses the latest name the daemon announced", async () => {
-    const { client, term } = setup();
-    const done = attach(client, "s_1", term.io);
-    await subscribed(client);
-    client.push({ type: "session.updated", session: session({ name: "renamed" }) });
-    term.type(CHORD);
-    await done;
-    expect(term.text()).toContain("session renamed keeps running · afk attach renamed");
   });
 
   it("returns ended with the exit code when the session ends", async () => {
@@ -236,7 +207,7 @@ describe("attach", () => {
       expect(client.ofType("pty.resize")).toEqual([
         { type: "pty.resize", sessionId: "s_1", cols: 120, rows: 50 },
       ]);
-      term.type(CHORD);
+      end(client);
       await done;
     });
 
@@ -251,7 +222,7 @@ describe("attach", () => {
       const order = client.sent.filter((m) => m.type === "pty.resize" || m.type === "pty.input");
       expect(order.map((m) => m.type)).toEqual(["pty.resize", "pty.input", "pty.input"]);
       expect(order[0]).toEqual({ type: "pty.resize", sessionId: "s_1", cols: 100, rows: 40 });
-      term.type(CHORD);
+      end(client);
       await done;
     });
 
@@ -261,7 +232,7 @@ describe("attach", () => {
       await subscribed(client);
       term.type("x");
       expect(client.ofType("pty.resize")).toEqual([]);
-      term.type(CHORD);
+      end(client);
       await done;
     });
   });
@@ -272,7 +243,7 @@ describe("attach", () => {
       const done = attach(client, "s_1", term.io);
       await subscribed(client);
       client.push(data("\x1b[?25l\x1b[5 q\x1b[?2004h\x1b[?1004h\x1b[?1003h"));
-      term.type(CHORD);
+      end(client);
       await done;
       const tail = term.text().slice(term.text().lastIndexOf("\x1b[?1003h") + 8);
       const modes = [
@@ -292,17 +263,17 @@ describe("attach", () => {
       await subscribed(inAlt.client);
       inAlt.client.push(data("\x1b[?10"));
       inAlt.client.push(data("49h full-screen app"));
-      inAlt.term.type(CHORD);
+      end(inAlt.client);
       await done;
       const out = inAlt.term.text();
       expect(out.indexOf("\x1b[?1049l")).toBeGreaterThan(out.indexOf("full-screen app"));
-      expect(out.indexOf("\x1b[?1049l")).toBeLessThan(out.indexOf("[afk] detached"));
+      expect(out.indexOf("\x1b[?1049l")).toBeLessThan(out.indexOf("[afk] session ended"));
 
       const leftAlt = setup();
       done = attach(leftAlt.client, "s_1", leftAlt.term.io);
       await subscribed(leftAlt.client);
       leftAlt.client.push(data("\x1b[?1049hvim\x1b[?1049l"));
-      leftAlt.term.type(CHORD);
+      end(leftAlt.client);
       await done;
       expect(leftAlt.term.text().split("\x1b[?1049l")).toHaveLength(2);
     });
@@ -311,7 +282,7 @@ describe("attach", () => {
       const { client, term } = setup("main\r\n\x1b[?1049h\x1b[Halt");
       const done = attach(client, "s_1", term.io);
       await subscribed(client);
-      term.type(CHORD);
+      end(client);
       await done;
       expect(term.text()).toContain("\x1b[?1049l");
     });

@@ -38,7 +38,7 @@ afterEach(async () => {
 
 describe("attach against a live daemon", () => {
   onWindows(
-    "afk shell, detach, reattach by name to the same screen, then exit with the shell's code",
+    "afk shell, a second window by name on the same screen, then exit with the shell's code",
     async () => {
       daemon = await startDaemon({ configDir: dir, port: 0 });
       const first = fakeTerminal({ columns: 100, rows: 30 });
@@ -48,12 +48,9 @@ describe("attach against a live daemon", () => {
         name: "itest",
         ...first.io,
       });
-      await vi.waitFor(() => expect(first.text()).toContain("detach: Ctrl+] d"), WAIT);
+      await vi.waitFor(() => expect(first.text()).toContain("closing this window ends it"), WAIT);
       first.type("echo marker-$((6*7))\r");
       await vi.waitFor(() => expect(first.text()).toContain("marker-42"), WAIT);
-      first.type([0x1d, 0x64]);
-      expect(await launched).toBe(0);
-      expect(first.text()).toContain("[afk] detached, session itest keeps running");
 
       const again = fakeTerminal({ columns: 100, rows: 30 });
       const attached = runAttach("itest", await connect(), again.io);
@@ -61,6 +58,8 @@ describe("attach against a live daemon", () => {
       again.type("exit 3\r");
       expect(await attached).toBe(3);
       expect(again.text()).toContain("[afk] session ended (exit 3)");
+      // The first window shows the same session, and ends with it.
+      expect(await launched).toBe(3);
     },
     60_000,
   );
