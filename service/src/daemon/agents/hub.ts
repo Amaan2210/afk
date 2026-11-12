@@ -8,6 +8,8 @@ import { ClaudeSource, CodexSource, type SourceSink } from "./hub-sources.js";
 import { truncate } from "./summarize.js";
 
 const DEFAULT_POLL_MS = 250;
+/** How many times slower the files are polled while no phone is connected to show the chat. */
+const UNWATCHED_SLOWDOWN = 8;
 const DEFAULT_EXIT_GRACE_MS = 5000;
 /** Longest `lastMessage` taken from a transcript, the ellipsis included. */
 const LAST_MESSAGE_MAX = 200;
@@ -50,6 +52,7 @@ export interface ChatHubEvents {
 export class ChatHub extends EventEmitter<ChatHubEvents> {
   private readonly sessions = new Map<string, HubSession>();
   private readonly pollMs: number;
+  private watched = true;
   private readonly exitGraceMs: number;
   private readonly onError: (sessionId: string, err: Error) => void;
   private readonly now: () => Date;
@@ -75,6 +78,17 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
 
   attachCodex(sessionId: string, rolloutPath: string): void {
     this.attach(sessionId, rolloutPath, (sink) => new CodexSource(rolloutPath, sink));
+  }
+
+  /**
+   * Whether a phone is connected. Without one nobody reads the chat, so the files are polled
+   * less often; they are still read, because their lines also drive each session's state. When
+   * a phone connects, every file is read at once, so the chat it gets is current.
+   */
+  setWatched(watched: boolean): void {
+    if (this.watched === watched) return;
+    this.watched = watched;
+    if (watched) for (const session of this.sessions.values()) session.attached?.flush();
   }
 
   /** Stops reading the session's files; its history stays. */
@@ -143,7 +157,7 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
 
   private sinkFor(sessionId: string, session: HubSession): SourceSink {
     return {
-      pollMs: this.pollMs,
+      pollMs: () => (this.watched ? this.pollMs : this.pollMs * UNWATCHED_SLOWDOWN),
       chat: (threadId, event, live) => {
         this.show(sessionId, session, threadId, event);
         if (live && threadId === MAIN_THREAD && event.kind === "assistant" && event.text) {

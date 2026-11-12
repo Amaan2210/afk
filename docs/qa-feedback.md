@@ -333,7 +333,7 @@ Screenshots: `8.jpg` and `9.jpg` in the owner's `afk-qa-screenshots` folder, nex
       it is not running; `afk pair` later only adds the phone, and the sessions already
       running show up on it. **Confirmed by the owner:** any `afk` command that needs the
       service starts it when it is not running. Still never at logon.
-- [ ] **S13-4. Do less work while no phone is connected.** Owner asked to skip tracking until
+- [x] **S13-4. Do less work while no phone is connected.** Owner asked to skip tracking until
       pairing, to cut load. Plan:
       - Pause while no phone is connected: the RAM and CPU check (every 5 s), and reading the
         agent's conversation file for the Chat tab (it is on disk, so it can be read from the
@@ -456,7 +456,11 @@ What changed in the app, by item:
 - **Before you start, 4.** README and the checklist say that only sessions started with `afk`
   are listed.
 
-Design choices made without asking first, easy to change:
+- **S13-4.** Without a phone connected, the laptop looks at each chat file every 2 seconds,
+  not 4 times a second. It cannot stop fully: those files also tell AFK what each agent is
+  doing. When a phone connects, the files are read at once. The saving was not measured.
+
+Design choices made without asking first (approved by the owner 2026-11-12):
 
 - Terminal tab has no text box at all.
 - The question card under the terminal is the same card as in Chat.
@@ -465,7 +469,6 @@ Design choices made without asking first, easy to change:
 
 Still open:
 
-- **S13-4.** Measure the cost of reading the chat file before pausing it.
 - **S9-3.** Why a session ended while the phone was offline.
 - The service tests crash at random about one run in six. Cause found: this laptop runs
   Node 24.15.0, the version the README and CONTRIBUTING already warn about (a crash inside

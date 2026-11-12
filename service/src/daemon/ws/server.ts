@@ -70,12 +70,15 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
   const save = serialized(deps.saveConfig);
   let nextId = 1;
 
-  // Only a phone shows the laptop's RAM and CPU, so they are sampled only while one is connected.
+  // Only a phone shows the laptop's RAM and CPU and the chat: the first are sampled only while
+  // one is connected, and the chat files are read less often without one.
   const sampleForPhones = (): void => {
     const phoneConnected = [...conns].some((c) => c.authenticated && !c.isLocal);
+    deps.hub.setWatched(phoneConnected);
     if (phoneConnected) deps.stats.start(() => deps.keepAwake.active);
     else deps.stats.stop();
   };
+  deps.hub.setWatched(false); // no phone yet
 
   const ctx: WsContext = {
     deps,

@@ -377,6 +377,21 @@ describe("ChatHub with a Claude transcript", () => {
     hub.flush(sid); // detached: nothing to read
   });
 
+  it("with no phone connected the transcript is read less often, and at once when one connects", async () => {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS));
+
+    hub.setWatched(false);
+    await pause(POLL_MS * 2); // the wait under way was a short one; the next is 8 times longer
+    append(transcript, assistantText("a6", "Still here."));
+    await pause(POLL_MS * 3);
+    expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS);
+
+    hub.setWatched(true);
+    expect(ids(hub.history(sid, "main")).at(-1)).toBe("a6");
+  });
+
   it("a reply read after the turn ended still becomes the session's lastMessage", async () => {
     write(transcript, MAIN);
     hub.attachClaude(sid, transcript);

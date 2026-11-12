@@ -39,7 +39,7 @@ export class SubagentWatcher extends EventEmitter<SubagentWatcherEvents> {
 
   constructor(
     readonly dir: string,
-    private readonly pollMs = DEFAULT_POLL_MS,
+    private readonly pollMs: () => number = () => DEFAULT_POLL_MS,
   ) {
     super();
   }
@@ -59,7 +59,7 @@ export class SubagentWatcher extends EventEmitter<SubagentWatcherEvents> {
   private schedule(delayMs: number): void {
     this.timer = setTimeout(() => {
       this.poll();
-      if (this.running) this.schedule(this.pollMs);
+      if (this.running) this.schedule(this.pollMs());
     }, delayMs);
   }
 

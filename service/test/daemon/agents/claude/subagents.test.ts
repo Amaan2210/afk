@@ -19,7 +19,7 @@ let watcher: SubagentWatcher | undefined;
 /** Starts a watcher on `watched` and records the files it reports. */
 function watch(watched: string) {
   const seen: [string, string][] = [];
-  watcher = new SubagentWatcher(watched, POLL_MS);
+  watcher = new SubagentWatcher(watched, () => POLL_MS);
   watcher.on("file", (path: string, threadId: string) => seen.push([path, threadId]));
   watcher.start();
   return seen;

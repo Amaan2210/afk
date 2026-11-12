@@ -162,6 +162,26 @@ describe("JsonlTailer", () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  it("a pollMs function is asked before every wait, so the pace can change", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    writeFileSync(file, '{"n":1}\n');
+    let pollMs = POLL_MS * 10;
+    const lines: unknown[] = [];
+    tailer = new JsonlTailer(file, { pollMs: () => pollMs });
+    tailer.on("line", (obj) => lines.push(obj));
+    tailer.start();
+    vi.advanceTimersByTime(0); // the first read; the next is the slow wait away
+    appendFileSync(file, '{"n":2}\n');
+    vi.advanceTimersByTime(POLL_MS * 9);
+    expect(lines).toHaveLength(1);
+    pollMs = POLL_MS;
+    vi.advanceTimersByTime(POLL_MS); // the slow wait ends; later waits are short
+    expect(lines).toHaveLength(2);
+    appendFileSync(file, '{"n":3}\n');
+    vi.advanceTimersByTime(POLL_MS);
+    expect(lines).toHaveLength(3);
+  });
+
   it("drain from a listener while the tailer is reading does nothing", async () => {
     writeFileSync(file, '{"n":1}\n{"n":2}\n');
     const { lines, caughtUpAt } = startTailer();

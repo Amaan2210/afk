@@ -7,8 +7,8 @@ const READ_CHUNK_BYTES = 64 * 1024;
 const NEWLINE = 0x0a;
 
 export interface JsonlTailerOptions {
-  /** How often to look for appended bytes. */
-  pollMs?: number;
+  /** How often to look for appended bytes. A function is asked again before every wait. */
+  pollMs?: number | (() => number);
   /** Emit the lines already in the file (default), or only those appended after `start()`. */
   fromStart?: boolean;
   /**
@@ -53,7 +53,7 @@ type Line = [obj: unknown, lineNo: number];
  * where it surfaces as an uncaught exception, and the remaining lines are still delivered.
  */
 export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
-  private readonly pollMs: number;
+  private readonly pollMs: () => number;
   private readonly fromStart: boolean;
   private readonly rethrow: (err: unknown) => void;
   private running = false;
@@ -69,7 +69,8 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
     opts: JsonlTailerOptions = {},
   ) {
     super();
-    this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+    const pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+    this.pollMs = typeof pollMs === "function" ? pollMs : () => pollMs;
     this.fromStart = opts.fromStart ?? true;
     this.rethrow = opts.rethrow ?? throwOnNextTick;
   }
@@ -99,7 +100,7 @@ export class JsonlTailer extends EventEmitter<JsonlTailerEvents> {
   private schedule(delayMs: number): void {
     this.timer = setTimeout(() => {
       this.poll();
-      if (this.running) this.schedule(this.pollMs);
+      if (this.running) this.schedule(this.pollMs());
     }, delayMs);
   }
 

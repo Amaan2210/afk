@@ -8,7 +8,8 @@ import { JsonlTailer } from "./tail.js";
 
 /** Where a source delivers what it reads. The hub binds one to each session. */
 export interface SourceSink {
-  readonly pollMs: number;
+  /** How long to wait between two looks at a file, asked before every wait. */
+  readonly pollMs: () => number;
   /** `live`: the event comes from a line appended after its file was first read to the end. */
   chat(threadId: string, event: ChatEvent, live: boolean): void;
   /** A thread's file was truncated or replaced: its history is about to be read again. */
