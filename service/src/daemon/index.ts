@@ -228,6 +228,7 @@ async function compose(
     codexSessionsDir: codexSessionsDir(),
     log,
     startedAt,
+    phoneWatching: (sessionId) => p.ws?.phoneWatching(sessionId) === true,
   }));
   // `hello` reads `tailscaleIp` from here when it is sent, so a later address shows up in it.
   const wsDeps: WsDeps = {

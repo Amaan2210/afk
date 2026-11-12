@@ -27,6 +27,8 @@ export interface HttpDeps {
   /** Codex rollout locate loop timing after `agent-start` (defaults 2000 / 30000 ms). */
   locateIntervalMs?: number;
   locateTimeoutMs?: number;
+  /** Whether a phone is showing this session's terminal now. */
+  phoneWatching?: (sessionId: string) => boolean;
   /** Clock for the agent-start time a rollout must not predate. */
   now?: () => Date;
 }

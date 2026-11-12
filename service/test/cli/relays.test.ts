@@ -187,7 +187,7 @@ describe("runStatusline", () => {
     expect(r).toEqual({ code: 0, out: "" });
   });
 
-  it("does not wait for a slow post before running the original", async () => {
+  it("runs the original once a post that never settles has had its time", async () => {
     const user = path.join(dir, "user.json");
     settings(user, echoCommand);
     let release: () => void = () => undefined;
@@ -206,5 +206,16 @@ describe("runStatusline", () => {
     await vi.waitFor(() => expect(out).toBe("{}"), { timeout: 5000 });
     release();
     expect(await done).toBe(0);
+  });
+
+  it("draws nothing when the daemon says a phone is showing the terminal", async () => {
+    const user = path.join(dir, "user.json");
+    settings(user, echoCommand);
+    const hiding = (async (_port, _route, _body, _headers, _timeout, onReply) => {
+      onReply?.({ hideOriginal: true });
+      return true;
+    }) as PostFn;
+    const r = await run("{}", user, hiding);
+    expect(r).toEqual({ code: 0, out: "" });
   });
 });

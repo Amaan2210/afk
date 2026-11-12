@@ -50,30 +50,38 @@ function runOriginal(command: string, input: string, io: StatuslineIo): Promise<
 }
 
 /**
- * Relays the status-line JSON to the daemon and, concurrently, to the status line the user had
- * before AFK took the slot, so a down daemon never slows the display. Always returns 0.
+ * Relays the status-line JSON to the daemon, then to the status line the user had before AFK took
+ * the slot, unless the daemon says a phone is showing this terminal (`hideOriginal`): those lines
+ * are cut off there. A daemon that does not answer in time counts as no phone. Always returns 0.
  */
 export async function runStatusline(io: StatuslineIo): Promise<number> {
   try {
     const input = await readStdin(io.stdin);
     const json = parseJson(input);
     const sessionId = io.env.AFK_SESSION_ID;
-    const post =
-      sessionId && json !== undefined
-        ? io.post(
-            portFromEnv(io.env),
-            "/statusline",
-            json,
-            { "X-AFK-Session": sessionId },
-            POST_TIMEOUT_MS,
-          )
-        : Promise.resolve(false);
+    let hide = false;
+    if (sessionId && json !== undefined) {
+      // The relay's own limit too: a post that never settles must not hold the status line back.
+      const limit = new Promise<void>((resolve) => setTimeout(resolve, POST_TIMEOUT_MS).unref());
+      const post = io.post(
+        portFromEnv(io.env),
+        "/statusline",
+        json,
+        { "X-AFK-Session": sessionId },
+        POST_TIMEOUT_MS,
+        (reply) => {
+          hide = isRecord(reply) && reply.hideOriginal === true;
+        },
+      );
+      await Promise.race([post, limit]);
+    }
+    if (hide) return 0;
     const command = findOriginalStatusline({
       projectDir: projectDirOf(json, io.cwd ?? process.cwd()),
       env: io.env,
       userSettingsPath: io.userSettingsPath,
     });
-    await Promise.all([post, command === undefined ? undefined : runOriginal(command, input, io)]);
+    if (command !== undefined) await runOriginal(command, input, io);
   } catch {
     // A relay never fails the agent.
   }

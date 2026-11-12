@@ -136,6 +136,7 @@ interface DaemonSettings {
   keepAwake: boolean; // default true
   keepAwakeGraceMin: number; // default 10
   retentionHours: number; // default 24
+  laptopName?: string; // what `hello` gives as `hostname`; absent = the computer's own name
 }
 ```
 
@@ -145,7 +146,7 @@ interface DaemonSettings {
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth`                               | `token`, `protocol`, `client{kind,name}`                                                                          | `hello` …                                                                                                                                                                                       |
 | `session.create`                     | `id`, `cwd`, `kind`, `args: string[]`, `name?`, `prompt?`                                                         | `ack{sessionId}`                                                                                                                                                                                |
-| `session.kill`                       | `id`, `sessionId`                                                                                                 | `ack`                                                                                                                                                                                           |
+| `session.kill`                       | `id`, `sessionId`                                                                                                 | `ack`. A session that has already ended is removed from the list                                                                                                                                |
 | `session.resume`                     | `id`, `sessionId` (an ended session with `agentSessionId`)                                                        | `ack{sessionId}` of the new session                                                                                                                                                             |
 | `session.rename`                     | `id`, `sessionId`, `name`                                                                                         | `ack`                                                                                                                                                                                           |
 | `pty.subscribe`                      | `id`, `sessionId`, `cols`, `rows`                                                                                 | `ack`, then `pty.snapshot`, then `pty.data` stream                                                                                                                                              |
@@ -194,7 +195,7 @@ Error codes: `unauthorized`, `protocol_mismatch`, `bad_request`, `not_found`, `s
 
 ## Loopback HTTP (relays)
 
-All bodies are JSON; all responses are `200 {}` on success. Relays must exit 0 even if the daemon is unreachable, so an agent's hook never fails because of AFK.
+All bodies are JSON; all responses are `200 {}` on success, except `/statusline`, which answers `200 {"hideOriginal": boolean}`: true while a phone shows the session's terminal, and the relay then does not draw the user's own status line. Relays must exit 0 even if the daemon is unreachable, so an agent's hook never fails because of AFK.
 
 | Route                            | Header                        | Body                                                                                                                                                                                              |
 | -------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

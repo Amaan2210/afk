@@ -98,8 +98,13 @@ export const hookDropped: RouteHandler = (ctx) => {
   );
 };
 
+/**
+ * `hideOriginal` tells the relay not to draw the user's own status line: a phone is showing this
+ * terminal, where those lines are cut off and take a third of the screen, and the app has its own.
+ */
 export const statusline: RouteHandler = (ctx) => {
   ctx.deps.hub.updateStrip(ctx.sessionId, mapStatusline(ctx.body));
+  return { hideOriginal: ctx.deps.phoneWatching?.(ctx.sessionId) === true };
 };
 
 export const agentStart: RouteHandler = (ctx) => {

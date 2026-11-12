@@ -3,6 +3,7 @@ import http from "node:http";
 /**
  * POSTs a JSON body to the daemon's loopback HTTP port. Never throws: resolves true on a 2xx
  * answer and false on any error, non-2xx answer or timeout, so a relay can never fail an agent.
+ * `onReply` gets a 2xx answer's JSON body, before the promise resolves.
  */
 export function postLoopback(
   port: number,
@@ -10,6 +11,7 @@ export function postLoopback(
   body: unknown,
   headers: Record<string, string> = {},
   timeoutMs = 1500,
+  onReply?: (body: unknown) => void,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
@@ -37,8 +39,19 @@ export function postLoopback(
           },
         },
         (res) => {
-          res.resume();
-          res.on("end", () => done((res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300));
+          const chunks: Buffer[] = [];
+          res.on("data", (c: Buffer) => chunks.push(c));
+          res.on("end", () => {
+            const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300;
+            if (ok && onReply !== undefined) {
+              try {
+                onReply(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+              } catch {
+                // An answer that is not JSON says nothing.
+              }
+            }
+            done(ok);
+          });
           res.on("error", () => done(false));
         },
       );

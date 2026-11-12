@@ -27,6 +27,8 @@ export interface WsServer {
   close(): Promise<void>;
   /** Authenticated clients. */
   clientCount(): number;
+  /** Whether a phone is subscribed to this session's terminal. */
+  phoneWatching(sessionId: string): boolean;
 }
 
 /** Runs `save` calls one after another: concurrent writes of one file would race. */
@@ -115,6 +117,7 @@ export function attachWsServer(servers: Server | Server[], deps: WsDeps): WsServ
       server.on("upgrade", onUpgrade);
     },
     clientCount: () => ctx.clients().length,
+    phoneWatching: (sessionId) => ctx.clients().some((c) => !c.isLocal && c.pty.has(sessionId)),
     async close() {
       closed = true;
       deps.stats.stop();
