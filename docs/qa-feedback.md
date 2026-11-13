@@ -357,14 +357,14 @@ owner's `afk-qa-screenshots` folder, next to the repo. Do not commit.
 
 New session
 
-- [ ] **R2-1. A session started from the phone opens no window on the laptop.** The session
+- [x] **R2-1. A session started from the phone opens no window on the laptop.** The session
       starts and works on the phone, but no window shows on the laptop.
-- [ ] **R2-2. Text typed in the terminal is not carried over to Chat.** Before, text typed
+- [x] **R2-2. Text typed in the terminal is not carried over to Chat.** Before, text typed
       into Claude's input in Terminal showed in the Chat text box after switching tabs. Now
       the Chat box is empty.
-- [ ] **R2-3. Hide "bypass permissions on" in the phone's terminal.** Show it as a chip on
+- [x] **R2-3. Hide "bypass permissions on" in the phone's terminal.** Show it as a chip on
       the session's card in the sessions list instead.
-- [ ] **R2-4. New session stopped working.** It worked earlier in this round; later, starting
+- [x] **R2-4. New session stopped working.** It worked earlier in this round; later, starting
       a new session failed with a message like "Not able to connect to laptop". Some time
       later it worked again by itself. The offline banner was not showing, and the Claude
       session kept running fine at the same time, so the owner thinks the connection had
@@ -373,36 +373,36 @@ New session
 
 Pairing
 
-- [ ] **R2-5. Move the pairing steps to the centre of the screen.** Change the layout so the
+- [x] **R2-5. Move the pairing steps to the centre of the screen.** Change the layout so the
       instructions sit in the middle.
 
 Terminal
 
-- [ ] **R2-6. The terminal sometimes freezes.** Mostly while scrolling back through the
+- [x] **R2-6. The terminal sometimes freezes.** Mostly while scrolling back through the
       output. Only going back and opening the session again fixes it.
-- [ ] **R2-8. The keyboard suggests no words in the terminal.** In Chat it does. Fix it if
+- [x] **R2-8. The keyboard suggests no words in the terminal.** In Chat it does. Fix it if
       it can be done. The catch to check: the terminal sends each key to the laptop as it
       is typed, and word suggestions need the keyboard to hold a word back and change it.
-- [ ] **R2-9. The terminal stops responding after switching apps.** Leave AFK for another
+- [x] **R2-9. The terminal stops responding after switching apps.** Leave AFK for another
       app, come back to the terminal: it takes no input. Only going back and opening the
       session again fixes it. Likely the same cause as R2-6.
-- [ ] **R2-10. Claude's status line came back.** After a reply finished, the status line
+- [x] **R2-10. Claude's status line came back.** After a reply finished, the status line
       (model, thinking, totals) showed again under Claude's input box (12.png).
-- [ ] **R2-11. Kill from the session's menu leaves you on a dead terminal.** After Kill the
+- [x] **R2-11. Kill from the session's menu leaves you on a dead terminal.** After Kill the
       screen stays open showing "Claude · ended" and the laptop's shell prompt, and takes no
       input (13.png). Expected: go back to the sessions list. The ended card staying in the
       list is by design (for Resume and Delete).
 
 Chat
 
-- [ ] **R2-12. After `/compact`, Chat shows the compaction summary as if you typed it.** A
+- [x] **R2-12. After `/compact`, Chat shows the compaction summary as if you typed it.** A
       large bubble on your side holds Claude's summary text ("If you need specific details
       from before compaction ... Continue the conversation ..."), then `/compact`. The
       terminal shows only "Compacted" (10.png, 11.png).
 
 State
 
-- [ ] **R2-7. A cancelled prompt leaves the session on "working".** Typed into Claude's input
+- [x] **R2-7. A cancelled prompt leaves the session on "working".** Typed into Claude's input
       in Terminal, pressed Enter by mistake, pressed Esc at once. Claude cancelled and put
       the text back (correct), but the session still shows "working", not "idle".
 
@@ -516,6 +516,30 @@ What changed in the app, by item:
   not 4 times a second. It cannot stop fully: those files also tell AFK what each agent is
   doing. When a phone connects, the files are read at once. The saving was not measured.
 
+Re-test round 2 fixes (2026-11-13). The laptop side is unit-tested. The app side is written but
+**not yet built or run**.
+
+- **R2-1 (no laptop window).** The laptop started the window without a console, so none showed.
+  It now opens a real window titled "AFK". Checked on this laptop with a test program.
+- **R2-2 (text not carried to Chat).** The Terminal lost its own text box, so nothing was
+  shared. Opening Chat now moves what Claude's input box holds into the Chat box and erases it
+  on the laptop. Going back pastes the Chat text into an empty input box, without Enter.
+  Claude only, not Codex.
+- **R2-3 (bypass line).** Owner chose to keep the line. The card shows a **Bypass** tag.
+- **R2-4 (new session failed).** The phone is on Wi-Fi and mobile data. Losing either one made
+  the app reconnect. It now reconnects only when no network is left. Likely cause, to confirm.
+- **R2-5.** The pairing steps sit in the middle of the screen.
+- **R2-6, R2-9 (terminal stops).** Likely cause: leaving the app cut Claude's output in the
+  middle of a code, and the fresh screen was read as part of it. Fixed; a tap also links the
+  keyboard again. Not reproduced: to confirm on the phone.
+- **R2-7 (stuck on "working").** A quick Esc before Claude answers leaves no trace in Claude's
+  files. The laptop now ends the turn when Esc comes before the answer starts.
+- **R2-8 (no word suggestions).** New switch, on by default: Settings → Terminal → Word
+  suggestions. Letters still reach the laptop at once; a picked word replaces the typed one.
+- **R2-10 (status line back).** Claude redrew it only on events. It now refreshes every 3 s.
+- **R2-11 (dead screen after Kill).** Kill and Delete go back to the list.
+- **R2-12 (`/compact` summary).** No longer shown as your message.
+
 Design choices made without asking first (approved by the owner 2026-11-12):
 
 - Terminal tab has no text box at all.
@@ -530,4 +554,4 @@ Still open:
   Node 24.15.0, the version the README and CONTRIBUTING already warn about (a crash inside
   Node, exit code 0xC0000409). It is not from the Batch 1 changes. The same crash can stop
   AFK itself, which ends every session. Fix: install Node 24.22 or newer, or 22.23 or newer.
-- The phone re-test is under way: see "Re-test round 2" above.
+- Round 2 fixes: build the app, then check them on the phone (fix log above).

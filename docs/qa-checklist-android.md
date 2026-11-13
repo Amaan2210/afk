@@ -134,6 +134,12 @@ ask me which of three colours I like". To get a permission prompt, start `afk cl
       the terminal.
 - [ ] The keyboard key shows the phone keyboard, with the terminal focused. Tap it again: the
       keyboard hides.
+- [ ] Word suggestions: in Claude's terminal type `helo`. Each letter shows on the laptop at
+      once and the keyboard suggests words. Pick `hello`: the laptop shows `hello`. Turn off
+      Settings → Terminal → **Word suggestions**: no suggestions, keys go out as typed.
+- [ ] Carry-over: type a few words into Claude's input in Terminal, then open Chat. The words
+      are in the Chat box and gone from Claude's input on the laptop. Open Terminal again: they
+      are back in Claude's input, not sent, and the Chat box is empty.
 - [ ] Long-press terminal text: a selection with Copy appears. Copy it, then paste it into
       another app: the text matches.
 - [ ] Long-press → Paste in the terminal pastes the clipboard into the session as typed text.
