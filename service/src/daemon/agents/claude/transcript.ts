@@ -247,6 +247,12 @@ export function isInterruptLine(line: unknown): boolean {
   );
 }
 
+/** The permission mode Claude Code was in when it wrote a user line (`permissionMode`). */
+export function permissionModeOf(line: unknown): string | undefined {
+  if (!isRecord(line) || line.type !== "user") return undefined;
+  return typeof line.permissionMode === "string" ? line.permissionMode : undefined;
+}
+
 /**
  * What the user typed in a user line's text, or undefined when the line holds nothing of theirs:
  * reminders are cut out, a slash command reads as typed (`/model opus`), and a line that is one

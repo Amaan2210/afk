@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { Session, SessionKind } from "../../protocol/index.js";
+import { skipsPermissions } from "./permissions.js";
 import type { SessionProcess } from "./session-process.js";
 import { reduce, type AgentSignal, type NotifyKind, type StateSlice } from "./state.js";
 
@@ -62,6 +63,7 @@ export function newEntry(o: NewEntry): Entry {
     subagentsRunning: 0,
   };
   setOptional(session, "gitBranch", o.gitBranch);
+  setSkipsPermissions(session, skipsPermissions(o.kind, o.origin.args));
   const entry: Entry = {
     session,
     process: o.process,
@@ -129,6 +131,12 @@ export function isFocusReport(bytes: Buffer): boolean {
 }
 
 type OptionalField = "pending" | "lastMessage" | "exitCode" | "gitBranch";
+
+/** `skipsPermissions` is sent only while true. */
+export function setSkipsPermissions(s: Session, skips: boolean): void {
+  if (skips) s.skipsPermissions = true;
+  else delete s.skipsPermissions;
+}
 
 /** Sets an optional session field, deleting the key when the value is undefined. */
 export function setOptional<K extends OptionalField>(s: Session, key: K, value: Session[K]): void {

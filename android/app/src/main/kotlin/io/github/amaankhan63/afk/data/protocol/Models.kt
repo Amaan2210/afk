@@ -27,6 +27,8 @@ data class Session(
     val gitBranch: String? = null,
     val agentSessionId: String? = null,
     val lastMessage: String? = null,
+    /** True while the agent runs without asking permission (Claude's bypass mode, Codex's yolo). */
+    val skipsPermissions: Boolean = false,
     val subagentsRunning: Int = 0,
     val pending: Pending? = null
 )

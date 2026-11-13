@@ -64,6 +64,7 @@ interface Session {
   gitBranch?: string;
   agentSessionId?: string; // Claude session id or Codex thread id
   lastMessage?: string; // ≤ 200 chars, for cards and notifications
+  skipsPermissions?: true; // the agent asks no permission: from its launch flags, then Claude's mode at each prompt
   subagentsRunning: number;
   pending?: Pending; // present only while state is "needs_input"
 }

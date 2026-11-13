@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { ChatEvent, Pending, Strip } from "../../protocol/index.js";
 import type { SessionRegistry } from "../sessions/registry.js";
+import { CLAUDE_BYPASS_MODE } from "../sessions/permissions.js";
 import type { AgentSignal } from "../sessions/state.js";
 import type { RolloutMeta } from "./codex/rollout.js";
 import { HubSession, MAIN_THREAD, type AttachedSource } from "./hub-session.js";
@@ -209,6 +210,7 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
       },
       strip: (strip) => this.updateStrip(sessionId, strip),
       meta: (meta) => this.codexMeta(sessionId, meta),
+      permissionMode: (mode) => this.permissionMode(sessionId, mode),
       error: (err) => this.onError(sessionId, err),
     };
   }
@@ -222,6 +224,15 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
   private lateReply(sessionId: string, text: string): void {
     if (this.registry.get(sessionId)?.session.state !== "finished") return;
     this.registry.setMeta(sessionId, { lastMessage: lastMessageOf(text) });
+  }
+
+  /** Sends the session again only when the mode moved into or out of bypassing permissions. */
+  private permissionMode(sessionId: string, mode: string): void {
+    const record = this.registry.get(sessionId);
+    if (record === undefined) return;
+    const skips = mode === CLAUDE_BYPASS_MODE;
+    if ((record.session.skipsPermissions === true) === skips) return;
+    this.registry.setMeta(sessionId, { skipsPermissions: skips });
   }
 
   /** The rollout's thread id names the Codex conversation unless something already has. */

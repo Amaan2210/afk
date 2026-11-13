@@ -13,6 +13,7 @@ import {
   freeName,
   isFocusReport,
   isLoneEscape,
+  setSkipsPermissions,
   newEntry,
   notFound,
   setOptional,
@@ -164,6 +165,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     if (m.kind !== undefined) rec.session.kind = m.kind;
     if (m.agentSessionId !== undefined) rec.session.agentSessionId = m.agentSessionId;
     if (m.lastMessage !== undefined) rec.session.lastMessage = m.lastMessage;
+    if (m.skipsPermissions !== undefined) setSkipsPermissions(rec.session, m.skipsPermissions);
     this.emitUpdated(rec);
   }
 

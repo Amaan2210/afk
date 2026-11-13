@@ -656,6 +656,9 @@
                   "lastMessage": {
                     "type": "string"
                   },
+                  "skipsPermissions": {
+                    "type": "boolean"
+                  },
                   "subagentsRunning": {
                     "type": "number"
                   },
@@ -817,6 +820,9 @@
                 },
                 "lastMessage": {
                   "type": "string"
+                },
+                "skipsPermissions": {
+                  "type": "boolean"
                 },
                 "subagentsRunning": {
                   "type": "number"
@@ -1819,6 +1825,9 @@
         },
         "lastMessage": {
           "type": "string"
+        },
+        "skipsPermissions": {
+          "type": "boolean"
         },
         "subagentsRunning": {
           "type": "number"

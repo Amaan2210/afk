@@ -638,6 +638,29 @@ describe("ChatHub and the Esc key", () => {
   });
 });
 
+describe("ChatHub and the permission mode", () => {
+  /** A prompt line as Claude Code 2.1 writes it, with the mode it was in. */
+  const prompt = (uuid: string, permissionMode: string) => ({
+    type: "user",
+    uuid,
+    timestamp: LINE_AT,
+    permissionMode,
+    message: { role: "user", content: "go on" },
+  });
+
+  it("follows the mode of each new prompt, and ignores the ones read on attach", async () => {
+    write(transcript, [...MAIN, prompt("p0", "bypassPermissions")]);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(mainEvent("p0")).toBeDefined());
+    expect(session().skipsPermissions).toBeUndefined();
+
+    append(transcript, prompt("p1", "bypassPermissions"));
+    await vi.waitFor(() => expect(session().skipsPermissions).toBe(true));
+    append(transcript, prompt("p2", "default"));
+    await vi.waitFor(() => expect(session().skipsPermissions).toBeUndefined());
+  });
+});
+
 describe("ChatHub attachments", () => {
   it("detach stops tailers (no events after append) and is idempotent", async () => {
     write(transcript, MAIN);

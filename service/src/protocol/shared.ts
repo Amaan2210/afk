@@ -57,6 +57,8 @@ export const SessionSchema = z.object({
   gitBranch: z.string().optional(),
   agentSessionId: z.string().optional(),
   lastMessage: z.string().optional(),
+  /** Present, and true, while the agent runs without asking permission. */
+  skipsPermissions: z.boolean().optional(),
   subagentsRunning: z.number(),
   pending: PendingSchema.optional(),
 });

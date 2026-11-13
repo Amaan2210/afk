@@ -31,7 +31,7 @@ export interface CreateOptions {
 }
 
 export type MetaPatch = Partial<SessionRecord["meta"]> &
-  Partial<Pick<Session, "kind" | "agentSessionId" | "lastMessage">>;
+  Partial<Pick<Session, "kind" | "agentSessionId" | "lastMessage" | "skipsPermissions">>;
 
 export interface RegistryEvents {
   updated: [session: Session];

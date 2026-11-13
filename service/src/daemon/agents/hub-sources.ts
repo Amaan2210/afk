@@ -1,7 +1,11 @@
 import type { ChatEvent, Strip } from "../../protocol/index.js";
 import type { AgentSignal } from "../sessions/state.js";
 import { parentUuidOf, subagentDirFor, SubagentWatcher } from "./claude/subagents.js";
-import { ClaudeTranscriptNormalizer, isInterruptLine } from "./claude/transcript.js";
+import {
+  ClaudeTranscriptNormalizer,
+  isInterruptLine,
+  permissionModeOf,
+} from "./claude/transcript.js";
 import { CodexRolloutNormalizer, type RolloutMeta } from "./codex/rollout.js";
 import { MAIN_THREAD, type AttachedSource } from "./hub-session.js";
 import { JsonlTailer } from "./tail.js";
@@ -19,6 +23,8 @@ export interface SourceSink {
   signal(signal: AgentSignal): void;
   strip(strip: Strip): void;
   meta(meta: RolloutMeta): void;
+  /** Claude's permission mode, from each prompt it writes; Shift+Tab changes it between prompts. */
+  permissionMode(mode: string): void;
   error(err: Error): void;
 }
 
@@ -116,6 +122,8 @@ export class ClaudeSource implements AttachedSource {
         this.sink.signal({ kind: "pending_cleared", pendingId: before.id });
     }
     if (isInterruptLine(obj)) this.sink.signal({ kind: "turn_abort" });
+    const mode = permissionModeOf(obj);
+    if (mode !== undefined) this.sink.permissionMode(mode);
   }
 
   private addSubagent(path: string, threadId: string): void {
