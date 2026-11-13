@@ -531,7 +531,9 @@ Re-test round 2 fixes (2026-11-13). The laptop side is unit-tested. The app side
 - **R2-5.** The pairing steps sit in the middle of the screen.
 - **R2-6, R2-9 (terminal stops).** Likely cause: leaving the app cut Claude's output in the
   middle of a code, and the fresh screen was read as part of it. Fixed; a tap also links the
-  keyboard again. Not reproduced: to confirm on the phone.
+  keyboard again. Not reproduced: to confirm on the phone. Second possible cause: Claude asks
+  for mouse input, so a swipe scrolls Claude's own view and a tap clicks in it. Re-test: did
+  the freeze come right after a swipe?
 - **R2-7 (stuck on "working").** A quick Esc before Claude answers leaves no trace in Claude's
   files. The laptop now ends the turn when Esc comes before the answer starts.
 - **R2-8 (no word suggestions).** New switch, on by default: Settings → Terminal → Word
