@@ -365,7 +365,9 @@ New session
 - [ ] **R2-3. Hide "bypass permissions on" in the phone's terminal.** Show it as a chip on
       the session's card in the sessions list instead.
 - [ ] **R2-4. New session stopped working.** It worked earlier in this round; later, starting
-      a new session did nothing. To find out: what the app shows, and what `afk ls` says.
+      a new session failed with a message like "Not able to connect to laptop". Some time
+      later it worked again by itself. To find out: whether the connection had dropped (was
+      the offline banner showing?) or only this screen failed.
 
 Pairing
 
