@@ -67,10 +67,13 @@ export class ClaudeTranscriptNormalizer {
     const at = typeof line.timestamp === "string" ? line.timestamp : this.fallbackTime();
     const uuid = typeof line.uuid === "string" ? line.uuid : undefined;
     const blocks = contentBlocks(line.message.content);
+    // After /compact, Claude Code writes its summary of the conversation as a user line. The
+    // user did not type it, and the terminal shows only "Compacted".
+    const machine = line.isMeta === true || line.isCompactSummary === true;
     const events =
       line.type === "assistant"
         ? this.assistantLine(blocks, uuid, at)
-        : this.userLine(blocks, uuid, at, line.toolUseResult, line.isMeta === true);
+        : this.userLine(blocks, uuid, at, line.toolUseResult, machine);
     if (events.length > 0) this.lastAt = at;
     return events;
   }

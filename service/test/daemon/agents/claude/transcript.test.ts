@@ -399,6 +399,26 @@ describe("what counts as the user's own message", () => {
     ).toEqual([]);
   });
 
+  it("drops the summary /compact writes as a user line, and keeps the /compact itself", () => {
+    // The two lines as Claude Code 2.1 wrote them (the summary cut short).
+    const summary = {
+      type: "user",
+      message: {
+        role: "user",
+        content: "This session is being continued from a previous conversation that ran out",
+      },
+      isVisibleInTranscriptOnly: true,
+      isCompactSummary: true,
+      uuid: "u1",
+      timestamp: "2026-11-13T06:35:15.000Z",
+    };
+    const command = user(
+      "u2",
+      "<command-name>/compact</command-name><command-message>compact</command-message><command-args></command-args>",
+    );
+    expect(texts([summary, command])).toEqual(["/compact"]);
+  });
+
   it("keeps what the user typed, without the reminder Claude Code adds to it", () => {
     expect(
       texts([user("u1", "fix the build\n<system-reminder>Todo list is empty.</system-reminder>")]),
