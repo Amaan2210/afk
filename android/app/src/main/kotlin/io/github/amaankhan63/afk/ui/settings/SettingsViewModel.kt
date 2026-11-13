@@ -135,6 +135,8 @@ class SettingsViewModel internal constructor(
 
     fun setSwipeTabs(on: Boolean) = save { it.copy(swipeTabs = on) }
 
+    fun setWordSuggestions(on: Boolean) = save { it.copy(wordSuggestions = on) }
+
     /**
      * Names the laptop, as the app shows it from then on; a blank [name] gives it the computer's
      * own name back.

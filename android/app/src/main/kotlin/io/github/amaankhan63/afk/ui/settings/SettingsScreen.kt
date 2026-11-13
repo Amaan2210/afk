@@ -122,7 +122,9 @@ fun SettingsScreen(onBack: () -> Unit, onUnpaired: () -> Unit, onAbout: () -> Un
                 onFontSize = viewModel::setFontSize,
                 onKeyBar = viewModel::setKeyBar,
                 swipeTabs = settings.swipeTabs,
-                onSwipeTabs = viewModel::setSwipeTabs
+                onSwipeTabs = viewModel::setSwipeTabs,
+                wordSuggestions = settings.wordSuggestions,
+                onWordSuggestions = viewModel::setWordSuggestions
             )
             AboutSection(state.version, onLicenses = onAbout)
         }

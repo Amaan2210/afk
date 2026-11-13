@@ -55,6 +55,7 @@ class AppSettingsStoreTest {
         assertFalse(defaults.notifications.subagents)
         assertEquals(12, defaults.terminalFontSp)
         assertEquals(true, defaults.keyBar)
+        assertEquals(true, defaults.wordSuggestions)
 
         // An empty file reads as the defaults: saving what was read writes them out.
         val dataStore = dataStore()
@@ -73,6 +74,7 @@ class AppSettingsStoreTest {
         assertEquals(false, prefs[booleanPreferencesKey("settings.notif.subagents")])
         assertEquals(12, prefs[intPreferencesKey("settings.terminalFontSp")])
         assertEquals(true, prefs[booleanPreferencesKey("settings.keyBar")])
+        assertEquals(true, prefs[booleanPreferencesKey("settings.wordSuggestions")])
         assertEquals(defaults, store.settings.value)
     }
 
@@ -84,7 +86,8 @@ class AppSettingsStoreTest {
             alwaysDarkTerminal = true,
             notifications = NotificationPrefs(needsInput = false, subagents = true),
             terminalFontSp = 16,
-            keyBar = false
+            keyBar = false,
+            wordSuggestions = false
         )
         store(dataStore).update { changed }
 

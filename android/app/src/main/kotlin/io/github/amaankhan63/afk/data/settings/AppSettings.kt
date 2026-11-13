@@ -14,7 +14,8 @@ const val MAX_TERMINAL_FONT_SP = 20
 /**
  * The app's own settings, kept on the phone; the laptop's live in the daemon. [stripChips] are the
  * status strip's chips in the order it shows them. [swipeTabs] lets a sideways swipe change
- * between a session's Terminal and Chat. [mutedSessions] holds the ids of the sessions whose
+ * between a session's Terminal and Chat. [wordSuggestions] lets the keyboard suggest and correct
+ * words typed into an agent's terminal. [mutedSessions] holds the ids of the sessions whose
  * notifications are off.
  */
 data class AppSettings(
@@ -26,5 +27,6 @@ data class AppSettings(
     val terminalFontSp: Int = 12,
     val keyBar: Boolean = true,
     val swipeTabs: Boolean = false,
+    val wordSuggestions: Boolean = true,
     val mutedSessions: Set<String> = emptySet()
 )

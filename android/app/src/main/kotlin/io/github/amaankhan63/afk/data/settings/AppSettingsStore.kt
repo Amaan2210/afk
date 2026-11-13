@@ -63,6 +63,7 @@ class AppSettingsStore @Inject constructor(
         val TERMINAL_FONT_SP = intPreferencesKey("settings.terminalFontSp")
         val KEY_BAR = booleanPreferencesKey("settings.keyBar")
         val SWIPE_TABS = booleanPreferencesKey("settings.swipeTabs")
+        val WORD_SUGGESTIONS = booleanPreferencesKey("settings.wordSuggestions")
         val MUTED_SESSIONS = stringSetPreferencesKey("settings.mutedSessions")
 
         const val SEPARATOR = ","
@@ -86,6 +87,7 @@ class AppSettingsStore @Inject constructor(
                     ?: defaults.terminalFontSp,
                 keyBar = prefs[KEY_BAR] ?: defaults.keyBar,
                 swipeTabs = prefs[SWIPE_TABS] ?: defaults.swipeTabs,
+                wordSuggestions = prefs[WORD_SUGGESTIONS] ?: defaults.wordSuggestions,
                 mutedSessions = prefs[MUTED_SESSIONS] ?: defaults.mutedSessions
             )
         }
@@ -101,6 +103,7 @@ class AppSettingsStore @Inject constructor(
             prefs[TERMINAL_FONT_SP] = settings.terminalFontSp
             prefs[KEY_BAR] = settings.keyBar
             prefs[SWIPE_TABS] = settings.swipeTabs
+            prefs[WORD_SUGGESTIONS] = settings.wordSuggestions
             prefs[MUTED_SESSIONS] = settings.mutedSessions
         }
 

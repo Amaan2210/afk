@@ -17,8 +17,9 @@ import io.github.amaankhan63.afk.data.settings.MIN_TERMINAL_FONT_SP
 import kotlin.math.roundToInt
 
 /**
- * The terminal's font size, which a pinch on the terminal also changes, its key bar, and whether
- * a sideways swipe changes between a session's Terminal and Chat. A change of [fontSaveFailures]
+ * The terminal's font size, which a pinch on the terminal also changes, its key bar, whether
+ * a sideways swipe changes between a session's Terminal and Chat, and whether the keyboard
+ * suggests words in an agent's terminal. A change of [fontSaveFailures]
  * says a size could not be saved: the slider goes back to the saved size.
  */
 @Composable
@@ -29,7 +30,9 @@ internal fun TerminalSection(
     onFontSize: (Int) -> Unit,
     onKeyBar: (Boolean) -> Unit,
     swipeTabs: Boolean = false,
-    onSwipeTabs: (Boolean) -> Unit = {}
+    onSwipeTabs: (Boolean) -> Unit = {},
+    wordSuggestions: Boolean = true,
+    onWordSuggestions: (Boolean) -> Unit = {}
 ) {
     // The size under the thumb while dragging and until it is saved; only the end is saved.
     var dragged by remember { mutableStateOf<Float?>(null) }
@@ -65,6 +68,13 @@ internal fun TerminalSection(
             note = "Off, only the tabs at the top change between them",
             checked = swipeTabs,
             onChange = onSwipeTabs
+        )
+        RowDivider()
+        SwitchRow(
+            title = "Word suggestions",
+            note = "In Claude's and Codex's terminal. Off, each key goes to the laptop as typed",
+            checked = wordSuggestions,
+            onChange = onWordSuggestions
         )
     }
 }
