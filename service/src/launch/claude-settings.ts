@@ -30,7 +30,7 @@ interface HookMatcher {
 
 export interface ClaudeSettings {
   hooks: Record<ClaudeHookEvent, HookMatcher[]>;
-  statusLine: { type: "command"; command: string; padding: number };
+  statusLine: { type: "command"; command: string; padding: number; refreshInterval: number };
 }
 
 /** Tool hooks only need the question tool; every other tool call stays unhooked. */
@@ -41,6 +41,13 @@ const MATCHERS: Partial<Record<ClaudeHookEvent, string>> = {
 
 /** Seconds. The relay itself gives up on the daemon well inside this. */
 const HOOK_TIMEOUT = 10;
+
+/**
+ * Seconds between two runs of the status line besides Claude Code's own (a new message, a mode
+ * change). The relay hides the user's status line while a phone shows the terminal; without a
+ * timer, a line drawn while no phone looked stayed on the phone until the next message.
+ */
+const STATUSLINE_REFRESH = 3;
 
 /** Absolute node + absolute script, both quoted, so neither PATH nor spaces matter. */
 function relayCommand(t: ClaudeHookTarget, ...args: string[]): string {
@@ -64,6 +71,11 @@ export function renderClaudeSettings(t: ClaudeHookTarget): ClaudeSettings {
   }
   return {
     hooks,
-    statusLine: { type: "command", command: relayCommand(t, "statusline"), padding: 0 },
+    statusLine: {
+      type: "command",
+      command: relayCommand(t, "statusline"),
+      padding: 0,
+      refreshInterval: STATUSLINE_REFRESH,
+    },
   };
 }

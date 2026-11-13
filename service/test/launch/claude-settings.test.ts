@@ -26,11 +26,12 @@ describe("renderClaudeSettings", () => {
       expect(s.hooks[ev][0]!.hooks[0]).toMatchObject({ type: "command", timeout: 10 });
   });
 
-  it("sets the statusLine relay", () => {
+  it("sets the statusLine relay, run again every 3 seconds", () => {
     expect(s.statusLine).toEqual({
       type: "command",
       command: `"C:\\n\\node.exe" "D:\\a b\\cli.js" statusline`,
       padding: 0,
+      refreshInterval: 3,
     });
   });
 });
