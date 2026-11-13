@@ -1,4 +1,9 @@
-import { windowArgs, openSessionWindow } from "../../../src/daemon/sessions/window.js";
+import {
+  windowArgs,
+  windowCmdArgs,
+  openSessionWindow,
+  type WindowChild,
+} from "../../../src/daemon/sessions/window.js";
 import pino from "pino";
 import { PIXEL_TOKEN, startHarness, type Harness } from "./harness.js";
 
@@ -69,7 +74,7 @@ describe("a session and its laptop window", () => {
 describe("openSessionWindow", () => {
   const log = pino({ level: "silent" });
 
-  it("starts `afk attach <id> --own-window` on the daemon's port, detached", () => {
+  it("starts `afk attach <id> --own-window` on the daemon's port, through cmd's start", () => {
     const calls: [string, string[]][] = [];
     const unref = vi.fn();
     openSessionWindow("s_9", 2350, log, {
@@ -79,7 +84,9 @@ describe("openSessionWindow", () => {
         return { once: () => undefined, unref };
       },
     });
-    expect(calls).toEqual([[process.execPath, windowArgs("s_9", 2350)]]);
+    expect(calls).toEqual([
+      [process.env.ComSpec ?? "cmd.exe", windowCmdArgs(process.execPath, "s_9", 2350)],
+    ]);
     expect(windowArgs("s_9", 2350).slice(1)).toEqual([
       "attach",
       "s_9",
@@ -88,6 +95,37 @@ describe("openSessionWindow", () => {
       "--own-window",
     ]);
     expect(unref).toHaveBeenCalledOnce();
+  });
+
+  it("quotes every part of cmd's line after start, so paths with spaces stay whole", () => {
+    const args = windowCmdArgs("C:\\Program Files\\nodejs\\node.exe", "s_9", 2350);
+    const entry = windowArgs("s_9", 2350)[0];
+    expect(args).toEqual([
+      "/d",
+      "/s",
+      "/c",
+      `"start "AFK" "C:\\Program Files\\nodejs\\node.exe" "${entry}" "attach" "s_9" "--port" "2350" "--own-window""`,
+    ]);
+  });
+
+  it("logs a cmd that ends with an error code", () => {
+    const warn = vi.spyOn(log, "warn");
+    let onExit: ((code: number | null) => void) | undefined;
+    openSessionWindow("s_9", 2350, log, {
+      platform: "win32",
+      spawnWindow: () =>
+        ({
+          once: (event: string, cb: (code: number | null) => void) => {
+            if (event === "exit") onExit = cb;
+            return undefined;
+          },
+          unref: () => undefined,
+        }) as unknown as WindowChild,
+    });
+    onExit?.(0);
+    expect(warn).not.toHaveBeenCalled();
+    onExit?.(1);
+    expect(warn).toHaveBeenCalledOnce();
   });
 
   it("opens nothing off Windows, and never throws when the spawn does", () => {
