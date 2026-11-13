@@ -366,9 +366,10 @@ New session
       the session's card in the sessions list instead.
 - [ ] **R2-4. New session stopped working.** It worked earlier in this round; later, starting
       a new session failed with a message like "Not able to connect to laptop". Some time
-      later it worked again by itself. The offline banner was not showing, so the app
-      thought it was connected: either only this screen failed, or the connection had
-      dropped and the app had not noticed.
+      later it worked again by itself. The offline banner was not showing, and the Claude
+      session kept running fine at the same time, so the owner thinks the connection had
+      not dropped. Look first at the New session screen and its own requests to the laptop
+      (the folder list and the start request).
 
 Pairing
 
