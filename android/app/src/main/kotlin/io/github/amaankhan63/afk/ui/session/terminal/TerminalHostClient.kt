@@ -2,7 +2,10 @@ package io.github.amaankhan63.afk.ui.session.terminal
 
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import com.termux.terminal.TerminalSession
+import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import io.github.amaankhan63.afk.ui.session.KeyBarState
 
@@ -19,13 +22,15 @@ private const val PINCH_OUT = 1.1f
  * steps the font size through [onFontSizeChange]. The key bar's Ctrl, while [keyBar]'s is armed,
  * holds Ctrl down for the next character typed into the view. A long press starts the view's text
  * selection, whose Copy and Paste reach [AfkTerminalSession]. A tap calls [onTap], which opens the
- * keyboard. Logs are dropped: they can quote what is typed.
+ * keyboard. While [suggestions] says so, the keyboard links to the view as a text field that
+ * suggests words. Logs are dropped: they can quote what is typed.
  */
 internal class TerminalHostClient(
     private val fontSizeSp: () -> Int,
     private val onFontSizeChange: (Int) -> Unit,
     private val keyBar: () -> KeyBarState? = { null },
-    private val onTap: () -> Unit = {}
+    private val onTap: () -> Unit = {},
+    private val suggestions: () -> Boolean = { false }
 ) : TerminalViewClient {
     /** [scale] is the pinch gathered so far; TerminalView keeps what this returns. */
     override fun onScale(scale: Float): Float {
@@ -37,9 +42,9 @@ internal class TerminalHostClient(
     }
 
     /**
-     * True, as in Termux while the terminal has focus: the keyboard then sends every key as typed.
-     * As a plain text field it would offer suggestions and autocorrect, and hold letters back until
-     * a word is done.
+     * True, as in Termux while the terminal has focus: without word suggestions the keyboard then
+     * sends every key as typed. As Termux's plain text field it would hold letters back until a
+     * word is done; [onCreateInputConnection] links one that sends them at once.
      */
     override fun isTerminalViewSelected(): Boolean = true
 
@@ -82,6 +87,23 @@ internal class TerminalHostClient(
     ): Boolean {
         keyBar()?.disarm()
         return false
+    }
+
+    /**
+     * With word suggestions on, a [SuggestingInputConnection]; off, null, for TerminalView's own
+     * link, which sends every key as typed.
+     */
+    override fun onCreateInputConnection(
+        view: TerminalView,
+        outAttrs: EditorInfo
+    ): InputConnection? {
+        if (!suggestions()) return null
+        SuggestingInputConnection.describe(outAttrs)
+        return SuggestingInputConnection(
+            view = view,
+            ctrlArmed = { keyBar()?.ctrlArmed == true },
+            restart = view::restartKeyboard
+        )
     }
 
     override fun onEmulatorSet() = Unit

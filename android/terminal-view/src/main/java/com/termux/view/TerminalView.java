@@ -299,6 +299,10 @@ public final class TerminalView extends View {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+        // AFK: the client can link the keyboard its own way, to offer word suggestions.
+        InputConnection own = mClient.onCreateInputConnection(this, outAttrs);
+        if (own != null) return own;
+
         // Ensure that inputType is only set if TerminalView is selected view with the keyboard and
         // an alternate view is not selected, like an EditText. This is necessary if an activity is
         // initially started with the alternate view or if activity is returned to from another app

@@ -40,7 +40,8 @@ private val COLOR_SLOTS = (0 until ANSI_COLORS) + listOf(
  * size one step larger or smaller, within [MIN_FONT_SP]..[MAX_FONT_SP]. A long press selects text,
  * and its Copy and Paste use the system clipboard. A tap opens the soft keyboard on the view,
  * [TerminalBridge.toggleKeyboard] opens and closes it, and [keyBarState]'s armed Ctrl applies to
- * the next character typed into it.
+ * the next character typed into it. With [wordSuggestions] on, the keyboard suggests and corrects
+ * words (see [SuggestingInputConnection]).
  *
  * Termux keeps its default colours process-wide, so every TerminalHost shows the [colors] set last.
  */
@@ -51,12 +52,14 @@ fun TerminalHost(
     fontSizeSp: Int,
     onFontSizeChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    keyBarState: KeyBarState? = null
+    keyBarState: KeyBarState? = null,
+    wordSuggestions: Boolean = false
 ) {
     val textSizePx = with(LocalDensity.current) { fontSizeSp.sp.roundToPx() }
     val currentFontSizeSp by rememberUpdatedState(fontSizeSp)
     val currentOnFontSizeChange by rememberUpdatedState(onFontSizeChange)
     val currentKeyBarState by rememberUpdatedState(keyBarState)
+    val currentSuggestions by rememberUpdatedState(wordSuggestions)
     // Another session's bridge gets a view of its own.
     key(bridge) {
         val shown = remember { Shown() }
@@ -68,7 +71,8 @@ fun TerminalHost(
                             fontSizeSp = { currentFontSizeSp },
                             onFontSizeChange = { currentOnFontSizeChange(it) },
                             keyBar = { currentKeyBarState },
-                            onTap = { showSoftKeyboard() }
+                            onTap = { showSoftKeyboard() },
+                            suggestions = { currentSuggestions }
                         )
                     )
                     isFocusable = true
@@ -76,6 +80,7 @@ fun TerminalHost(
                     setTextSize(textSizePx)
                     setTypeface(Typeface.MONOSPACE)
                     shown.textSizePx = textSizePx
+                    shown.suggestions = wordSuggestions
                     takeOver(bridge, shown)
                     attachSession(bridge.session)
                 }
@@ -90,6 +95,10 @@ fun TerminalHost(
                     view.applyColors(colors, bridge.session)
                     shown.colors = colors
                 }
+                if (shown.suggestions != wordSuggestions) {
+                    shown.suggestions = wordSuggestions
+                    view.restartKeyboard()
+                }
             },
             onRelease = { bridge.release(shown) }
         )
@@ -100,6 +109,7 @@ fun TerminalHost(
 private class Shown {
     var textSizePx = 0
     var colors: TerminalColors? = null
+    var suggestions = false
     var redraw: (() -> Unit)? = null
 }
 
@@ -113,6 +123,7 @@ private fun TerminalView.takeOver(bridge: TerminalBridge, shown: Shown) {
     shown.redraw = redraw
     bridge.onScreenChanged = redraw
     bridge.toggleKeyboard = ::toggleSoftKeyboard
+    bridge.resetKeyboard = ::restartKeyboard
     // A selection is of text the snapshot replaced; held, it would also keep the view still.
     bridge.onSnapshot = { if (isSelectingText) stopTextSelectionMode() }
     bridge.session.onCopyText = { text ->
@@ -152,11 +163,19 @@ private fun TerminalView.showSoftKeyboard() {
     }
 }
 
+/** Gives the keyboard a new link to the view, with an empty field, if the view has it. */
+internal fun TerminalView.restartKeyboard() {
+    val keyboard = context.getSystemService(InputMethodManager::class.java) ?: return
+    // Not from inside a call of the keyboard's: the restart then waits for it to end.
+    post { keyboard.restartInput(this) }
+}
+
 /** Undoes [takeOver], unless another TerminalHost has taken the bridge over meanwhile. */
 private fun TerminalBridge.release(shown: Shown) {
     if (onScreenChanged !== shown.redraw) return
     onScreenChanged = null
     toggleKeyboard = null
+    resetKeyboard = null
     onSnapshot = null
     session.onCopyText = null
     session.onPasteRequest = null

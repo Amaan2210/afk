@@ -194,6 +194,9 @@ fun SessionScreen(
                         onToggleKeyboard = { viewModel.bridge.toggleKeyboard?.invoke() },
                         failure = failure,
                         onRetry = viewModel::attachTerminal,
+                        // A shell's commands are not words: its keys go out as typed.
+                        wordSuggestions = settings.wordSuggestions &&
+                            session?.kind != SessionKind.shell,
                         prompt = session?.pending,
                         onAnswer = viewModel::answer
                     )

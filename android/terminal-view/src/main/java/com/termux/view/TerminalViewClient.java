@@ -4,6 +4,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 
 import com.termux.terminal.TerminalSession;
 
@@ -79,5 +81,14 @@ public interface TerminalViewClient {
     void logStackTraceWithMessage(String tag, String message, Exception e);
 
     void logStackTrace(String tag, Exception e);
+
+    /**
+     * AFK: the client's own link from the keyboard to {@code view}, or null for TerminalView's. Asked
+     * on every {@link TerminalView#onCreateInputConnection(EditorInfo)}; a client that returns one
+     * fills in {@code outAttrs} itself.
+     */
+    default InputConnection onCreateInputConnection(TerminalView view, EditorInfo outAttrs) {
+        return null;
+    }
 
 }

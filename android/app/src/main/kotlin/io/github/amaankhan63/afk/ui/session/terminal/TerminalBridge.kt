@@ -33,6 +33,13 @@ class TerminalBridge(
     /** Redraws the view showing [session]; [TerminalHost] sets it while it shows one. */
     var onScreenChanged: (() -> Unit)? = null
 
+    /**
+     * Gives the keyboard a new, empty field on the view showing [session], so a word it was
+     * suggesting for is not continued after the key bar moved the laptop's cursor; [TerminalHost]
+     * sets it while it shows one.
+     */
+    var resetKeyboard: (() -> Unit)? = null
+
     /** Called after a snapshot replaced the screen; [TerminalHost] ends a text selection there. */
     var onSnapshot: (() -> Unit)? = null
 

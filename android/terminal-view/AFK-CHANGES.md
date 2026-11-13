@@ -26,4 +26,9 @@ The edited file carries an `AFK:` comment saying what changed.
 - `src/main/java/com/termux/view/TerminalView.java`, `doScroll`: a swipe on the alternate screen
   no longer sends Up and Down keys. An agent takes Up as "recall the last prompt".
 
+- `src/main/java/com/termux/view/TerminalViewClient.java`: a default method
+  `onCreateInputConnection(view, outAttrs)` returning null. `TerminalView.onCreateInputConnection`
+  asks it first and uses what it returns, so the app can link the keyboard its own way (word
+  suggestions).
+
 Every other file under `src/main/java/` and `src/main/res/` is unchanged.

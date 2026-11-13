@@ -40,7 +40,8 @@ private val PROMPT_MAX_HEIGHT = 220.dp
  * the next character typed into the terminal. A [failure] to show the terminal is reported over
  * it, with a Retry that calls [onRetry].
  *
- * Typing goes straight into the terminal: a tap on it opens the keyboard. A [prompt] the agent
+ * Typing goes straight into the terminal: a tap on it opens the keyboard, which suggests words
+ * when [wordSuggestions] is on. A [prompt] the agent
  * waits on shows as a card under the terminal, and a tap on one of its options answers it through
  * [onAnswer], which says whether the answer went out.
  */
@@ -57,6 +58,7 @@ fun TerminalTab(
     failure: AfkError?,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    wordSuggestions: Boolean = false,
     prompt: Pending? = null,
     onAnswer: (
         pendingId: String,
@@ -81,7 +83,8 @@ fun TerminalTab(
                 fontSizeSp = fontSizeSp,
                 onFontSizeChange = onFontSizeChange,
                 modifier = Modifier.fillMaxSize().padding(8.dp),
-                keyBarState = keyBarState.takeIf { keyBar }
+                keyBarState = keyBarState.takeIf { keyBar },
+                wordSuggestions = wordSuggestions
             )
             if (failure != null) {
                 TerminalFailure(failure, onRetry, Modifier.align(Alignment.TopCenter))
@@ -100,7 +103,17 @@ fun TerminalTab(
                 }
             }
         }
-        if (keyBar) KeyBar(keyBarState, onBytes, onToggleKeyboard)
+        if (keyBar) {
+            // A key bar key moves the laptop's cursor or sends a line: the keyboard's word is done.
+            KeyBar(
+                keyBarState,
+                { bytes ->
+                    onBytes(bytes)
+                    bridge.resetKeyboard?.invoke()
+                },
+                onToggleKeyboard
+            )
+        }
     }
 }
 
