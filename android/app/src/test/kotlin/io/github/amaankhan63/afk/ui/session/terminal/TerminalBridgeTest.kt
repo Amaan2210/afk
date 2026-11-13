@@ -72,6 +72,26 @@ class TerminalBridgeTest {
         assertEquals("fresh", bridge.text.trim())
     }
 
+    /** The phone left, or the connection dropped, in the middle of a title (OSC) sequence. */
+    @Test fun snapshotIsShownAfterOutputThatStoppedInsideAnEscapeSequence() = runTest {
+        val bridge = attached()
+        receive(PtyFrame.Data("before\r\n\u001b]0;a title cut sh".toByteArray()))
+
+        receive(PtyFrame.Snapshot(80, 24, "fresh".toByteArray()))
+        receive(PtyFrame.Data(" and live".toByteArray()))
+
+        assertEquals("fresh and live", bridge.text.trim())
+    }
+
+    @Test fun aSnapshotIsReported() = runTest {
+        val bridge = attached()
+        var snapshots = 0
+        bridge.onSnapshot = { snapshots++ }
+        receive(PtyFrame.Data("x".toByteArray()))
+        receive(PtyFrame.Snapshot(80, 24, "fresh".toByteArray()))
+        assertEquals(1, snapshots)
+    }
+
     @Test fun inputBytesForwarded() = runTest {
         val bridge = attached()
         bridge.session.write("ls".toByteArray(), 0, 2)

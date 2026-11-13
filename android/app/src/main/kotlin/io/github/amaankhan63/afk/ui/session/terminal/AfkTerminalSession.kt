@@ -122,8 +122,16 @@ class AfkTerminalSession(
         notifyScreenUpdate()
     }
 
-    /** Clears the screen and the scrollback and resets the terminal's modes, for a snapshot. */
-    override fun reset() = feed(FULL_RESET)
+    /**
+     * Clears the screen and the scrollback and resets the terminal's modes, for a snapshot. The
+     * output before it can have stopped inside an escape sequence (the phone left, or the
+     * connection dropped, between two chunks): the emulator would read the reset, and the snapshot
+     * after it, as part of that sequence. Its own reset forgets a half-read sequence first.
+     */
+    override fun reset() {
+        mEmulator?.reset()
+        feed(FULL_RESET)
+    }
 
     /**
      * Copy from TerminalView's selection menu goes to [onCopyText]. A program's request to set the

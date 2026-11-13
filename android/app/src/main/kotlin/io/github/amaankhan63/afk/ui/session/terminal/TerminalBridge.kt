@@ -33,6 +33,9 @@ class TerminalBridge(
     /** Redraws the view showing [session]; [TerminalHost] sets it while it shows one. */
     var onScreenChanged: (() -> Unit)? = null
 
+    /** Called after a snapshot replaced the screen; [TerminalHost] ends a text selection there. */
+    var onSnapshot: (() -> Unit)? = null
+
     /**
      * Focuses the view showing [session] and opens the soft keyboard on it, or closes the keyboard
      * when that view has it; [TerminalHost] sets it while it shows one. The key bar's keyboard key
@@ -130,6 +133,7 @@ class TerminalBridge(
                 session.reset()
                 session.applyRemoteSize(frame.cols, frame.rows)
                 session.feed(frame.bytes)
+                onSnapshot?.invoke()
             }
 
             is PtyFrame.Data -> session.feed(frame.bytes)

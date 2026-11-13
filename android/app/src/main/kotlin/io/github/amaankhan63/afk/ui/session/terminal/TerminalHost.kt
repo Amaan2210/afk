@@ -113,6 +113,8 @@ private fun TerminalView.takeOver(bridge: TerminalBridge, shown: Shown) {
     shown.redraw = redraw
     bridge.onScreenChanged = redraw
     bridge.toggleKeyboard = ::toggleSoftKeyboard
+    // A selection is of text the snapshot replaced; held, it would also keep the view still.
+    bridge.onSnapshot = { if (isSelectingText) stopTextSelectionMode() }
     bridge.session.onCopyText = { text ->
         clipboard?.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text))
     }
@@ -136,12 +138,18 @@ private fun TerminalView.toggleSoftKeyboard() {
     showSoftKeyboard()
 }
 
-/** Focuses the view and opens the keyboard on it. */
+/**
+ * Focuses the view and opens the keyboard on it. The keyboard's link to the view is made anew:
+ * after the app was in the background, typing could otherwise reach nothing.
+ */
 private fun TerminalView.showSoftKeyboard() {
     val keyboard = context.getSystemService(InputMethodManager::class.java) ?: return
     requestFocus()
     // Asked at once, the keyboard can still be bound to the field that had the focus before.
-    post { keyboard.showSoftInput(this, 0) }
+    post {
+        keyboard.restartInput(this)
+        keyboard.showSoftInput(this, 0)
+    }
 }
 
 /** Undoes [takeOver], unless another TerminalHost has taken the bridge over meanwhile. */
@@ -149,6 +157,7 @@ private fun TerminalBridge.release(shown: Shown) {
     if (onScreenChanged !== shown.redraw) return
     onScreenChanged = null
     toggleKeyboard = null
+    onSnapshot = null
     session.onCopyText = null
     session.onPasteRequest = null
 }
