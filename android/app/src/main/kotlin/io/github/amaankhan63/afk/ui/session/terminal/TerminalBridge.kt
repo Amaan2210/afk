@@ -1,6 +1,7 @@
 package io.github.amaankhan63.afk.ui.session.terminal
 
 import android.os.Looper
+import android.os.SystemClock
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import io.github.amaankhan63.afk.data.protocol.AfkError
@@ -43,6 +44,10 @@ class TerminalBridge(
     /** Called after a snapshot replaced the screen; [TerminalHost] ends a text selection there. */
     var onSnapshot: (() -> Unit)? = null
 
+    /** When the view last typed into the terminal, on [SystemClock.uptimeMillis]; 0 before. */
+    var lastInputAt = 0L
+        private set
+
     /**
      * Focuses the view showing [session] and opens the soft keyboard on it, or closes the keyboard
      * when that view has it; [TerminalHost] sets it while it shows one. The key bar's keyboard key
@@ -52,7 +57,10 @@ class TerminalBridge(
 
     val session = AfkTerminalSession(
         client = ScreenClient(),
-        onInput = { repo.ptyInput(sessionId, it) },
+        onInput = {
+            lastInputAt = SystemClock.uptimeMillis()
+            repo.ptyInput(sessionId, it)
+        },
         onResize = ::onSizeChanged
     )
 
@@ -68,6 +76,9 @@ class TerminalBridge(
     private var viewGrid: Grid? = null
 
     private val attached: Boolean get() = frames?.isActive == true
+
+    /** Claude Code's input box as the screen shows it; null without a screen, or another one. */
+    fun claudeInput(): ClaudeInput? = session.emulator?.claudeInput()
 
     /**
      * Shows the terminal: subscribes, and through the repository subscribes again after every
