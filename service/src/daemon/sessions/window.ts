@@ -62,9 +62,10 @@ export function openSessionWindow(
     deps.spawnWindow ??
     ((file: string, args: string[]) =>
       spawn(file, args, {
+        // Detached, cmd itself gets no console; it is not hidden either, as `start` could pass
+        // that on to the window it opens.
         detached: true,
         stdio: "ignore",
-        windowsHide: true,
         windowsVerbatimArguments: true,
         cwd: os.homedir(),
         env,
