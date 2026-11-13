@@ -97,12 +97,15 @@ internal class TabCarry(
         setComposer("")
     }
 
-    /** The screen after it changed from [before] and settled; null if it never changed. */
+    /**
+     * The screen once it settled on something other than [before]; null if it never did. A
+     * redraw that shows [before] again, as after a moment with the cursor hidden, is no change:
+     * the Backspaces may not have arrived yet.
+     */
     private suspend fun erased(before: ClaudeInput): Read? {
         var waited = 0L
         var seen: ClaudeInput? = before
         var steadyFor = 0L
-        var changed = false
         while (waited < CARRY_ERASE_TIMEOUT_MS) {
             delay(CARRY_POLL_MS)
             waited += CARRY_POLL_MS
@@ -110,13 +113,12 @@ internal class TabCarry(
             if (read != seen) {
                 seen = read
                 steadyFor = 0
-                changed = true
-            } else if (changed) {
+            } else if (read != before) {
                 steadyFor += CARRY_POLL_MS
                 if (steadyFor >= CARRY_STABLE_MS) return Read(read)
             }
         }
-        return if (changed) Read(seen) else null
+        return if (seen != before) Read(seen) else null
     }
 
     /** One read of the screen; [input] is null when it no longer shows the input box. */

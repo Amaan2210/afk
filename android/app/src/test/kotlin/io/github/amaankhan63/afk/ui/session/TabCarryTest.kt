@@ -75,6 +75,24 @@ class TabCarryTest {
         assertEquals("hello there", composer)
     }
 
+    @Test fun aRedrawOfTheSameTextIsNotTakenForTheErase() = runTest {
+        val carry = carry()
+        draw(typed("hello there"))
+        carry.toChat()
+        runCurrent()
+        // Claude hides the cursor while it redraws, then shows the same box again.
+        draw("\u001b[?25l".toByteArray())
+        advanceTimeBy(CARRY_POLL_MS * 2)
+        draw("\u001b[?25h".toByteArray())
+        settle()
+        assertEquals("⌫".repeat(11), typedKeys)
+        assertEquals("", composer)
+
+        draw(empty())
+        settle()
+        assertEquals("hello there", composer)
+    }
+
     @Test fun aLongTextShownInPartIsMovedPartByPart() = runTest {
         val carry = carry()
         // Only the last row shows; the one before ends in the space Claude wrapped at.
