@@ -350,6 +350,39 @@ the owner says go. Then test Section 13 and re-run the blocked sections.
 
 Deferred on purpose until after the fixes. Checks 1 to 3 publish a release (tag), and check 4 (README screenshots) should be taken after the UI changes. Do not push a tag unasked.
 
+## Re-test round 2 (2026-11-13, new APK)
+
+Findings from the phone re-test after the fixes. Nothing here is started until the owner
+says go.
+
+New session
+
+- [ ] **R2-1. A session started from the phone opens no window on the laptop.** The session
+      starts and works on the phone, but no window shows on the laptop.
+- [ ] **R2-2. Text typed in the terminal is not carried over to Chat.** Before, text typed
+      into Claude's input in Terminal showed in the Chat text box after switching tabs. Now
+      the Chat box is empty.
+- [ ] **R2-3. Hide "bypass permissions on" in the phone's terminal.** Show it as a chip on
+      the session's card in the sessions list instead.
+- [ ] **R2-4. New session stopped working.** It worked earlier in this round; later, starting
+      a new session did nothing. To find out: what the app shows, and what `afk ls` says.
+
+Pairing
+
+- [ ] **R2-5. Move the pairing steps to the centre of the screen.** Change the layout so the
+      instructions sit in the middle.
+
+Terminal
+
+- [ ] **R2-6. The terminal sometimes freezes.** Mostly while scrolling back through the
+      output. Only going back and opening the session again fixes it.
+
+State
+
+- [ ] **R2-7. A cancelled prompt leaves the session on "working".** Typed into Claude's input
+      in Terminal, pressed Enter by mistake, pressed Esc at once. Claude cancelled and put
+      the text back (correct), but the session still shows "working", not "idle".
+
 ## Fix log
 
 Decisions taken before the fixes (owner, 2026-11-12):
@@ -474,4 +507,4 @@ Still open:
   Node 24.15.0, the version the README and CONTRIBUTING already warn about (a crash inside
   Node, exit code 0xC0000409). It is not from the Batch 1 changes. The same crash can stop
   AFK itself, which ends every session. Fix: install Node 24.22 or newer, or 22.23 or newer.
-- The app has not been built: run the unit tests and a release build, then the phone re-test.
+- The phone re-test is under way: see "Re-test round 2" above.
