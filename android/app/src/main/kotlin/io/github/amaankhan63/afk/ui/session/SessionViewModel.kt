@@ -73,12 +73,16 @@ class SessionViewModel internal constructor(
     // an earlier one.
     private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
     private val resumedIds = Channel<String>(Channel.BUFFERED)
+    private val closedEvents = Channel<Unit>(Channel.BUFFERED)
 
     /** Failures of [sendLine], [answer], [kill], [rename] and [resume], each shown once. */
     val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
 
     /** The id of the session a [resume] started, for the screen to open. */
     val resumed: Flow<String> = resumedIds.receiveAsFlow()
+
+    /** The session was killed or deleted, so the screen has nothing left to show. */
+    val closed: Flow<Unit> = closedEvents.receiveAsFlow()
 
     // A resume under way: a second tap meanwhile would start a second session.
     private var resuming = false
@@ -159,8 +163,9 @@ class SessionViewModel internal constructor(
         return true
     }
 
+    /** Kills the session, or deletes it once ended; on success [closed] says so. */
     fun kill() {
-        request(call = { repo.killSession(sessionId) })
+        request(onSuccess = { closedEvents.trySend(Unit) }, call = { repo.killSession(sessionId) })
     }
 
     /** The new name shows once the daemon's update for the session arrives. */

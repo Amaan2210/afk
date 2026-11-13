@@ -360,6 +360,18 @@ class SessionViewModelTest {
         assertEquals(listOf("s_resumed"), opened)
     }
 
+    @Test fun aKillThatSucceedsClosesTheScreenAndOneThatFailsDoesNot() = runTest {
+        val closed = mutableListOf<Unit>()
+        collecting(vm.closed, closed)
+        repo.killResult = Result.failure(AfkError("not_found", "no session s_1"))
+        vm.kill()
+        assertEquals(emptyList<Unit>(), closed)
+
+        repo.killResult = Result.success(Unit)
+        vm.kill()
+        assertEquals(listOf(Unit), closed)
+    }
+
     @Test fun failedRequestIsReported() = runTest {
         val errors = mutableListOf<AfkError>()
         collecting(vm.errors, errors)

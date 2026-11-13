@@ -107,6 +107,9 @@ fun SessionScreen(
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }
     }
     LaunchedEffect(viewModel) { viewModel.resumed.collect { openSession(it) } }
+    val back by rememberUpdatedState(onBack)
+    // Killed or deleted: back to the list, where an ended card stays for Resume and Delete.
+    LaunchedEffect(viewModel) { viewModel.closed.collect { back() } }
     LaunchedEffect(chatError, hasChat) {
         val error = chatError
         if (hasChat && error != null) {
@@ -160,11 +163,7 @@ fun SessionScreen(
                 onCopied = { scope.launch { snackbar.showSnackbar("Copied") } },
                 muted = sessionId in settings.mutedSessions,
                 onMute = { appSettings.setMuted(sessionId, it) },
-                // Deleted, the session is gone: so is its screen.
-                onDelete = {
-                    viewModel.kill()
-                    onBack()
-                }
+                onDelete = viewModel::kill
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }
