@@ -120,16 +120,27 @@ class AfkConnectionService : Service() {
     }
 
     /**
-     * Watches the phone's own networks (Wi-Fi, mobile data; not the VPN on top of them). A socket
-     * over a network that went away says nothing until its pings run out, and a wait before the
-     * next try would outlast the network's return.
+     * Watches the phone's own networks (Wi-Fi, mobile data; not the VPN on top of them). With the
+     * last one gone, the connection is dropped at once: its socket would say nothing until its
+     * pings ran out, and a wait before the next try would outlast the network's return. Losing one
+     * of two networks drops nothing: Tailscale carries the connection over the other, and
+     * reconnecting then only made requests fail ("Not connected").
      */
     private fun watchNetworks() {
         val connectivity = getSystemService(ConnectivityManager::class.java) ?: return
         val watch = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = manager.onNetworkAvailable()
+            // Called on the ConnectivityManager's thread, one callback at a time.
+            private val up = HashSet<Network>()
 
-            override fun onLost(network: Network) = manager.onNetworkLost()
+            override fun onAvailable(network: Network) {
+                up.add(network)
+                manager.onNetworkAvailable()
+            }
+
+            override fun onLost(network: Network) {
+                up.remove(network)
+                if (up.isEmpty()) manager.onNetworkLost()
+            }
         }
         val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
