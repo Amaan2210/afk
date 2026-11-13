@@ -11,6 +11,11 @@ const DEFAULT_POLL_MS = 250;
 /** How many times slower the files are polled while no phone is connected to show the chat. */
 const UNWATCHED_SLOWDOWN = 8;
 const DEFAULT_EXIT_GRACE_MS = 5000;
+/**
+ * How long after an Esc key the hub looks whether it cancelled a Claude turn: time for the
+ * prompt's hook to arrive (Esc can follow Enter at once) and for Claude to write its lines.
+ */
+const DEFAULT_ESCAPE_CHECK_MS = 1500;
 /** Longest `lastMessage` taken from a transcript, the ellipsis included. */
 const LAST_MESSAGE_MAX = 200;
 
@@ -21,6 +26,8 @@ export interface ChatHubOptions {
   pollMs?: number;
   /** How long a session's files are still read after its process exits. */
   exitGraceMs?: number;
+  /** How long after an Esc key a Claude turn with no reply yet is taken as cancelled. */
+  escapeCheckMs?: number;
   /** An I/O failure reading one of a session's files; ignored by default. */
   onError?: (sessionId: string, err: Error) => void;
   now?: () => Date;
@@ -54,6 +61,7 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
   private readonly pollMs: number;
   private watched = true;
   private readonly exitGraceMs: number;
+  private readonly escapeCheckMs: number;
   private readonly onError: (sessionId: string, err: Error) => void;
   private readonly now: () => Date;
 
@@ -64,11 +72,13 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     super();
     this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
     this.exitGraceMs = opts.exitGraceMs ?? DEFAULT_EXIT_GRACE_MS;
+    this.escapeCheckMs = opts.escapeCheckMs ?? DEFAULT_ESCAPE_CHECK_MS;
     this.onError = opts.onError ?? (() => undefined);
     this.now = opts.now ?? (() => new Date());
     registry.on("signal", (sessionId, signal) => this.onSignal(sessionId, signal));
     registry.on("exit", (sessionId) => this.onExit(sessionId));
     registry.on("removed", (sessionId) => this.remove(sessionId));
+    registry.on("escape", (sessionId) => this.onEscape(sessionId));
   }
 
   /** Reads a Claude transcript into the main thread and its sub-agents' files into theirs. */
@@ -144,6 +154,28 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     return session;
   }
 
+  /**
+   * Esc cancels a Claude turn. Once a reply has begun, Claude writes "[Request interrupted by
+   * user]" and that line ends the turn. Before any reply, Claude puts the prompt back into its
+   * input and writes nothing, and no hook runs: a turn still working with no reply a moment after
+   * an Esc was cancelled. An Esc that only closed a menu before the first reply is taken as a
+   * cancel too; the Stop hook still finishes the turn.
+   */
+  private onEscape(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session === undefined || this.registry.get(sessionId)?.session.kind !== "claude") return;
+    clearTimeout(session.escapeTimer);
+    session.escapeTimer = setTimeout(() => {
+      session.escapeTimer = undefined;
+      // Read what Claude wrote meanwhile: an interrupt line or a reply settles it.
+      session.attached?.flush();
+      const state = this.registry.get(sessionId)?.session.state;
+      if (state === "working" && session.awaitingReply) {
+        this.registry.signal(sessionId, { kind: "turn_abort" });
+      }
+    }, this.escapeCheckMs).unref();
+  }
+
   /** The agent may still be flushing its last lines: keep reading a little, then stop. */
   private onExit(sessionId: string): void {
     const session = this.sessions.get(sessionId);
@@ -159,6 +191,9 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
     return {
       pollMs: () => (this.watched ? this.pollMs : this.pollMs * UNWATCHED_SLOWDOWN),
       chat: (threadId, event, live) => {
+        if (live && threadId === MAIN_THREAD && event.kind !== "user" && event.kind !== "turn") {
+          session.awaitingReply = false;
+        }
         this.show(sessionId, session, threadId, event);
         if (live && threadId === MAIN_THREAD && event.kind === "assistant" && event.text) {
           this.lateReply(sessionId, event.text);
@@ -203,6 +238,8 @@ export class ChatHub extends EventEmitter<ChatHubEvents> {
    */
   private onSignal(sessionId: string, signal: AgentSignal): void {
     this.resolveDropped(sessionId);
+    const hubSession = this.sessions.get(sessionId);
+    if (hubSession !== undefined && signal.kind === "turn_start") hubSession.awaitingReply = true;
     switch (signal.kind) {
       case "turn_start":
       case "turn_end":

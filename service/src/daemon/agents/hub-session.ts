@@ -31,6 +31,13 @@ export class HubSession {
   /** The file last attached, kept after detaching. */
   private path: string | undefined;
   private stopTimer: NodeJS.Timeout | undefined;
+  /**
+   * True from a turn's start until the main thread shows the agent's first reply to it (text, a
+   * tool call, a question).
+   */
+  awaitingReply = false;
+  /** The check an Esc key set off; see ChatHub. */
+  escapeTimer: NodeJS.Timeout | undefined;
 
   /** `main`, then the sub-agent threads in the order they were discovered. */
   threads(): string[] {
@@ -105,6 +112,8 @@ export class HubSession {
   detach(): void {
     clearTimeout(this.stopTimer);
     this.stopTimer = undefined;
+    clearTimeout(this.escapeTimer);
+    this.escapeTimer = undefined;
     this.source?.stop();
     this.source = undefined;
   }

@@ -113,6 +113,11 @@ const FOCUS_OUT = 0x4f; // O
  * each time it gains or loses focus while the agent's TUI has focus reporting on; that is not
  * the user answering anything.
  */
+/** Whether `bytes` is the Esc key alone, not the start of another key's escape sequence. */
+export function isLoneEscape(bytes: Buffer): boolean {
+  return bytes.length === 1 && bytes[0] === ESC;
+}
+
 export function isFocusReport(bytes: Buffer): boolean {
   if (bytes.length === 0 || bytes.length % 3 !== 0) return false;
   for (let i = 0; i < bytes.length; i += 3) {

@@ -12,6 +12,7 @@ import {
   folderName,
   freeName,
   isFocusReport,
+  isLoneEscape,
   newEntry,
   notFound,
   setOptional,
@@ -171,6 +172,7 @@ export class SessionRegistry extends EventEmitter<RegistryEvents> {
     const rec = this.require(id);
     rec.process?.write(bytes);
     if (!isFocusReport(bytes)) this.apply(rec, { kind: "user_input" });
+    if (isLoneEscape(bytes)) this.emit("escape", id);
   }
 
   /** Forgets sessions that ended more than `retentionHours` ago and deletes their folders. */

@@ -12,6 +12,9 @@ import { readFixtureLines } from "../../helpers/fixtures.js";
 const POLL_MS = 20;
 /** How long the hub keeps reading after a session's process exits (5 s in the daemon). */
 const EXIT_GRACE_MS = 150;
+/** How long after an Esc the hub checks for a cancelled turn (1.5 s in the daemon). */
+const ESCAPE_MS = 60;
+const ESC = Buffer.from([0x1b]);
 const NOW = "2026-10-31T10:00:00.000Z";
 const LINE_AT = "2026-10-30T13:40:00.000Z";
 const HOUR = 3_600_000;
@@ -143,6 +146,7 @@ beforeEach(async () => {
   hub = new ChatHub(registry, {
     pollMs: POLL_MS,
     exitGraceMs: EXIT_GRACE_MS,
+    escapeCheckMs: ESCAPE_MS,
     now: () => new Date(NOW),
     onError: (id, err) => errors.push([id, err]),
   });
@@ -577,6 +581,62 @@ function perm(id: string): Pending {
 function permEvent(id: string): ChatEvent {
   return { id, threadId: "main", at: NOW, kind: "permission" };
 }
+
+describe("ChatHub and the Esc key", () => {
+  /** A Claude session with the main fixture read, so lines appended now are live. */
+  async function caughtUp(): Promise<void> {
+    write(transcript, MAIN);
+    hub.attachClaude(sid, transcript);
+    await vi.waitFor(() => expect(ids(hub.history(sid, "main"))).toEqual(MAIN_IDS));
+  }
+
+  it("ends a turn that Esc cancelled before any reply (Claude writes nothing then)", async () => {
+    await caughtUp();
+    registry.signal(sid, { kind: "turn_start" });
+    registry.input(sid, ESC);
+    expect(session().state).toBe("working");
+    await vi.waitFor(() => expect(session().state).toBe("idle"));
+  });
+
+  it("counts a turn whose start arrives just after the Esc: Enter, then Esc at once", async () => {
+    await caughtUp();
+    registry.input(sid, ESC);
+    registry.signal(sid, { kind: "turn_start" });
+    await vi.waitFor(() => expect(session().state).toBe("idle"));
+  });
+
+  it("leaves a turn with a reply to Claude's interrupt line", async () => {
+    await caughtUp();
+    registry.signal(sid, { kind: "turn_start" });
+    append(transcript, assistantText("a9", "Working on it."));
+    await vi.waitFor(() => expect(mainEvent("a9")).toBeDefined());
+    registry.input(sid, ESC);
+    await pause(ESCAPE_MS * 3);
+    expect(session().state).toBe("working");
+  });
+
+  it("reads the transcript before deciding, so a reply written meanwhile counts", async () => {
+    await caughtUp();
+    hub.setWatched(false); // reads 8 times less often, as with no phone
+    registry.signal(sid, { kind: "turn_start" });
+    registry.input(sid, ESC);
+    append(transcript, assistantText("a9", "Working on it."));
+    await pause(ESCAPE_MS * 3);
+    expect(session().state).toBe("working");
+  });
+
+  it("ignores other keys that start with Esc, and other agents", async () => {
+    await caughtUp();
+    registry.signal(sid, { kind: "turn_start" });
+    registry.input(sid, Buffer.from([0x1b, 0x5b, 0x41])); // Up
+    const codex = await newSession("codex");
+    registry.signal(codex, { kind: "turn_start" });
+    registry.input(codex, ESC);
+    await pause(ESCAPE_MS * 3);
+    expect(session().state).toBe("working");
+    expect(session(codex).state).toBe("working");
+  });
+});
 
 describe("ChatHub attachments", () => {
   it("detach stops tailers (no events after append) and is idempotent", async () => {

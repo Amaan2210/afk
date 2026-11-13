@@ -41,4 +41,6 @@ export interface RegistryEvents {
   exit: [sessionId: string, exitCode: number];
   /** Every signal applied to a session, after the reducer and before "updated". */
   signal: [sessionId: string, signal: AgentSignal];
+  /** A client sent the Esc key alone, after it reached the session's terminal. */
+  escape: [sessionId: string];
 }
