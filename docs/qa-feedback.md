@@ -352,8 +352,8 @@ Deferred on purpose until after the fixes. Checks 1 to 3 publish a release (tag)
 
 ## Re-test round 2 (2026-11-13, new APK)
 
-Findings from the phone re-test after the fixes. Nothing here is started until the owner
-says go.
+Findings from the phone re-test after the fixes. Screenshots: `10.png` to `13.png` in the
+owner's `afk-qa-screenshots` folder, next to the repo. Do not commit.
 
 New session
 
@@ -383,6 +383,22 @@ Terminal
 - [ ] **R2-8. The keyboard suggests no words in the terminal.** In Chat it does. Fix it if
       it can be done. The catch to check: the terminal sends each key to the laptop as it
       is typed, and word suggestions need the keyboard to hold a word back and change it.
+- [ ] **R2-9. The terminal stops responding after switching apps.** Leave AFK for another
+      app, come back to the terminal: it takes no input. Only going back and opening the
+      session again fixes it. Likely the same cause as R2-6.
+- [ ] **R2-10. Claude's status line came back.** After a reply finished, the status line
+      (model, thinking, totals) showed again under Claude's input box (12.png).
+- [ ] **R2-11. Kill from the session's menu leaves you on a dead terminal.** After Kill the
+      screen stays open showing "Claude · ended" and the laptop's shell prompt, and takes no
+      input (13.png). Expected: go back to the sessions list. The ended card staying in the
+      list is by design (for Resume and Delete).
+
+Chat
+
+- [ ] **R2-12. After `/compact`, Chat shows the compaction summary as if you typed it.** A
+      large bubble on your side holds Claude's summary text ("If you need specific details
+      from before compaction ... Continue the conversation ..."), then `/compact`. The
+      terminal shows only "Compacted" (10.png, 11.png).
 
 State
 
