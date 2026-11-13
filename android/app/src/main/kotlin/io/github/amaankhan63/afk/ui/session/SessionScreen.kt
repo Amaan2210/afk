@@ -102,6 +102,8 @@ fun SessionScreen(
 
     // After process death the field gets its text back but the view model starts empty.
     LaunchedEffect(viewModel) { viewModel.onComposer(composer) }
+    // A change of tab moved text into the composer or out of it.
+    LaunchedEffect(viewModel) { viewModel.composerSet.collect { composer = it } }
     val openSession by rememberUpdatedState(onOpenSession)
     LaunchedEffect(viewModel) {
         viewModel.errors.collect { snackbar.showSnackbar(it.message ?: it.code) }

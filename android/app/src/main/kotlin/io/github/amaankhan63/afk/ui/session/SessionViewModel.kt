@@ -8,6 +8,8 @@ import io.github.amaankhan63.afk.data.connection.ConnectionState
 import io.github.amaankhan63.afk.data.connection.ERROR_DISCONNECTED
 import io.github.amaankhan63.afk.data.protocol.AfkError
 import io.github.amaankhan63.afk.data.protocol.Session
+import io.github.amaankhan63.afk.data.protocol.SessionKind
+import io.github.amaankhan63.afk.data.protocol.SessionState
 import io.github.amaankhan63.afk.data.sessions.SessionsRepository
 import io.github.amaankhan63.afk.di.StripChipsFlow
 import io.github.amaankhan63.afk.service.ForegroundTracker
@@ -74,6 +76,7 @@ class SessionViewModel internal constructor(
     private val errorEvents = Channel<AfkError>(Channel.BUFFERED)
     private val resumedIds = Channel<String>(Channel.BUFFERED)
     private val closedEvents = Channel<Unit>(Channel.BUFFERED)
+    private val composerTexts = Channel<String>(Channel.CONFLATED)
 
     /** Failures of [sendLine], [answer], [kill], [rename] and [resume], each shown once. */
     val errors: Flow<AfkError> = errorEvents.receiveAsFlow()
@@ -83,6 +86,21 @@ class SessionViewModel internal constructor(
 
     /** The session was killed or deleted, so the screen has nothing left to show. */
     val closed: Flow<Unit> = closedEvents.receiveAsFlow()
+
+    /** The composer's new text after a change of tab carried text in or out, for the screen. */
+    val composerSet: Flow<String> = composerTexts.receiveAsFlow()
+
+    private val carry = TabCarry(
+        bridge = bridge,
+        scope = viewModelScope,
+        canType = ::canCarry,
+        type = { repo.ptyInput(sessionId, it) },
+        composer = { composer.value },
+        setComposer = {
+            composer.value = it
+            composerTexts.trySend(it)
+        }
+    )
 
     // A resume under way: a second tap meanwhile would start a second session.
     private var resuming = false
@@ -110,8 +128,15 @@ class SessionViewModel internal constructor(
         SessionUiState(connection = repo.connection.value)
     )
 
+    /**
+     * Shows tab [t]. A change of tab carries unsent text between Claude's input box and the
+     * composer (see [TabCarry]); the tabs and a settled swipe both call this, so the same tab
+     * again does nothing.
+     */
     fun selectTab(t: SessionTab) {
+        if (tab.value == t) return
         tab.value = t
+        if (t == SessionTab.Chat) carry.toChat() else carry.toTerminal()
     }
 
     fun onComposer(text: String) {
@@ -203,6 +228,15 @@ class SessionViewModel internal constructor(
     override fun onCleared() {
         bridge.detach()
         ForegroundTracker.release(this)
+    }
+
+    /** Typing into Claude's input box reaches it now, and no prompt would take the keys. */
+    private fun canCarry(): Boolean {
+        val session = current.value ?: return false
+        return repo.connection.value is ConnectionState.Connected &&
+            session.kind == SessionKind.claude &&
+            session.state != SessionState.ended &&
+            session.pending == null
     }
 
     /** Whether the app is connected; when it is not, [errors] says so. */
