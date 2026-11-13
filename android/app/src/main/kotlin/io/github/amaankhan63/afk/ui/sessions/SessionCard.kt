@@ -39,7 +39,7 @@ private val AGENT_EDGE = 3.dp
 /**
  * One session in the list: its state, name, age and last message, its agent's colour on the
  * left edge. [workingSince] is when the session was first seen working, if it is. A [muted]
- * session, whose notifications are off, says so.
+ * session, whose notifications are off, says so, and so does one whose agent asks no permission.
  */
 @Composable
 fun SessionCard(
@@ -115,6 +115,7 @@ fun SessionCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 AgentTag(session.kind)
+                if (session.skipsPermissions) Tag(BYPASS_LABEL)
                 if (muted) Tag("Muted")
                 if (session.subagentsRunning > 0) Tag(subagentsLabel(session.subagentsRunning))
                 session.gitBranch?.let { Tag(it, Modifier.weight(1f, fill = false)) }
@@ -122,6 +123,9 @@ fun SessionCard(
         }
     }
 }
+
+/** The tag of a session whose agent runs without asking permission. */
+internal const val BYPASS_LABEL = "Bypass"
 
 /** What the card says of [session]'s state; a working session counts from [workingSince]. */
 internal fun stateLabel(session: Session, workingSince: Instant?, now: Instant): String =
