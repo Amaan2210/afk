@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,13 +101,14 @@ internal fun PairingContent(
         if (failure != null) snackbar.showSnackbar(failure, duration = SnackbarDuration.Long)
     }
     Surface(modifier = modifier.fillMaxSize()) {
-        Box {
+        BoxWithConstraints(Modifier.safeDrawingPadding()) {
+            // In the middle of the screen; scrolls once it is taller than the screen.
             Column(
                 modifier = Modifier
-                    .safeDrawingPadding()
                     .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
                     .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
             ) {
                 Text(
                     text = "Pair with your laptop",
@@ -132,10 +134,7 @@ internal fun PairingContent(
                 }
                 if (byHand) Details(state, onEdit, onConnect)
             }
-            SnackbarHost(
-                hostState = snackbar,
-                modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding()
-            )
+            SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 }
