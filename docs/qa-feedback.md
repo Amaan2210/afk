@@ -380,6 +380,9 @@ Terminal
 
 - [ ] **R2-6. The terminal sometimes freezes.** Mostly while scrolling back through the
       output. Only going back and opening the session again fixes it.
+- [ ] **R2-8. The keyboard suggests no words in the terminal.** In Chat it does. Fix it if
+      it can be done. The catch to check: the terminal sends each key to the laptop as it
+      is typed, and word suggestions need the keyboard to hold a word back and change it.
 
 State
 
