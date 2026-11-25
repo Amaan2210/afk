@@ -6,4 +6,4 @@ from Terminal Emulator for Android, https://github.com/jackpal/Android-Terminal-
 
 Copyright the Termux developers and the Terminal Emulator for Android (jackpal) contributors.
 
-AFK's changes are listed in each directory's AFK-CHANGES.md in AFK's source, github.com/AmaanKhan63/afk.
+AFK's changes are listed in each directory's AFK-CHANGES.md in AFK's source, github.com/Amaan2210/afk.

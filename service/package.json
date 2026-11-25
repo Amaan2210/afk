@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AmaanKhan63/afk.git",
+    "url": "git+https://github.com/Amaan2210/afk.git",
     "directory": "service"
   },
-  "homepage": "https://github.com/AmaanKhan63/afk#readme",
+  "homepage": "https://github.com/Amaan2210/afk#readme",
   "bugs": {
-    "url": "https://github.com/AmaanKhan63/afk/issues"
+    "url": "https://github.com/Amaan2210/afk/issues"
   },
   "type": "module",
   "bin": {
