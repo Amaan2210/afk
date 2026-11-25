@@ -78,7 +78,7 @@ class TerminalBridge(
     private val attached: Boolean get() = frames?.isActive == true
 
     /** Claude Code's input box as the screen shows it; null without a screen, or another one. */
-    fun claudeInput(): ClaudeInput? = session.emulator?.claudeInput()
+    internal fun claudeInput(): ClaudeInput? = session.emulator?.claudeInput()
 
     /**
      * Shows the terminal: subscribes, and through the repository subscribes again after every
