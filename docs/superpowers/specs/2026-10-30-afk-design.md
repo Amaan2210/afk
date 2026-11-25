@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-30
 **Status:** Draft for approval
-**Repo:** `git@github.com:AmaanKhan63/afk.git`
+**Repo:** `git@github.com:Amaan2210/afk.git`
 
 AFK is a remote control for terminal-based AI coding agents. You start Claude Code or Codex on your laptop with `afk claude …` or `afk codex …`, walk away, and from an Android phone you see exactly what the laptop terminal shows, get notified when the agent needs you or finishes, answer it, and start new sessions in any folder. Everything runs on your own machines over Tailscale. No accounts, no cloud, no cost.
 
@@ -73,7 +73,7 @@ AFK is the phone app and the laptop service that solve all four, built well enou
 - **Agents are usually run in skip-permissions / YOLO mode.** So the common "needs you" moments are: the agent finished its turn, or the agent asked a question with choices. Permission prompts must still be handled correctly when permissions are on.
 - **The user's existing setup must keep working:** a `Notification`/`Stop`/`SubagentStart`/`SubagentStop` hook set in `~/.claude/settings.json` (Telegram), and a `statusLine` command (`npx -y ccstatusline@latest`). AFK adds to these per session; it never removes or rewrites them.
 - **Cost:** zero. Every dependency is free and open source. Distribution is a GitHub Release APK and an npm package; no Play Store required.
-- **Development context:** this folder *is* the repo (`remote-dev` locally, remote `AmaanKhan63/afk`); scaffold in place. A physical Android phone is available for testing and is the verification target for notifications, the foreground service, and the terminal view; the emulator is for CI and quick UI checks only. Tailscale will be installed on both devices before the Android phases, so the real network path can be exercised. Note: the laptop's SSH key identifies as a different GitHub account than the repo owner; the first push verifies access.
+- **Development context:** this folder *is* the repo (`remote-dev` locally, remote `Amaan2210/afk`); scaffold in place. A physical Android phone is available for testing and is the verification target for notifications, the foreground service, and the terminal view; the emulator is for CI and quick UI checks only. Tailscale will be installed on both devices before the Android phases, so the real network path can be exercised. Note: the laptop's SSH key identifies as a different GitHub account than the repo owner; the first push verifies access.
 
 ## 4. System overview
 
@@ -302,7 +302,7 @@ Reconnection uses exponential backoff with jitter; the service survives app swip
 | Playbooks, clipboard bridge | Declined | — |
 | Changes / git-diff tab | Future | in v1 |
 | Voice, replay, multi-laptop | Future | — |
-| Name / repo / package | AFK · `AmaanKhan63/afk` · npm `afkdev`, binary `afk` | tether-dev, overwatch-dev |
+| Name / repo / package | AFK · `Amaan2210/afk` · npm `afkdev`, binary `afk` | tether-dev, overwatch-dev |
 | License | MIT (author's call) | Apache-2.0 |
 
 ## 14. Changes after the first phone test (2026-11-12)

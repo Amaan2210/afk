@@ -55,7 +55,7 @@ daemon listens only on your Tailscale address and `127.0.0.1`. More in
    ```
 
 3. Install the app: on the phone, download `afk-vX.Y.Z.apk` from the latest
-   [GitHub Release](https://github.com/AmaanKhan63/afk/releases) and open it. When Android asks,
+   [GitHub Release](https://github.com/Amaan2210/afk/releases) and open it. When Android asks,
    allow your browser (or file manager) to install unknown apps, then install.
 4. Pair the phone: run `afk pair` on the laptop and scan the QR code it prints in the AFK app.
 
